@@ -1376,9 +1376,9 @@ window.addEventListener('DOMContentLoaded',clearMapAnalysisOnPageStart);
 
 
 function resetTrainingOcr(){
-  if($('ocrMeta')) $('ocrMeta').style.display='none';
-  if($('ocrRecognitionPercent')) $('ocrRecognitionPercent').textContent='—';
-  if($('ocrElapsedTime')) $('ocrElapsedTime').textContent='—';
+  if($('ocrMeta')) $('ocrMeta').style.display='grid';
+  if($('ocrRecognitionPercent')) $('ocrRecognitionPercent').textContent='0%';
+  if($('ocrElapsedTime')) $('ocrElapsedTime').textContent='0.0 с';
 
   if($('ocrParsedMetrics')) $('ocrParsedMetrics').style.display='none';
   if($('trainingOcrStatus')) $('trainingOcrStatus').textContent='Скриншот выбран. Нажмите «Распознать текст со скриншота».';
@@ -1404,6 +1404,15 @@ $('trainingOcrBtn')?.addEventListener('click',async()=>{
   }
 
   const ocrStartedAt=performance.now();
+  ocrTimer=setInterval(()=>{
+    const sec=(performance.now()-ocrStartedAt)/1000;
+    if($('ocrElapsedTime')) $('ocrElapsedTime').textContent=sec.toFixed(1)+' с';
+  },200);
+  if($('ocrMeta')) $('ocrMeta').style.display='grid';
+  if($('ocrRecognitionPercent')) $('ocrRecognitionPercent').textContent='0%';
+  if($('ocrElapsedTime')) $('ocrElapsedTime').textContent='0.0 с';
+  let ocrTimer=null;
+
   setActionState('trainingOcrBtn','loading');
   if(status) status.textContent='Распознаю текст…';
   try{
@@ -1421,6 +1430,7 @@ $('trainingOcrBtn')?.addEventListener('click',async()=>{
     const text=String(data.text||'').trim();
     const parsedMetrics=parseTrainingMetricsFromText(text);
     renderTrainingOcrMetrics(parsedMetrics);
+    if(ocrTimer){clearInterval(ocrTimer);ocrTimer=null;}
     const elapsedSec=(performance.now()-ocrStartedAt)/1000;
     if($('ocrMeta')) $('ocrMeta').style.display='grid';
     if($('ocrRecognitionPercent')) $('ocrRecognitionPercent').textContent=getOcrRecognitionPercent(parsedMetrics)+'%';
@@ -1428,6 +1438,11 @@ $('trainingOcrBtn')?.addEventListener('click',async()=>{
     if(status) status.textContent=text?'✓ Скриншот распознан. Найденные показатели показаны ниже.':'✕ Показатели не найдены.';
     setActionState('trainingOcrBtn',text?'success':'error');
   }catch(err){
+    if(ocrTimer){clearInterval(ocrTimer);ocrTimer=null;}
+    const failedSec=(performance.now()-ocrStartedAt)/1000;
+    if($('ocrMeta')) $('ocrMeta').style.display='grid';
+    if($('ocrRecognitionPercent')) $('ocrRecognitionPercent').textContent='0%';
+    if($('ocrElapsedTime')) $('ocrElapsedTime').textContent=failedSec.toFixed(1)+' с';
     if(status) status.textContent='✕ Ошибка распознавания: '+(err.name==='AbortError'?'таймаут 45 секунд':err.message);
     setActionState('trainingOcrBtn','error');
   }

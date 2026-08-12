@@ -295,3 +295,30 @@ button.action-error:disabled {
 }
 .ocr-meta span{font-size:12px;color:#94a3b8}
 .ocr-meta b{font-size:18px}
+
+.training-file-input{
+  width:100%;
+  min-height:74px;
+  font-size:24px;
+  font-weight:700;
+  padding:14px 16px;
+  border-radius:16px;
+  background:#f8fafc;
+  color:#0f172a;
+  border:2px solid #cbd5e1;
+}
+#trainingOcrBtn{
+  min-height:56px;
+  font-size:20px;
+  padding:10px 16px;
+}
+@media(max-width:520px){
+  .training-file-input{
+    min-height:70px;
+    font-size:22px;
+  }
+  #trainingOcrBtn{
+    min-height:52px;
+    font-size:18px;
+  }
+}

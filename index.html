@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="app-version">v0.68 ONLINE FULL</div>
+<div class="app-version">v0.70 ONLINE FULL</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Trail Race Analyzer</div>
@@ -160,11 +160,11 @@
         <h2>Тренировки</h2>
         <div class="upload-box">
           <b>Скриншот тренировки</b>
-          <input id="trainingScreenshot" type="file" accept="image/*">
+          <input id="trainingScreenshot" class="training-file-input" type="file" accept="image/*">
           <button class="action ready" id="trainingOcrBtn" type="button">Загрузить и распознать</button>
           <div class="status" id="trainingOcrStatus">Выберите один скриншот. После распознавания будут показаны только найденные показатели.</div>
-          <div class="ocr-meta" id="ocrMeta" style="display:none">
-            <div><span>Распознано</span><b id="ocrRecognitionPercent">—</b></div>
+          <div class="ocr-meta" id="ocrMeta">
+            <div><span>Распознано показателей</span><b id="ocrRecognitionPercent">—</b></div>
             <div><span>Время обработки</span><b id="ocrElapsedTime">—</b></div>
           </div>
 
