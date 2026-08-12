@@ -1443,7 +1443,7 @@ function clearBestTrainingData(){
 }
 
 
-function hardClearBestTrainingFields(){
+function hardClearBestTrainingFields(clearFile=false){
   const ids=['refDist','refMinutes','refPace','refAvgHr'];
   ids.forEach(id=>{
     const el=$(id);
@@ -1461,7 +1461,6 @@ function hardClearBestTrainingFields(){
   if($('trainingOcrStatus')) $('trainingOcrStatus').textContent='Выберите один скриншот тренировки.';
   if($('ocrSlowWarning')) $('ocrSlowWarning').style.display='none';
 
-  if($('trainingScreenshot')) $('trainingScreenshot').value='';
   state.bestTraining=null;
 
   try{
@@ -1469,6 +1468,10 @@ function hardClearBestTrainingFields(){
     localStorage.removeItem('trail_best_training');
     localStorage.removeItem('bestTraining');
   }catch(e){}
+
+  if(clearFile && $('trainingScreenshot')) $('trainingScreenshot').value='';
+
+  if(clearFile && $('trainingSelectedFileName')) $('trainingSelectedFileName').textContent='';
 }
 
 function resetTrainingOcr(){
@@ -1485,7 +1488,10 @@ function resetTrainingOcr(){
 }
 $('trainingScreenshot')?.addEventListener('change',resetTrainingOcr);
 $('trainingOcrBtn')?.addEventListener('click',async()=>{
-  hardClearBestTrainingFields();
+  const selected=$('trainingScreenshot')?.files?.[0];
+  if($('trainingSelectedFileName')) $('trainingSelectedFileName').textContent=selected ? `Выбран: ${selected.name}` : '';
+
+  hardClearBestTrainingFields(false);
   const file=$('trainingScreenshot')?.files?.[0], status=$('trainingOcrStatus');
   if(!file){ if(status) status.textContent='✕ Сначала выберите скриншот.'; setActionState('trainingOcrBtn','error'); return; }
   
@@ -1681,11 +1687,25 @@ function renderTrainingOcrMetrics(metrics){
   if(metrics.hr!=null && $('refAvgHr')) $('refAvgHr').value=String(metrics.hr);
 }
 
-window.addEventListener('DOMContentLoaded',clearBestTrainingData);
 
-window.addEventListener('DOMContentLoaded',()=>{
-  hardClearBestTrainingFields();
-});
+
+
+function clearBestTrainingOnPageLoad(){
+  hardClearBestTrainingFields(true);
+  // Safari may restore form values after DOMContentLoaded, so clear again shortly after paint.
+  requestAnimationFrame(()=>{
+    hardClearBestTrainingFields(true);
+    setTimeout(()=>hardClearBestTrainingFields(true),120);
+    setTimeout(()=>hardClearBestTrainingFields(true),500);
+  });
+}
+
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded',clearBestTrainingOnPageLoad,{once:true});
+}else{
+  clearBestTrainingOnPageLoad();
+}
+
 window.addEventListener('pageshow',()=>{
-  hardClearBestTrainingFields();
+  clearBestTrainingOnPageLoad();
 });

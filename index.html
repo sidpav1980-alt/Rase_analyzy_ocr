@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="app-version">v0.83 ONLINE FULL</div>
+<div class="app-version">v0.85 ONLINE FULL</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Trail Race Analyzer</div>
@@ -161,9 +161,9 @@
         <p class="muted">Самая сильная тренировка определяется по высокому среднему пульсу и лучшим показателям дистанции, набора и темпа.</p>
         <div class="upload-box">
           <b>Скриншот тренировки</b>
-          <input id="trainingScreenshot" type="file" accept="image/*">
+          <input id="trainingScreenshot" type="file" accept="image/*"><div id="trainingSelectedFileName" class="status"></div>
           <button class="action ready" id="trainingOcrBtn" type="button">Загрузить и распознать</button>
-          <div class="status" id="trainingOcrStatus">Выберите один скриншот тренировки и нажмите «Загрузить и распознать».</div><div id="ocrTimeoutNote" class="status">Максимальное время ожидания OCR — 60 секунд.</div><div id="ocrSlowWarning" class="status" style="display:none">⚠ Распознавание занимает необычно много времени. OCR продолжает работать.</div>
+          <div class="status" id="trainingOcrStatus">Выберите один скриншот тренировки и нажмите «Загрузить и распознать».</div><div id="ocrTimeoutNote" class="status">Среднее время ожидания OCR — 56 секунд. Максимальное время ожидания — 60 секунд.</div><div id="ocrSlowWarning" class="status" style="display:none">⚠ Распознавание занимает необычно много времени. OCR продолжает работать.</div>
           <div class="ocr-meta" id="ocrMeta">
             <div><span>Распознано показателей</span><b id="ocrRecognitionPercent">0%</b></div>
             <div><span>Время обработки</span><b id="ocrElapsedTime">0.0 с</b></div>
