@@ -22,7 +22,23 @@ function setActionState(id,state){
 function resetOwnItraForNewGPX(){
   const piEl=getAthletePiElement ? getAthletePiElement() : ($('athletePi')||$('itraPi')||$('pi'));
   if(piEl) piEl.value='0';
+
+  const profileEl=$('ownItraProfile');
+  if(profileEl) profileEl.value='';
+
+  const ownStatus=$('ownItraLookupStatus');
+  if(ownStatus) ownStatus.textContent='ITRA не загружен. PI = 0.';
+
+  const ownBtn=$('ownItraLookupBtn');
+  if(ownBtn){
+    ownBtn.disabled=false;
+    setActionState('ownItraLookupBtn','ready');
+  }
+
+  try{ localStorage.removeItem('trailOwnItraProfile'); }catch(e){}
 }
+
+
 function clearMapAnalysisOnPageStart(){
   try{ localStorage.removeItem('trailMapAnalysis'); }catch(e){}
 
@@ -904,6 +920,86 @@ function paceFmt(sec){
   sec=Math.round(sec); return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;
 }
 
+let selectedShotFile=null;
+
+$('shotFiles').addEventListener('change', e=>{
+  selectedShotFile=e.currentTarget.files&&e.currentTarget.files[0] ? e.currentTarget.files[0] : null;
+  if(!selectedShotFile){
+    state.shots=[];
+    $('shotsName').innerHTML='<span class="file-check">○</span> Файл не выбран';
+    $('shotsStatus').textContent='1. Выберите один скриншот.';
+    $('shotsLoadBtn').disabled=true;
+    setActionState('shotsLoadBtn','idle');
+    return;
+  }
+  $('shotsName').innerHTML='<span class="file-check selected">✓</span> Выбран: '+selectedShotFile.name;
+  $('shotsStatus').textContent='2. Файл выбран. Нажмите кнопку загрузки.';
+  $('shotsLoadBtn').disabled=false;
+  setActionState('shotsLoadBtn','ready');
+});
+
+$('shotsLoadBtn').addEventListener('click',async ()=>{
+  if(!selectedShotFile){
+    $('shotsStatus').textContent='✕ Сначала выберите скриншот.';
+    setActionState('shotsLoadBtn','error');
+    return;
+  }
+
+  const btn=$('shotsLoadBtn'), p=$('shotsProgress');
+  btn.disabled=true;
+  setActionState('shotsLoadBtn','working');
+  p.style.display='block';
+  p.value=20;
+  $('shotsStatus').textContent='⏳ Загружаю скриншот…';
+
+  try{
+    state.shots=[selectedShotFile];
+    p.value=70;
+    renderShots();
+    await new Promise(r=>setTimeout(r,60));
+    p.value=100;
+    $('shotsStatus').textContent='✓ Скриншот успешно загружен.';
+    setActionState('shotsLoadBtn','success');
+    setTimeout(()=>{p.style.display='none';},1000);
+  }catch(err){
+    p.style.display='none';
+    $('shotsStatus').textContent='✕ Ошибка загрузки скриншота: '+(err.message||String(err));
+    setActionState('shotsLoadBtn','error');
+  }finally{
+    btn.disabled=false;
+  }
+});
+
+function renderShots(){
+  const box=$('shotsList'); box.innerHTML='';
+  state.shots.forEach((f,i)=>{
+    const url=URL.createObjectURL(f);
+    const d=document.createElement('div'); d.className='shot';
+    d.innerHTML=`<img src="${url}"><div><b>${f.name}</b><textarea id="shotText${i}" rows="4" placeholder="Вставьте текст с тренировки"></textarea></div>`;
+    box.appendChild(d);
+  });
+}
+
+$('ocrBtn').addEventListener('click', ()=>{
+  if(!state.shots.length){$('ocrStatus').textContent='Сначала загрузите скриншот.';return;}
+  let merged='';
+  for(let i=0;i<state.shots.length;i++){
+    const el=$(`shotText${i}`);
+    if(el) merged += '\\n' + el.value;
+  }
+  applyOCR(merged);
+  $('ocrStatus').textContent='Данные из вставленного текста применены. Проверь значения ниже.';
+});
+
+function applyOCR(text){
+  const low=text.toLowerCase().replace(',','.');
+  let m=low.match(/(\d+(?:\.\d+)?)\s*км/); if(m)$('refDist').value=m[1];
+  m=low.match(/(?:набор|elevation|gain|\+)\D{0,8}(\d{2,5})\s*м/); if(m)$('refGain').value=m[1];
+  m=low.match(/(?:средн\w*\s*пульс|avg\s*hr|average heart rate)\D{0,12}(\d{2,3})/); if(m)$('refAvgHr').value=m[1];
+  m=low.match(/(?:макс\w*\s*пульс|max\s*hr|max heart rate)\D{0,12}(\d{2,3})/); if(m)$('refMaxHr').value=m[1];
+}
+
+
 async function inflateRaw(bytes){
   if(typeof DecompressionStream==='undefined') throw new Error('Safari слишком старый для автономного XLSX. Сохраните файл как CSV.');
   const ds=new DecompressionStream('deflate-raw');
@@ -1188,6 +1284,10 @@ $('mapAnalyzeBtn')?.addEventListener('click',async ()=>{
 
 
 
+function getAthleteNameValue(){
+  const el=$('athleteName');
+  return el ? el.value.trim() : '';
+}
 function getAthletePiElement(){
   return $('athletePi') || $('itraPi') || $('pi');
 }
@@ -1245,6 +1345,68 @@ function initOpenRouterKeyUI(){
 }
 
 
+$('ownItraLookupBtn')?.addEventListener('click', async ()=>{
+  const name=getAthleteNameValue();
+  const piEl=getAthletePiElement();
+
+  const profile=$('ownItraProfile') ? $('ownItraProfile').value.trim() : '';
+  if(!profile){
+    $('ownItraLookupStatus').textContent='✕ Укажите ссылку ITRA или Runner ID.';
+    setActionState('ownItraLookupBtn','error');
+    return;
+  }
+
+  const btn=$('ownItraLookupBtn');
+  btn.disabled=true;
+  setActionState('ownItraLookupBtn','working');
+  $('ownItraLookupStatus').textContent='Ищу профиль ITRA: '+(profile||name)+'…';
+
+  try{
+    const resp=await fetch('/api/itra-own',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name,profile})
+    });
+
+    if(!resp.ok){
+      let detail='';
+      try{
+        const e=await resp.json();
+        detail=e.error||'';
+      }catch(e){}
+      throw new Error('HTTP '+resp.status+(detail?' · '+detail:''));
+    }
+
+    const data=await resp.json();
+    const result=data.result||null;
+
+    if(!result || result.pi===null || result.pi===undefined){
+      if(piEl) piEl.value='0';
+      throw new Error('ITRA Performance Index не найден по указанной ссылке');
+    }
+
+    if(piEl) piEl.value=String(result.pi);
+    $('ownItraLookupStatus').textContent='✓ ITRA PI найден: '+result.pi;
+    setActionState('ownItraLookupBtn','success');
+
+    // Persist current profile locally when possible.
+    try{
+      localStorage.setItem('trailOwnItraProfile',JSON.stringify({
+        name,
+        pi:Number(result.pi),
+        source:result.source||null,
+        profile:($('ownItraProfile')?$('ownItraProfile').value.trim():''),
+        savedAt:new Date().toISOString()
+      }));
+    }catch(e){}
+  }catch(err){
+    const piEl=getAthletePiElement(); if(piEl) piEl.value='0';
+    $('ownItraLookupStatus').textContent='✕ Ошибка ITRA: '+(err.message||String(err));
+    setActionState('ownItraLookupBtn','error');
+  }finally{
+    btn.disabled=false;
+  }
+});
 
 
 $('itraLookupBtn')?.addEventListener('click', async ()=>{
@@ -1354,7 +1516,7 @@ $('saveBtn').addEventListener('click',()=>{
   const payload={
     athlete:$('athleteName').value, pi:$('itraPi').value,
     route:{dist:state.dist,gain:state.gain,loss:state.loss},
-    training:{dist:$('refDist').value,gain:$('refGain').value,avgHr:$('refAvgHr').value,lthr:$('lthr').value},
+    training:{dist:$('refDist').value,gain:$('refGain').value,avgHr:$('refAvgHr').value,maxHr:$('refMaxHr').value,lthr:$('lthr').value},
     roster:state.roster,
     savedAt:new Date().toISOString()
   };
@@ -1369,6 +1531,17 @@ window.addEventListener('DOMContentLoaded',initOpenRouterKeyUI);
 window.addEventListener('DOMContentLoaded',syncMapAnalyzeButton);
 
 
+function restoreOwnItraProfile(){
+  try{
+    const p=JSON.parse(localStorage.getItem('trailOwnItraProfile')||'null');
+    if(!p) return;
+    const nameEl=$('athleteName'), piEl=getAthletePiElement(), profileEl=$('ownItraProfile');
+    if(nameEl && (!nameEl.value || nameEl.value==='Noname')) nameEl.value=p.name||'Noname';
+    if(piEl && p.pi) piEl.value=String(p.pi);
+    if(profileEl && p.profile) profileEl.value=p.profile;
+  }catch(e){}
+}
+window.addEventListener('DOMContentLoaded',restoreOwnItraProfile);
 
 
 window.addEventListener('DOMContentLoaded',clearMapAnalysisOnPageStart);
@@ -1376,13 +1549,8 @@ window.addEventListener('DOMContentLoaded',clearMapAnalysisOnPageStart);
 
 
 function resetTrainingOcr(){
-  if($('ocrPreview')) $('ocrPreview').style.display='none';
-  if($('ocrPreviewText')) $('ocrPreviewText').textContent='';
-  if($('ocrMeta')) $('ocrMeta').style.display='grid';
-  if($('ocrRecognitionPercent')) $('ocrRecognitionPercent').textContent='0%';
-  if($('ocrElapsedTime')) $('ocrElapsedTime').textContent='0.0 с';
-
   if($('ocrParsedMetrics')) $('ocrParsedMetrics').style.display='none';
+  if($('trainingOcrText')) $('trainingOcrText').value='';
   if($('trainingOcrStatus')) $('trainingOcrStatus').textContent='Скриншот выбран. Нажмите «Распознать текст со скриншота».';
   setActionState('trainingOcrBtn','ready');
 }
@@ -1405,16 +1573,6 @@ $('trainingOcrBtn')?.addEventListener('click',async()=>{
     return;
   }
 
-  const ocrStartedAt=performance.now();
-  ocrTimer=setInterval(()=>{
-    const sec=(performance.now()-ocrStartedAt)/1000;
-    if($('ocrElapsedTime')) $('ocrElapsedTime').textContent=sec.toFixed(1)+' с';
-  },200);
-  if($('ocrMeta')) $('ocrMeta').style.display='grid';
-  if($('ocrRecognitionPercent')) $('ocrRecognitionPercent').textContent='0%';
-  if($('ocrElapsedTime')) $('ocrElapsedTime').textContent='0.0 с';
-  let ocrTimer=null;
-
   setActionState('trainingOcrBtn','loading');
   if(status) status.textContent='Распознаю текст…';
   try{
@@ -1430,48 +1588,16 @@ $('trainingOcrBtn')?.addEventListener('click',async()=>{
     const data=await resp.json().catch(()=>({}));
     if(!resp.ok) throw new Error(data.error||`HTTP ${resp.status}`);
     const text=String(data.text||'').trim();
-    const parsedMetrics=parseTrainingMetricsFromText(text);
-    renderTrainingOcrMetrics(parsedMetrics);
-    renderOcrPreview(parsedMetrics);
-    if(ocrTimer){clearInterval(ocrTimer);ocrTimer=null;}
-    const elapsedSec=(performance.now()-ocrStartedAt)/1000;
-    if($('ocrMeta')) $('ocrMeta').style.display='grid';
-    if($('ocrRecognitionPercent')) $('ocrRecognitionPercent').textContent=getOcrRecognitionPercent(parsedMetrics)+'%';
-    if($('ocrElapsedTime')) $('ocrElapsedTime').textContent=elapsedSec.toFixed(1)+' с';
-    if(status) status.textContent=text?'✓ Скриншот распознан. Найденные показатели показаны ниже.':'✕ Показатели не найдены.';
+    $('trainingOcrText').value=text;
+    renderTrainingOcrMetrics(parseTrainingMetricsFromText(text));
+    if(status) status.textContent=text?'✓ Текст распознан. Можно исправить вручную.':'✕ Текст не найден.';
     setActionState('trainingOcrBtn',text?'success':'error');
   }catch(err){
-    if(ocrTimer){clearInterval(ocrTimer);ocrTimer=null;}
-    const failedSec=(performance.now()-ocrStartedAt)/1000;
-    if($('ocrMeta')) $('ocrMeta').style.display='grid';
-    if($('ocrRecognitionPercent')) $('ocrRecognitionPercent').textContent='0%';
-    if($('ocrElapsedTime')) $('ocrElapsedTime').textContent=failedSec.toFixed(1)+' с';
-    if(status) status.textContent='✕ Ошибка распознавания: '+(err.name==='AbortError'?'таймаут 30 секунд':err.message);
+    if(status) status.textContent='✕ Ошибка распознавания: '+(err.name==='AbortError'?'таймаут 45 секунд':err.message);
     setActionState('trainingOcrBtn','error');
   }
 });
 
-
-
-
-function renderOcrPreview(metrics){
-  const box=$('ocrPreview'), out=$('ocrPreviewText');
-  if(!box || !out) return;
-  const rows=[];
-  if(metrics?.distance!=null && metrics.distance!=='') rows.push('Расстояние: '+metrics.distance+' км');
-  if(metrics?.time) rows.push('Время в движении: '+metrics.time);
-  if(metrics?.pace) rows.push('Средний темп: '+metrics.pace+' /км');
-  if(metrics?.hr!=null && metrics.hr!=='') rows.push('Средний пульс: '+metrics.hr+' уд/мин');
-  if(metrics?.gain!=null && metrics.gain!=='') rows.push('Набор: '+metrics.gain+' м');
-  out.textContent=rows.join('\n');
-  box.style.display=rows.length?'block':'none';
-}
-
-function getOcrRecognitionPercent(metrics){
-  const keys=['distance','time','pace','hr'];
-  const found=keys.filter(k=>metrics && metrics[k]!==undefined && metrics[k]!==null && metrics[k]!=='').length;
-  return Math.round(found/keys.length*100);
-}
 
 function parseTrainingMetricsFromText(text){
   const t=String(text||'').replace(/\u00a0/g,' ').replace(/,/g,'.');
