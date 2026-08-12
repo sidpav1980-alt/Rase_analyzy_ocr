@@ -904,86 +904,6 @@ function paceFmt(sec){
   sec=Math.round(sec); return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;
 }
 
-let selectedShotFile=null;
-
-$('shotFiles').addEventListener('change', e=>{
-  selectedShotFile=e.currentTarget.files&&e.currentTarget.files[0] ? e.currentTarget.files[0] : null;
-  if(!selectedShotFile){
-    state.shots=[];
-    $('shotsName').innerHTML='<span class="file-check">○</span> Файл не выбран';
-    $('shotsStatus').textContent='1. Выберите один скриншот.';
-    $('shotsLoadBtn').disabled=true;
-    setActionState('shotsLoadBtn','idle');
-    return;
-  }
-  $('shotsName').innerHTML='<span class="file-check selected">✓</span> Выбран: '+selectedShotFile.name;
-  $('shotsStatus').textContent='2. Файл выбран. Нажмите кнопку загрузки.';
-  $('shotsLoadBtn').disabled=false;
-  setActionState('shotsLoadBtn','ready');
-});
-
-$('shotsLoadBtn').addEventListener('click',async ()=>{
-  if(!selectedShotFile){
-    $('shotsStatus').textContent='✕ Сначала выберите скриншот.';
-    setActionState('shotsLoadBtn','error');
-    return;
-  }
-
-  const btn=$('shotsLoadBtn'), p=$('shotsProgress');
-  btn.disabled=true;
-  setActionState('shotsLoadBtn','working');
-  p.style.display='block';
-  p.value=20;
-  $('shotsStatus').textContent='⏳ Загружаю скриншот…';
-
-  try{
-    state.shots=[selectedShotFile];
-    p.value=70;
-    renderShots();
-    await new Promise(r=>setTimeout(r,60));
-    p.value=100;
-    $('shotsStatus').textContent='✓ Скриншот успешно загружен.';
-    setActionState('shotsLoadBtn','success');
-    setTimeout(()=>{p.style.display='none';},1000);
-  }catch(err){
-    p.style.display='none';
-    $('shotsStatus').textContent='✕ Ошибка загрузки скриншота: '+(err.message||String(err));
-    setActionState('shotsLoadBtn','error');
-  }finally{
-    btn.disabled=false;
-  }
-});
-
-function renderShots(){
-  const box=$('shotsList'); box.innerHTML='';
-  state.shots.forEach((f,i)=>{
-    const url=URL.createObjectURL(f);
-    const d=document.createElement('div'); d.className='shot';
-    d.innerHTML=`<img src="${url}"><div><b>${f.name}</b><textarea id="shotText${i}" rows="4" placeholder="Вставьте текст с тренировки"></textarea></div>`;
-    box.appendChild(d);
-  });
-}
-
-$('ocrBtn').addEventListener('click', ()=>{
-  if(!state.shots.length){$('ocrStatus').textContent='Сначала загрузите скриншот.';return;}
-  let merged='';
-  for(let i=0;i<state.shots.length;i++){
-    const el=$(`shotText${i}`);
-    if(el) merged += '\\n' + el.value;
-  }
-  applyOCR(merged);
-  $('ocrStatus').textContent='Данные из вставленного текста применены. Проверь значения ниже.';
-});
-
-function applyOCR(text){
-  const low=text.toLowerCase().replace(',','.');
-  let m=low.match(/(\d+(?:\.\d+)?)\s*км/); if(m)$('refDist').value=m[1];
-  m=low.match(/(?:набор|elevation|gain|\+)\D{0,8}(\d{2,5})\s*м/); if(m)$('refGain').value=m[1];
-  m=low.match(/(?:средн\w*\s*пульс|avg\s*hr|average heart rate)\D{0,12}(\d{2,3})/); if(m)$('refAvgHr').value=m[1];
-  m=low.match(/(?:макс\w*\s*пульс|max\s*hr|max heart rate)\D{0,12}(\d{2,3})/); if(m)$('refMaxHr').value=m[1];
-}
-
-
 async function inflateRaw(bytes){
   if(typeof DecompressionStream==='undefined') throw new Error('Safari слишком старый для автономного XLSX. Сохраните файл как CSV.');
   const ds=new DecompressionStream('deflate-raw');
@@ -1434,7 +1354,7 @@ $('saveBtn').addEventListener('click',()=>{
   const payload={
     athlete:$('athleteName').value, pi:$('itraPi').value,
     route:{dist:state.dist,gain:state.gain,loss:state.loss},
-    training:{dist:$('refDist').value,gain:$('refGain').value,avgHr:$('refAvgHr').value,maxHr:$('refMaxHr').value,lthr:$('lthr').value},
+    training:{dist:$('refDist').value,gain:$('refGain').value,avgHr:$('refAvgHr').value,lthr:$('lthr').value},
     roster:state.roster,
     savedAt:new Date().toISOString()
   };
@@ -1459,6 +1379,7 @@ function resetTrainingOcr(){
   if($('ocrMeta')) $('ocrMeta').style.display='none';
   if($('ocrRecognitionPercent')) $('ocrRecognitionPercent').textContent='—';
   if($('ocrElapsedTime')) $('ocrElapsedTime').textContent='—';
+
   if($('ocrParsedMetrics')) $('ocrParsedMetrics').style.display='none';
   if($('trainingOcrStatus')) $('trainingOcrStatus').textContent='Скриншот выбран. Нажмите «Распознать текст со скриншота».';
   setActionState('trainingOcrBtn','ready');
@@ -1500,65 +1421,56 @@ $('trainingOcrBtn')?.addEventListener('click',async()=>{
     const text=String(data.text||'').trim();
     const parsedMetrics=parseTrainingMetricsFromText(text);
     renderTrainingOcrMetrics(parsedMetrics);
-    const elapsedSec=(data.processing_seconds!=null?Number(data.processing_seconds):(performance.now()-ocrStartedAt)/1000);
+    const elapsedSec=(performance.now()-ocrStartedAt)/1000;
     if($('ocrMeta')) $('ocrMeta').style.display='grid';
-    if($('ocrRecognitionPercent')) $('ocrRecognitionPercent').textContent=String(parsedMetrics.confidence||0)+'%';
+    if($('ocrRecognitionPercent')) $('ocrRecognitionPercent').textContent=getOcrRecognitionPercent(parsedMetrics)+'%';
     if($('ocrElapsedTime')) $('ocrElapsedTime').textContent=elapsedSec.toFixed(1)+' с';
-    if(status) status.textContent=text?'✓ Показатели распознаны и заполнены ниже.':'✕ Показатели не найдены.';
+    if(status) status.textContent=text?'✓ Скриншот распознан. Найденные показатели показаны ниже.':'✕ Показатели не найдены.';
     setActionState('trainingOcrBtn',text?'success':'error');
   }catch(err){
-    if(status) status.textContent='✕ Ошибка распознавания: '+(err.name==='AbortError'?'таймаут 55 секунд':err.message);
+    if(status) status.textContent='✕ Ошибка распознавания: '+(err.name==='AbortError'?'таймаут 45 секунд':err.message);
     setActionState('trainingOcrBtn','error');
   }
 });
 
 
-function parseTrainingMetricsFromText(text){
-  const raw=String(text||'')
-    .replace(/\u00a0/g,' ')
-    .replace(/[|]/g,' ')
-    .replace(/,/g,'.')
-    .replace(/\s+/g,' ')
-    .trim();
 
+function getOcrRecognitionPercent(metrics){
+  const keys=['distance','gain','time','pace','hr'];
+  const found=keys.filter(k=>metrics && metrics[k]!==undefined && metrics[k]!==null && metrics[k]!=='').length;
+  return Math.round(found/keys.length*100);
+}
+
+function parseTrainingMetricsFromText(text){
+  const t=String(text||'').replace(/\u00a0/g,' ').replace(/,/g,'.');
   const out={};
 
-  // Distance: "Расстояние 5.70 км", "5.70 km", etc.
-  let m=raw.match(/(?:расстояние|дистанция|distance)\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*(?:км|km)\b/i)
-       || raw.match(/\b(\d+(?:\.\d+)?)\s*(?:км|km)\b/i);
-  if(m) out.distance=Number(m[1]);
+  const dist=t.match(/(?:дистанц(?:ия|ии)?|distance)\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*(?:км|km)\b/i)
+           || t.match(/\b(\d+(?:\.\d+)?)\s*(?:км|km)\b/i);
+  if(dist) out.distance=Number(dist[1]);
 
-  // Elevation gain
-  m=raw.match(/(?:набор(?:\s+высоты)?|elevation\s*gain|ascent)\s*[:\-]?\s*(\d{1,5})\s*(?:м|m)\b/i);
-  if(m) out.gain=Number(m[1]);
+  const gain=t.match(/(?:набор(?:\s+высоты)?|elevation\s*gain|ascent)\s*[:\-]?\s*(\d{2,5})\s*(?:м|m)\b/i);
+  if(gain) out.gain=Number(gain[1]);
 
-  // Average HR
-  m=raw.match(/(?:средн(?:ий|яя)\s+пульс|сред\.?\s*пульс|avg(?:erage)?\s+hr|average\s+heart\s+rate)\s*[:\-]?\s*(\d{2,3})\s*(?:уд\/мин|bpm)?/i);
-  if(m) out.hr=Number(m[1]);
+  const hr=t.match(/(?:средн(?:ий|яя)\s+пульс|avg(?:erage)?\s+hr|average\s+heart\s+rate)\s*[:\-]?\s*(\d{2,3})\b/i);
+  if(hr) out.hr=Number(hr[1]);
 
-  // Pace: "5:43 /км"
-  m=raw.match(/(?:средн(?:ий)?\s+темп|темп|pace)\s*[:\-]?\s*(\d{1,2})[:.](\d{2})\s*(?:\/км|\/km|min\/km|мин\/км)?/i)
-    || raw.match(/\b(\d{1,2})[:.](\d{2})\s*(?:\/км|\/km)\b/i);
-  if(m) out.pace=`${m[1]}:${m[2]}`;
+  const pace=t.match(/(?:темп|pace)\s*[:\-]?\s*(\d{1,2})[:.](\d{2})\s*(?:\/км|\/km|min\/km|мин\/км)?/i);
+  if(pace) out.pace=`${pace[1]}:${pace[2]}`;
 
-  // Moving/elapsed time - accept MM:SS and H:MM:SS.
-  m=raw.match(/(?:время\s+в\s+движении|moving\s*time|время|elapsed\s*time)\s*[:\-]?\s*(\d{1,2}):(\d{2}):(\d{2})\b/i);
-  if(m) out.time=`${m[1]}:${m[2]}:${m[3]}`;
-  else{
-    m=raw.match(/(?:время\s+в\s+движении|moving\s*time|время|elapsed\s*time)\s*[:\-]?\s*(\d{1,2}):(\d{2})\b/i);
-    if(m) out.time=`0:${m[1]}:${m[2]}`;
-  }
-
-  // Confidence based on how many expected metrics were successfully recognized.
-  const expected=5;
-  const found=['distance','gain','time','pace','hr'].filter(k=>out[k]!=null).length;
-  out.confidence=Math.round((found/expected)*100);
+  const time=t.match(/(?:время|time|elapsed\s*time|moving\s*time)\s*[:\-]?\s*(\d{1,2}):(\d{2}):(\d{2})\b/i)
+           || t.match(/\b(\d{1,2}):(\d{2}):(\d{2})\b/);
+  if(time) out.time=`${time[1]}:${time[2]}:${time[3]}`;
 
   return out;
 }
+
 function renderTrainingOcrMetrics(metrics){
   const box=$('ocrParsedMetrics');
-  if(box) box.style.display='grid';
+  if(!box) return;
+
+  const has=Object.keys(metrics||{}).length>0;
+  box.style.display=has?'grid':'none';
 
   if($('ocrDistance')) $('ocrDistance').textContent=metrics.distance!=null?`${metrics.distance} км`:'—';
   if($('ocrGain')) $('ocrGain').textContent=metrics.gain!=null?`${metrics.gain} м`:'—';
@@ -1566,17 +1478,8 @@ function renderTrainingOcrMetrics(metrics){
   if($('ocrPace')) $('ocrPace').textContent=metrics.pace?`${metrics.pace} /км`:'—';
   if($('ocrHr')) $('ocrHr').textContent=metrics.hr!=null?`${metrics.hr} уд/мин`:'—';
 
-  const setAny=(ids,val)=>{
-    if(val==null) return;
-    for(const id of ids){
-      const el=$(id);
-      if(el){ el.value=String(val); break; }
-    }
-  };
-
-  setAny(['refDist','trainingDistance','trainDist'],metrics.distance);
-  setAny(['refGain','trainingGain','trainGain'],metrics.gain);
-  setAny(['refAvgHr','trainingHr','trainHr'],metrics.hr);
-  setAny(['refPace','trainingPace','trainPace'],metrics.pace);
-  setAny(['refTime','trainingTime','trainTime'],metrics.time);
+  // Auto-fill existing training fields when present.
+  if(metrics.distance!=null && $('refDist')) $('refDist').value=String(metrics.distance);
+  if(metrics.gain!=null && $('refGain')) $('refGain').value=String(metrics.gain);
+  if(metrics.hr!=null && $('refAvgHr')) $('refAvgHr').value=String(metrics.hr);
 }

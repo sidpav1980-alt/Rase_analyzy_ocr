@@ -403,9 +403,9 @@ def ocr_health():
 
 @app.post("/api/training-ocr")
 def training_ocr():
-    started=time.time()
     import shutil as _shutil
     tess=_shutil.which("tesseract")
+
     if pytesseract is None:
         return jsonify({"error":"pytesseract Python package is not installed"}),500
     if not tess:
@@ -414,45 +414,49 @@ def training_ocr():
     f=request.files.get("image")
     if not f:
         return jsonify({"error":"Image is required"}),400
+
     try:
         raw=f.read()
         if not raw:
             return jsonify({"error":"Empty image"}),400
-        img=Image.open(io.BytesIO(raw))
-        img.thumbnail((1050,1800))
-        gray=img.convert("L")
 
-        # First pass is deliberately fast for Render Free.
-        attempts=[
-            (gray,"rus+eng","--oem 1 --psm 6",18),
-            (gray,"eng","--oem 1 --psm 6",12),
-        ]
-        text=""
-        timed_out=False
-        for im,lang,cfg,limit in attempts:
-            try:
-                text=pytesseract.image_to_string(im,lang=lang,config=cfg,timeout=limit)
-                if text and len(text.strip())>=8:
-                    break
-            except RuntimeError as e:
-                if "timeout" in str(e).lower():
-                    timed_out=True
-                    continue
-                raise
+        img=Image.open(io.BytesIO(raw)).convert("L")
+
+        # Resize to a sensible width; huge screenshots are slow on free Render.
+        w,h=img.size
+        target_w=1400
+        if w>target_w:
+            scale=target_w/w
+            img=img.resize((target_w,max(1,int(h*scale))))
+        elif w<900:
+            scale=900/max(1,w)
+            img=img.resize((900,max(1,int(h*scale))))
+
+        # Slight thresholding improves UI screenshots.
+        img=img.point(lambda p: 255 if p>175 else 0)
+
+        try:
+            text=pytesseract.image_to_string(
+                img,
+                lang="rus+eng",
+                config="--psm 6",
+                timeout=35
+            )
+        except RuntimeError as e:
+            if "timeout" in str(e).lower():
+                return jsonify({"error":"OCR timeout"}),504
+            text=pytesseract.image_to_string(
+                img,
+                lang="eng",
+                config="--psm 6",
+                timeout=35
+            )
 
         text=re.sub(r"\n{3,}","\n\n",text or "").strip()
-        if not text and timed_out:
-            return jsonify({
-                "error":"OCR не успел обработать изображение. Попробуйте обрезать скриншот до блока статистики.",
-                "processing_seconds":round(time.time()-started,2)
-            }),504
-        return jsonify({
-            "text":text,
-            "processing_seconds":round(time.time()-started,2),
-            "fallback_used":timed_out
-        })
+        return jsonify({"text":text})
     except Exception as e:
-        return jsonify({"error":f"OCR failed: {e}","processing_seconds":round(time.time()-started,2)}),500
+        return jsonify({"error":f"OCR failed: {e}"}),500
+
 
 @app.post("/api/itra-batch")
 def itra_batch():
@@ -499,7 +503,7 @@ def itra_batch():
 def health():
     return jsonify({
         "ok":True,
-        "version":"0.67",
+        "version":"0.68",
         "itra_enabled":bool(OPENROUTER_API_KEY),
         "model":OPENROUTER_MODEL
     })
