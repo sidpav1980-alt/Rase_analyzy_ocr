@@ -1571,28 +1571,44 @@ function parseTrainingMetricsFromText(text){
 
 
 function normalizeGarminTrainingMetrics(text, metrics){
-  const s=String(text||'').replace(/,/g,'.').replace(/\u00a0/g,' ');
+  const s=String(text||'')
+    .replace(/\u00a0/g,' ')
+    .replace(/,/g,'.')
+    .replace(/\r/g,'');
   const out={...(metrics||{})};
   let m;
 
-  m=s.match(/(?:Расстояние|Дистанция)[\s\S]{0,80}?(\d+(?:\.\d+)?)\s*(?:км|km)/i);
+  // Paired Garmin row:
+  // "Расстояние Средний темп"
+  // "8.03 км 5:53 /км"
+  m=s.match(/Расстояние\s+Средн(?:ий)?\s+темп[\s\S]{0,80}?(\d+(?:\.\d+)?)\s*(?:км|km)\s+(\d{1,2}):(\d{2})\s*\/?\s*(?:км|km)/i);
+  if(m){
+    out.distance=Number(m[1]);
+    out.pace=m[2]+':'+m[3];
+  }
+
+  // Explicit distance.
+  m=s.match(/(?:Расстояние|Дистанция|Distance)[\s\S]{0,80}?(\d+(?:\.\d+)?)\s*(?:км|km)\b/i);
   if(m) out.distance=Number(m[1]);
 
-  m=s.match(/(?:Средн(?:ий)?\s*темп|Средний темп|Темп)[\s\S]{0,100}?(\d{1,2}):(\d{2})\s*\/?\s*(?:км|km)/i);
+  // Explicit average pace, with unit context so 8.03 km cannot become 8:03 pace.
+  m=s.match(/(?:Средн(?:ий)?\s+темп|Темп|Pace)[\s\S]{0,100}?(\d{1,2}):(\d{2})\s*\/?\s*(?:км|km)\b/i);
   if(m) out.pace=m[1]+':'+m[2];
 
-  // paired Garmin layout: label row followed by value row
-  m=s.match(/Расстояние\s+Средн(?:ий)?\s*темп[\s\S]{0,50}?(\d+(?:\.\d+)?)\s*(?:км|km)\s+(\d{1,2}):(\d{2})\s*\/?\s*(?:км|km)/i);
-  if(m){ out.distance=Number(m[1]); out.pace=m[2]+':'+m[3]; }
-
-  m=s.match(/Время\s+в\s+движении(?:\s+Набор\s+высоты)?[\s\S]{0,50}?(\d{1,2}:\d{2}(?::\d{2})?)/i);
+  // Paired Garmin row:
+  // "Время в движении Набор высоты"
+  // "47:14 17 м"
+  m=s.match(/Время\s+в\s+движении(?:\s+Набор\s+высоты)?[\s\S]{0,80}?(\d{1,2}:\d{2}(?::\d{2})?)/i);
   if(m) out.time=m[1];
 
-  m=s.match(/(?:Сред\.?\s*пульс|Средн(?:ий|яя)\s+пульс)[\s\S]{0,60}?(\d{2,3})\s*(?:уд\/мин|bpm)/i);
+  // Paired Garmin row:
+  // "Калории Сред. пульс"
+  // "636 Ккал 155 уд/мин"
+  m=s.match(/Калории\s+Сред\.?\s*пульс[\s\S]{0,80}?\d+\s*Ккал\s+(\d{2,3})\s*уд\/мин/i);
   if(m) out.hr=Number(m[1]);
 
-  // Garmin: "Калории Сред. пульс" then "636 Ккал 155 уд/мин"
-  m=s.match(/Калории\s+Сред\.?\s*пульс[\s\S]{0,60}?\d+\s*Ккал\s+(\d{2,3})\s*уд\/мин/i);
+  // Explicit average HR fallback.
+  m=s.match(/(?:Сред\.?\s*пульс|Средн(?:ий|яя)\s+пульс|Avg(?:erage)?\s+HR)[\s\S]{0,80}?(\d{2,3})\s*(?:уд\/мин|bpm)\b/i);
   if(m) out.hr=Number(m[1]);
 
   return out;
