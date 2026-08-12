@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="app-version">v0.79 ONLINE FULL</div>
+<div class="app-version">v0.81 ONLINE FULL</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Trail Race Analyzer</div>
@@ -163,7 +163,7 @@
           <b>Скриншот тренировки</b>
           <input id="trainingScreenshot" type="file" accept="image/*">
           <button class="action ready" id="trainingOcrBtn" type="button">Загрузить и распознать</button>
-          <div class="status" id="trainingOcrStatus">Выберите один скриншот тренировки и нажмите «Загрузить и распознать».</div><div id="ocrSlowWarning" class="status" style="display:none">⚠ Распознавание занимает необычно много времени. OCR продолжает работать.</div>
+          <div class="status" id="trainingOcrStatus">Выберите один скриншот тренировки и нажмите «Загрузить и распознать».</div><div id="ocrTimeoutNote" class="status">Максимальное время ожидания OCR — 60 секунд.</div><div id="ocrSlowWarning" class="status" style="display:none">⚠ Распознавание занимает необычно много времени. OCR продолжает работать.</div>
           <div class="ocr-meta" id="ocrMeta">
             <div><span>Распознано показателей</span><b id="ocrRecognitionPercent">0%</b></div>
             <div><span>Время обработки</span><b id="ocrElapsedTime">0.0 с</b></div>

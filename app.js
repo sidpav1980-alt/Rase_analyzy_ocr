@@ -1152,6 +1152,19 @@ function estimateLTHR(){
   if(mins<=100)return Math.round(hr*1.01);
   return Math.round(hr*1.03);
 }
+
+function movingTimeMinutes(){
+  const el=$('refTime');
+  if(!el) return 0;
+  const s=String(el.value||'').trim().replace(',','.');
+  let m=s.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
+  if(m) return Number(m[1])*60+Number(m[2])+Number(m[3])/60;
+  m=s.match(/^(\d{1,3}):(\d{2})$/);
+  if(m) return Number(m[1])+Number(m[2])/60;
+  const n=Number(s);
+  return Number.isFinite(n)?n:0;
+}
+
 function formScore(){
   let s=0;
   const d=+$('refDist').value||0,g=+$('refGain').value||0,hr=+$('refAvgHr').value||0;
@@ -1471,7 +1484,33 @@ window.addEventListener('DOMContentLoaded',clearMapAnalysisOnPageStart);
 
 
 
+
+function clearBestTrainingData(){
+  // upper OCR result cards
+  if($('ocrDistance')) $('ocrDistance').textContent='—';
+  if($('ocrTime')) $('ocrTime').textContent='—';
+  if($('ocrPace')) $('ocrPace').textContent='—';
+  if($('ocrHr')) $('ocrHr').textContent='—';
+  if($('ocrGain')) $('ocrGain').textContent='—';
+
+  // lower editable fields
+  if($('refDist')) $('refDist').value='';
+  if($('refTime')) $('refTime').value='';
+  if($('refPace')) $('refPace').value='';
+  if($('refAvgHr')) $('refAvgHr').value='';
+
+  // OCR stats
+  if($('ocrRecognitionPercent')) $('ocrRecognitionPercent').textContent='0%';
+  if($('ocrElapsedTime')) $('ocrElapsedTime').textContent='0.0 с';
+
+  if($('ocrPreview')) $('ocrPreview').style.display='none';
+  if($('ocrPreviewText')) $('ocrPreviewText').textContent='';
+
+  state.bestTraining=null;
+}
+
 function resetTrainingOcr(){
+  clearBestTrainingData();
   if($('ocrSlowWarning')) $('ocrSlowWarning').style.display='none';
   if($('ocrMeta')) $('ocrMeta').style.display='grid';
   if($('ocrRecognitionPercent')) $('ocrRecognitionPercent').textContent='0%';
@@ -1502,7 +1541,7 @@ $('trainingOcrBtn')?.addEventListener('click',async()=>{
   }
 
   const ocrStartedAt=performance.now();
-  let ocrTimer=setInterval(()=>{if($('ocrElapsedTime')) $('ocrElapsedTime').textContent=((performance.now()-ocrStartedAt)/1000).toFixed(1)+' с';},200);
+  let ocrTimer=setInterval(()=>{if($('ocrElapsedTime')) $('ocrElapsedTime').textContent=Math.min((performance.now()-ocrStartedAt)/1000,60).toFixed(1)+' с';},200);
   let ocrSlowWarningTimer=setTimeout(()=>{
     if($('ocrSlowWarning')) $('ocrSlowWarning').style.display='block';
   },60000);
@@ -1510,7 +1549,18 @@ $('trainingOcrBtn')?.addEventListener('click',async()=>{
   if(status) status.textContent='Распознаю текст…';
   try{
     const fd=new FormData(); fd.append('image',file);
-    const resp=await fetch('/api/training-ocr',{method:'POST',body:fd});
+    const controller=new AbortController();
+    const hardTimeout=setTimeout(()=>controller.abort(),60000);
+    let resp;
+    try{
+      resp=await fetch('/api/training-ocr',{
+        method:'POST',
+        body:fd,
+        signal:controller.signal
+      });
+    }finally{
+      clearTimeout(hardTimeout);
+    }
     const data=await resp.json().catch(()=>({}));
     if(!resp.ok) throw new Error(data.error||`HTTP ${resp.status}`);
     const text=String(data.text||'').trim();
@@ -1526,14 +1576,17 @@ $('trainingOcrBtn')?.addEventListener('click',async()=>{
     if(status) status.textContent=text?'✓ Текст распознан. Можно исправить вручную.':'✕ Текст не найден.';
     setActionState('trainingOcrBtn',text?'success':'error');
   }catch(err){
+    if(err.name==='AbortError') clearBestTrainingData();
     if(typeof ocrSlowWarningTimer!=='undefined') clearTimeout(ocrSlowWarningTimer);
     if($('ocrSlowWarning')) $('ocrSlowWarning').style.display='none';
     if(typeof ocrTimer!=='undefined' && ocrTimer){clearInterval(ocrTimer);ocrTimer=null;}
     const failedSec=(performance.now()-ocrStartedAt)/1000;
     if($('ocrMeta')) $('ocrMeta').style.display='grid';
     if($('ocrRecognitionPercent')) $('ocrRecognitionPercent').textContent='0%';
-    if($('ocrElapsedTime')) $('ocrElapsedTime').textContent=failedSec.toFixed(1)+' с';
-    if(status) status.textContent='✕ Ошибка распознавания: '+err.message;
+    if($('ocrElapsedTime')) $('ocrElapsedTime').textContent=(err.name==='AbortError'?'60.0 с':failedSec.toFixed(1)+' с');
+    if(status) status.textContent = err.name==='AbortError'
+      ? '✕ Ошибка распознавания: превышено 60 секунд. Повторите снова.'
+      : '✕ Ошибка распознавания: '+err.message;
     setActionState('trainingOcrBtn','error');
   }
 });
@@ -1614,9 +1667,36 @@ function normalizeGarminTrainingMetrics(text, metrics){
   return out;
 }
 
+
+function setMovingTimeFieldFromOCR(value){
+  const el=$('refTime');
+  if(!el || !value) return;
+
+  const s=String(value).trim();
+  let seconds=null;
+  let m=s.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
+  if(m){
+    seconds=Number(m[1])*3600+Number(m[2])*60+Number(m[3]);
+  }else{
+    m=s.match(/^(\d{1,3}):(\d{2})$/);
+    if(m) seconds=Number(m[1])*60+Number(m[2]);
+  }
+
+  // v0.80 lower field originally inherited a numeric "minutes" input.
+  if(el.type==='number'){
+    if(seconds!=null) el.value=(seconds/60).toFixed(2).replace(/\.00$/,'');
+    else{
+      const n=Number(s.replace(',','.'));
+      el.value=Number.isFinite(n)?String(n):'';
+    }
+  }else{
+    el.value=s;
+  }
+}
+
 function renderTrainingOcrMetrics(metrics){
   if($('refDist') && metrics.distance!=null) $('refDist').value=metrics.distance;
-  if($('refTime') && metrics.time) $('refTime').value=metrics.time;
+  if(metrics.time) setMovingTimeFieldFromOCR(metrics.time);
   if($('refPace') && metrics.pace) $('refPace').value=metrics.pace;
   if($('refAvgHr') && metrics.hr!=null) $('refAvgHr').value=metrics.hr;
 
@@ -1637,3 +1717,5 @@ function renderTrainingOcrMetrics(metrics){
   if(metrics.gain!=null && $('refGain')) $('refGain').value=String(metrics.gain);
   if(metrics.hr!=null && $('refAvgHr')) $('refAvgHr').value=String(metrics.hr);
 }
+
+window.addEventListener('DOMContentLoaded',clearBestTrainingData);

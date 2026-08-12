@@ -443,7 +443,7 @@ def training_ocr():
             )
         except RuntimeError as e:
             if "timeout" in str(e).lower():
-                return jsonify({"error":"OCR timeout"}),504
+                return jsonify({"error":"OCR превысил 60 секунд. Повторите снова."}),504
             text=pytesseract.image_to_string(
                 img,
                 lang="eng",
@@ -501,7 +501,7 @@ def itra_batch():
 def health():
     return jsonify({
         "ok":True,
-        "version":"0.79",
+        "version":"0.81",
         "itra_enabled":bool(OPENROUTER_API_KEY),
         "model":OPENROUTER_MODEL
     })
