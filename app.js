@@ -1284,10 +1284,6 @@ $('mapAnalyzeBtn')?.addEventListener('click',async ()=>{
 
 
 
-function getAthleteNameValue(){
-  const el=$('athleteName');
-  return el ? el.value.trim() : '';
-}
 function getAthletePiElement(){
   return $('athletePi') || $('itraPi') || $('pi');
 }
@@ -1345,68 +1341,6 @@ function initOpenRouterKeyUI(){
 }
 
 
-$('ownItraLookupBtn')?.addEventListener('click', async ()=>{
-  const name=getAthleteNameValue();
-  const piEl=getAthletePiElement();
-
-  const profile=$('ownItraProfile') ? $('ownItraProfile').value.trim() : '';
-  if(!profile){
-    $('ownItraLookupStatus').textContent='✕ Укажите ссылку ITRA или Runner ID.';
-    setActionState('ownItraLookupBtn','error');
-    return;
-  }
-
-  const btn=$('ownItraLookupBtn');
-  btn.disabled=true;
-  setActionState('ownItraLookupBtn','working');
-  $('ownItraLookupStatus').textContent='Ищу профиль ITRA: '+(profile||name)+'…';
-
-  try{
-    const resp=await fetch('/api/itra-own',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({name,profile})
-    });
-
-    if(!resp.ok){
-      let detail='';
-      try{
-        const e=await resp.json();
-        detail=e.error||'';
-      }catch(e){}
-      throw new Error('HTTP '+resp.status+(detail?' · '+detail:''));
-    }
-
-    const data=await resp.json();
-    const result=data.result||null;
-
-    if(!result || result.pi===null || result.pi===undefined){
-      if(piEl) piEl.value='0';
-      throw new Error('ITRA Performance Index не найден по указанной ссылке');
-    }
-
-    if(piEl) piEl.value=String(result.pi);
-    $('ownItraLookupStatus').textContent='✓ ITRA PI найден: '+result.pi;
-    setActionState('ownItraLookupBtn','success');
-
-    // Persist current profile locally when possible.
-    try{
-      localStorage.setItem('trailOwnItraProfile',JSON.stringify({
-        name,
-        pi:Number(result.pi),
-        source:result.source||null,
-        profile:($('ownItraProfile')?$('ownItraProfile').value.trim():''),
-        savedAt:new Date().toISOString()
-      }));
-    }catch(e){}
-  }catch(err){
-    const piEl=getAthletePiElement(); if(piEl) piEl.value='0';
-    $('ownItraLookupStatus').textContent='✕ Ошибка ITRA: '+(err.message||String(err));
-    setActionState('ownItraLookupBtn','error');
-  }finally{
-    btn.disabled=false;
-  }
-});
 
 
 $('itraLookupBtn')?.addEventListener('click', async ()=>{
@@ -1531,17 +1465,6 @@ window.addEventListener('DOMContentLoaded',initOpenRouterKeyUI);
 window.addEventListener('DOMContentLoaded',syncMapAnalyzeButton);
 
 
-function restoreOwnItraProfile(){
-  try{
-    const p=JSON.parse(localStorage.getItem('trailOwnItraProfile')||'null');
-    if(!p) return;
-    const nameEl=$('athleteName'), piEl=getAthletePiElement(), profileEl=$('ownItraProfile');
-    if(nameEl && (!nameEl.value || nameEl.value==='Noname')) nameEl.value=p.name||'Noname';
-    if(piEl && p.pi) piEl.value=String(p.pi);
-    if(profileEl && p.profile) profileEl.value=p.profile;
-  }catch(e){}
-}
-window.addEventListener('DOMContentLoaded',restoreOwnItraProfile);
 
 
 window.addEventListener('DOMContentLoaded',clearMapAnalysisOnPageStart);
@@ -1549,6 +1472,10 @@ window.addEventListener('DOMContentLoaded',clearMapAnalysisOnPageStart);
 
 
 function resetTrainingOcr(){
+  if($('ocrMeta')) $('ocrMeta').style.display='grid';
+  if($('ocrRecognitionPercent')) $('ocrRecognitionPercent').textContent='0%';
+  if($('ocrElapsedTime')) $('ocrElapsedTime').textContent='0.0 с';
+
   if($('ocrParsedMetrics')) $('ocrParsedMetrics').style.display='none';
   if($('trainingOcrText')) $('trainingOcrText').value='';
   if($('trainingOcrStatus')) $('trainingOcrStatus').textContent='Скриншот выбран. Нажмите «Распознать текст со скриншота».';
@@ -1573,31 +1500,43 @@ $('trainingOcrBtn')?.addEventListener('click',async()=>{
     return;
   }
 
+  const ocrStartedAt=performance.now();
+  let ocrTimer=setInterval(()=>{if($('ocrElapsedTime')) $('ocrElapsedTime').textContent=((performance.now()-ocrStartedAt)/1000).toFixed(1)+' с';},200);
   setActionState('trainingOcrBtn','loading');
   if(status) status.textContent='Распознаю текст…';
   try{
     const fd=new FormData(); fd.append('image',file);
-    const controller=new AbortController();
-    const timeout=setTimeout(()=>controller.abort(),45000);
-    let resp;
-    try{
-      resp=await fetch('/api/training-ocr',{method:'POST',body:fd,signal:controller.signal});
-    }finally{
-      clearTimeout(timeout);
-    }
+    const resp=await fetch('/api/training-ocr',{method:'POST',body:fd});
     const data=await resp.json().catch(()=>({}));
     if(!resp.ok) throw new Error(data.error||`HTTP ${resp.status}`);
     const text=String(data.text||'').trim();
     $('trainingOcrText').value=text;
-    renderTrainingOcrMetrics(parseTrainingMetricsFromText(text));
+    const parsedMetrics=parseTrainingMetricsFromText(text);
+    renderTrainingOcrMetrics(parsedMetrics);
+    if(typeof ocrTimer!=='undefined' && ocrTimer){clearInterval(ocrTimer);ocrTimer=null;}
+    const elapsedSec=(performance.now()-ocrStartedAt)/1000;
+    if($('ocrMeta')) $('ocrMeta').style.display='grid';
+    if($('ocrRecognitionPercent')) $('ocrRecognitionPercent').textContent=getOcrRecognitionPercent(parsedMetrics)+'%';
+    if($('ocrElapsedTime')) $('ocrElapsedTime').textContent=elapsedSec.toFixed(1)+' с';
     if(status) status.textContent=text?'✓ Текст распознан. Можно исправить вручную.':'✕ Текст не найден.';
     setActionState('trainingOcrBtn',text?'success':'error');
   }catch(err){
-    if(status) status.textContent='✕ Ошибка распознавания: '+(err.name==='AbortError'?'таймаут 45 секунд':err.message);
+    if(typeof ocrTimer!=='undefined' && ocrTimer){clearInterval(ocrTimer);ocrTimer=null;}
+    const failedSec=(performance.now()-ocrStartedAt)/1000;
+    if($('ocrMeta')) $('ocrMeta').style.display='grid';
+    if($('ocrRecognitionPercent')) $('ocrRecognitionPercent').textContent='0%';
+    if($('ocrElapsedTime')) $('ocrElapsedTime').textContent=failedSec.toFixed(1)+' с';
+    if(status) status.textContent='✕ Ошибка распознавания: '+err.message;
     setActionState('trainingOcrBtn','error');
   }
 });
 
+
+function getOcrRecognitionPercent(metrics){
+  const keys=['distance','time','pace','hr'];
+  const found=keys.filter(k=>metrics && metrics[k]!==undefined && metrics[k]!==null && metrics[k]!=='').length;
+  return Math.round(found/keys.length*100);
+}
 
 function parseTrainingMetricsFromText(text){
   const t=String(text||'').replace(/\u00a0/g,' ').replace(/,/g,'.');

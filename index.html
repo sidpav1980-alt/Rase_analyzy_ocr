@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="app-version">v0.64 ONLINE FULL</div>
+<div class="app-version">v0.75 ONLINE FULL</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Trail Race Analyzer</div>
@@ -25,7 +25,7 @@
   <main>
     <section class="card hero">
       <h2>Новая гонка</h2>
-      <p>Загрузи GPX, описание покрытия, тренировки и стартовый список. Приложение рассчитает стратегию, прогноз финиша и шансы против соперников.</p>
+      <p>Загрузи GPX, лучшую тренировку и стартовый список. Приложение рассчитает стратегию, прогноз финиша и шансы против соперников.</p>
       <div class="grid2">
         <label class="field">
           <span>Имя спортсмена</span>
@@ -35,19 +35,7 @@
           <span>ITRA PI</span>
           <input id="itraPi" type="number" min="0" max="1000" value="0">
         </label>
-
-        <div class="own-itra-profile-box">
-          <label class="field">
-            <span>ITRA профиль / Runner ID</span>
-            <input id="ownItraProfile" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
-                   placeholder="https://itra.run/RunnerSpace/... или Runner ID">
-          </label>
-          <div class="muted">Вставьте ссылку ITRA или Runner ID. PI берётся только из блока «ITRA Performance Index». ИИ не используется.</div>
         </div>
-
-        <div class="own-itra-box">
-          <button id="ownItraLookupBtn" type="button" class="secondary action-ready">Загрузить мой ITRA по ссылке</button>
-          <div id="ownItraLookupStatus" class="muted">Возьмёт имя спортсмена выше, найдёт профиль ITRA и подставит PI.</div>
         </div>
 
       </div>
@@ -55,7 +43,7 @@
 
     <nav class="tabs">
       <button class="tab active" data-tab="route">1. Трасса</button>
-      <button class="tab" data-tab="training">2. Тренировки</button>
+      <button class="tab" data-tab="training">2. Лучшая тренировка</button>
       <button class="tab" data-tab="roster">3. Стартовый</button>
       <button class="tab" data-tab="result">4. Итог</button>
     </nav>
@@ -169,22 +157,27 @@
 
     <section id="training" class="tabpanel">
       <div class="card">
-        <h2>Тренировки</h2>
+        <h2>Лучшая тренировка</h2>
+        <p class="muted">Самая сильная тренировка определяется по высокому среднему пульсу и лучшим показателям дистанции, набора и темпа.</p>
         <div class="upload-box">
           <b>Скриншот тренировки</b>
           <input id="trainingScreenshot" type="file" accept="image/*">
           <button class="action ready" id="trainingOcrBtn" type="button">Загрузить и распознать</button>
           <div class="status" id="trainingOcrStatus">Выберите один скриншот тренировки и нажмите «Загрузить и распознать».</div>
+          <div class="ocr-meta" id="ocrMeta">
+            <div><span>Распознано показателей</span><b id="ocrRecognitionPercent">0%</b></div>
+            <div><span>Время обработки</span><b id="ocrElapsedTime">0.0 с</b></div>
+          </div>
           <label class="field">
             <span>Распознанный текст</span>
             <textarea id="trainingOcrText" rows="7" placeholder="Здесь появится текст со скриншота. Его можно исправить вручную."></textarea>
           </label>
 
           <div id="ocrParsedMetrics" class="ocr-parsed" style="display:none">
-            <div><span>Дистанция</span><b id="ocrDistance">—</b></div>
-            <div><span>Набор</span><b id="ocrGain">—</b></div>
-            <div><span>Время</span><b id="ocrTime">—</b></div>
-            <div><span>Темп</span><b id="ocrPace">—</b></div>
+            <div><span>Расстояние</span><b id="ocrDistance">—</b></div>
+            
+            <div><span>Время в движении</span><b id="ocrTime">—</b></div>
+            <div><span>Средний темп</span><b id="ocrPace">—</b></div>
             <div><span>Средний пульс</span><b id="ocrHr">—</b></div>
           </div>
         </div>

@@ -45,7 +45,7 @@ def osm_proxy():
     last_error=None
     for endpoint in OVERPASS_ENDPOINTS:
         try:
-            r=requests.post(endpoint,data={"data":query},headers=UA,timeout=35)
+            r=requests.post(endpoint,data={"data":query},headers=UA)
             if r.ok:
                 return jsonify(r.json())
             last_error=f"{endpoint} -> HTTP {r.status_code}"
@@ -120,7 +120,7 @@ def openrouter_extract(batch, api_key=None):
         "response_format":{"type":"json_object"}
     }
 
-    r=requests.post("https://openrouter.ai/api/v1/chat/completions",headers=headers,json=payload,timeout=90)
+    r=requests.post("https://openrouter.ai/api/v1/chat/completions",headers=headers,json=payload)
     if not r.ok:
         raise RuntimeError(f"OpenRouter HTTP {r.status_code}: {r.text[:300]}")
 
@@ -302,7 +302,7 @@ def fetch_itra_url(url):
         **UA,
         "Accept":"text/html,application/json;q=0.9,*/*;q=0.8",
         "Referer":"https://itra.run/"
-    },timeout=25,allow_redirects=True)
+    },allow_redirects=True)
     if not r.ok:
         raise RuntimeError(f"ITRA HTTP {r.status_code}")
     return r.text, r.url
@@ -439,8 +439,7 @@ def training_ocr():
             text=pytesseract.image_to_string(
                 img,
                 lang="rus+eng",
-                config="--psm 6",
-                timeout=35
+                config="--psm 6"
             )
         except RuntimeError as e:
             if "timeout" in str(e).lower():
@@ -448,8 +447,7 @@ def training_ocr():
             text=pytesseract.image_to_string(
                 img,
                 lang="eng",
-                config="--psm 6",
-                timeout=35
+                config="--psm 6"
             )
 
         text=re.sub(r"\n{3,}","\n\n",text or "").strip()
@@ -457,32 +455,6 @@ def training_ocr():
     except Exception as e:
         return jsonify({"error":f"OCR failed: {e}"}),500
 
-@app.post("/api/itra-own")
-def itra_own():
-    payload=request.get_json(silent=True) or {}
-    name=str(payload.get("name","")).strip()
-    profile=str(payload.get("profile","")).strip()
-
-    if not profile:
-        return jsonify({"error":"ITRA profile URL or Runner ID required"}),400
-
-    try:
-        direct=search_direct_itpa(name,profile)
-    except Exception as e:
-        return jsonify({"error":str(e)}),400
-
-    if direct and direct.get("pi") is not None:
-        return jsonify({"result":direct})
-
-    return jsonify({
-        "result":{
-            "name":name or profile,
-            "pi":None,
-            "source":None,
-            "confidence":0
-        },
-        "error":"ITRA Performance Index not found in supplied profile"
-    }),404
 
 @app.post("/api/itra-batch")
 def itra_batch():
@@ -529,7 +501,7 @@ def itra_batch():
 def health():
     return jsonify({
         "ok":True,
-        "version":"0.64",
+        "version":"0.75",
         "itra_enabled":bool(OPENROUTER_API_KEY),
         "model":OPENROUTER_MODEL
     })
