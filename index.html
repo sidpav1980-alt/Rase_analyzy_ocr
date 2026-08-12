@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="app-version">v0.82 ONLINE FULL</div>
+<div class="app-version">v0.83 ONLINE FULL</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Trail Race Analyzer</div>
@@ -183,28 +183,17 @@
         </div>
 
         <p class="muted">Добавь один скриншот Garmin/Strava. Приложение хранит их локально; ключевые цифры можно внести вручную или скопировать через iPhone Live Text. Интернет не нужен.</p>
-        <div class="upload">
-          <strong>Скриншот тренировки</strong>
-          <input id="shotFiles" type="file" accept="image/*">
-          <span id="shotsName"><span class="file-check">○</span> Файл не выбран</span>
-          <button id="shotsLoadBtn" type="button" class="primary action-idle" disabled>Загрузить и обработать скриншот</button>
-          <span id="shotsStatus">1. Выберите один скриншот.</span>
-          <progress id="shotsProgress" value="0" max="100" style="width:100%;display:none"></progress>
-        </div>
+        
 
         <div class="grid2">
-          <label class="field"><span>Расстояние, км</span><input id="refDist" type="number" step="0.01" placeholder="8.03"></label>
-          <label class="field"><span>Время в движении</span><input id="refMinutes" type="text" inputmode="numeric" placeholder="47:14"></label>
-          <label class="field"><span>Средний темп</span><input id="refPace" type="text" inputmode="numeric" placeholder="5:53"></label>
-          <label class="field"><span>Средний пульс</span><input id="refAvgHr" type="number" step="1" placeholder="155"></label>
+          <label class="field"><span>Расстояние, км</span><input id="refDist" autocomplete="off" type="number" step="0.01" placeholder="8.03"></label>
+          <label class="field"><span>Время в движении</span><input id="refMinutes" autocomplete="off" type="text" inputmode="numeric" placeholder="47:14"></label>
+          <label class="field"><span>Средний темп</span><input id="refPace" autocomplete="off" type="text" inputmode="numeric" placeholder="5:53"></label>
+          <label class="field"><span>Средний пульс</span><input id="refAvgHr" autocomplete="off" type="number" step="1" placeholder="155"></label>
         </div>
         <input id="refGain" type="hidden" value="0">
         <input id="refMaxHr" type="hidden" value="0">
         <input id="lthr" type="hidden" value="0">
-
-        <button id="ocrBtn" class="primary">Заполнить из текста</button>
-        <div id="ocrStatus" class="muted">Автономный режим: OCR-библиотека не требуется. На iPhone можно использовать Live Text и вставить распознанный текст в поле скриншота.</div>
-        <div id="shotsList"></div>
       </div>
     </section>
 

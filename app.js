@@ -920,86 +920,6 @@ function paceFmt(sec){
   sec=Math.round(sec); return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;
 }
 
-let selectedShotFile=null;
-
-$('shotFiles').addEventListener('change', e=>{
-  selectedShotFile=e.currentTarget.files&&e.currentTarget.files[0] ? e.currentTarget.files[0] : null;
-  if(!selectedShotFile){
-    state.shots=[];
-    $('shotsName').innerHTML='<span class="file-check">○</span> Файл не выбран';
-    $('shotsStatus').textContent='1. Выберите один скриншот.';
-    $('shotsLoadBtn').disabled=true;
-    setActionState('shotsLoadBtn','idle');
-    return;
-  }
-  $('shotsName').innerHTML='<span class="file-check selected">✓</span> Выбран: '+selectedShotFile.name;
-  $('shotsStatus').textContent='2. Файл выбран. Нажмите кнопку загрузки.';
-  $('shotsLoadBtn').disabled=false;
-  setActionState('shotsLoadBtn','ready');
-});
-
-$('shotsLoadBtn').addEventListener('click',async ()=>{
-  if(!selectedShotFile){
-    $('shotsStatus').textContent='✕ Сначала выберите скриншот.';
-    setActionState('shotsLoadBtn','error');
-    return;
-  }
-
-  const btn=$('shotsLoadBtn'), p=$('shotsProgress');
-  btn.disabled=true;
-  setActionState('shotsLoadBtn','working');
-  p.style.display='block';
-  p.value=20;
-  $('shotsStatus').textContent='⏳ Загружаю скриншот…';
-
-  try{
-    state.shots=[selectedShotFile];
-    p.value=70;
-    renderShots();
-    await new Promise(r=>setTimeout(r,60));
-    p.value=100;
-    $('shotsStatus').textContent='✓ Скриншот успешно загружен.';
-    setActionState('shotsLoadBtn','success');
-    setTimeout(()=>{p.style.display='none';},1000);
-  }catch(err){
-    p.style.display='none';
-    $('shotsStatus').textContent='✕ Ошибка загрузки скриншота: '+(err.message||String(err));
-    setActionState('shotsLoadBtn','error');
-  }finally{
-    btn.disabled=false;
-  }
-});
-
-function renderShots(){
-  const box=$('shotsList'); box.innerHTML='';
-  state.shots.forEach((f,i)=>{
-    const url=URL.createObjectURL(f);
-    const d=document.createElement('div'); d.className='shot';
-    d.innerHTML=`<img src="${url}"><div><b>${f.name}</b><textarea id="shotText${i}" rows="4" placeholder="Вставьте текст с тренировки"></textarea></div>`;
-    box.appendChild(d);
-  });
-}
-
-$('ocrBtn').addEventListener('click', ()=>{
-  if(!state.shots.length){$('ocrStatus').textContent='Сначала загрузите скриншот.';return;}
-  let merged='';
-  for(let i=0;i<state.shots.length;i++){
-    const el=$(`shotText${i}`);
-    if(el) merged += '\\n' + el.value;
-  }
-  applyOCR(merged);
-  $('ocrStatus').textContent='Данные из вставленного текста применены. Проверь значения ниже.';
-});
-
-function applyOCR(text){
-  const low=text.toLowerCase().replace(',','.');
-  let m=low.match(/(\d+(?:\.\d+)?)\s*км/); if(m)$('refDist').value=m[1];
-  m=low.match(/(?:набор|elevation|gain|\+)\D{0,8}(\d{2,5})\s*м/); if(m)$('refGain').value=m[1];
-  m=low.match(/(?:средн\w*\s*пульс|avg\s*hr|average heart rate)\D{0,12}(\d{2,3})/); if(m)$('refAvgHr').value=m[1];
-  m=low.match(/(?:макс\w*\s*пульс|max\s*hr|max heart rate)\D{0,12}(\d{2,3})/); if(m)$('refMaxHr').value=m[1];
-}
-
-
 async function inflateRaw(bytes){
   if(typeof DecompressionStream==='undefined') throw new Error('Safari слишком старый для автономного XLSX. Сохраните файл как CSV.');
   const ds=new DecompressionStream('deflate-raw');
@@ -1522,6 +1442,35 @@ function clearBestTrainingData(){
   state.bestTraining=null;
 }
 
+
+function hardClearBestTrainingFields(){
+  const ids=['refDist','refMinutes','refPace','refAvgHr'];
+  ids.forEach(id=>{
+    const el=$(id);
+    if(el) el.value='';
+  });
+
+  const resultIds=['ocrDistance','ocrTime','ocrPace','ocrHr','ocrGain'];
+  resultIds.forEach(id=>{
+    const el=$(id);
+    if(el) el.textContent='—';
+  });
+
+  if($('ocrRecognitionPercent')) $('ocrRecognitionPercent').textContent='0%';
+  if($('ocrElapsedTime')) $('ocrElapsedTime').textContent='0.0 с';
+  if($('trainingOcrStatus')) $('trainingOcrStatus').textContent='Выберите один скриншот тренировки.';
+  if($('ocrSlowWarning')) $('ocrSlowWarning').style.display='none';
+
+  if($('trainingScreenshot')) $('trainingScreenshot').value='';
+  state.bestTraining=null;
+
+  try{
+    sessionStorage.removeItem('trail_best_training');
+    localStorage.removeItem('trail_best_training');
+    localStorage.removeItem('bestTraining');
+  }catch(e){}
+}
+
 function resetTrainingOcr(){
   clearBestTrainingData();
   if($('ocrSlowWarning')) $('ocrSlowWarning').style.display='none';
@@ -1536,6 +1485,7 @@ function resetTrainingOcr(){
 }
 $('trainingScreenshot')?.addEventListener('change',resetTrainingOcr);
 $('trainingOcrBtn')?.addEventListener('click',async()=>{
+  hardClearBestTrainingFields();
   const file=$('trainingScreenshot')?.files?.[0], status=$('trainingOcrStatus');
   if(!file){ if(status) status.textContent='✕ Сначала выберите скриншот.'; setActionState('trainingOcrBtn','error'); return; }
   
@@ -1732,3 +1682,10 @@ function renderTrainingOcrMetrics(metrics){
 }
 
 window.addEventListener('DOMContentLoaded',clearBestTrainingData);
+
+window.addEventListener('DOMContentLoaded',()=>{
+  hardClearBestTrainingFields();
+});
+window.addEventListener('pageshow',()=>{
+  hardClearBestTrainingFields();
+});
