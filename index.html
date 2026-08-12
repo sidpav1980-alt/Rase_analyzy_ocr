@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Trail Analyzer">
+  <title>Trail Race Analyzer</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app-version">v0.63 ONLINE FULL</div>
+  <header class="app-header">
+    <div>
+      <div class="eyebrow">Trail Race Analyzer</div>
+      <h1>Гонка → ПЛАН → ФИНИШ</h1>
+    </div>
+    <button id="installBtn" class="ghost" hidden>Установить</button>
+  </header>
+
+  <main>
+    <section class="card hero">
+      <h2>Новая гонка</h2>
+      <p>Загрузи GPX, описание покрытия, тренировки и стартовый список. Приложение рассчитает стратегию, прогноз финиша и шансы против соперников.</p>
+      <div class="grid2">
+        <label class="field">
+          <span>Имя спортсмена</span>
+          <input id="athleteName" value="Noname">
+        </label>
+        <label class="field">
+          <span>ITRA PI</span>
+          <input id="itraPi" type="number" min="0" max="1000" value="0">
+        </label>
+
+        <div class="own-itra-profile-box">
+          <label class="field">
+            <span>ITRA профиль / Runner ID</span>
+            <input id="ownItraProfile" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
+                   placeholder="https://itra.run/RunnerSpace/... или Runner ID">
+          </label>
+          <div class="muted">Вставьте ссылку ITRA или Runner ID. PI берётся только из блока «ITRA Performance Index». ИИ не используется.</div>
+        </div>
+
+        <div class="own-itra-box">
+          <button id="ownItraLookupBtn" type="button" class="secondary action-ready">Загрузить мой ITRA по ссылке</button>
+          <div id="ownItraLookupStatus" class="muted">Возьмёт имя спортсмена выше, найдёт профиль ITRA и подставит PI.</div>
+        </div>
+
+      </div>
+    </section>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="route">1. Трасса</button>
+      <button class="tab" data-tab="training">2. Тренировки</button>
+      <button class="tab" data-tab="roster">3. Стартовый</button>
+      <button class="tab" data-tab="result">4. Итог</button>
+    </nav>
+
+    <section id="route" class="tabpanel active">
+      <div class="card">
+        <h2>Трасса</h2>
+        <div class="gpx-pace-row">
+  <div class="gpx-upload-column"><div class="upload">
+          <strong>GPX трассы</strong>
+          <input id="gpxFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml,*/*">
+          <span id="gpxName"><span id="gpxCheck" class="file-check">○</span> Файл не выбран</span>
+          <button id="gpxLoadBtn" type="button" class="primary" disabled>Загрузить и обработать GPX</button>
+          <span id="gpxStatus">1. Выберите файл GPX.</span>
+          <progress id="gpxProgress" value="0" max="100" style="width:100%;display:none"></progress>
+        </div></div>
+  <div class="pace-inline-column"><label class="field">
+            <span>Рассчитать время для темпа, мин/км</span>
+            <input id="basePace" value="5:30">
+          </label></div>
+</div>
+
+        <div class="field traversal-time-block">
+          <span>Фактическое время прохождения</span>
+          <div class="metrics">
+            <div><span>Без пауз</span><b id="movingTimeMetric">—</b><small id="movingPaceMetric">— мин/км</small></div>
+            <div><span>С паузами</span><b id="elapsedTimeMetric">—</b><small id="elapsedPaceMetric">— мин/км</small></div>
+          </div>
+          <div class="muted">Время берётся из временных меток GPX: без пауз — только движение, с паузами — от первой до последней точки.</div>
+        </div>
+
+        <div class="field">
+          <span>Анализ карты</span>
+          <button id="mapAnalyzeBtn" type="button" class="primary action-idle" disabled>Анализ карты</button>
+          <div id="mapAnalyzeStatus" class="muted">Сначала загрузите и обработайте GPX.</div>
+          <progress id="mapAnalyzeProgress" value="0" max="100" style="width:100%;display:none"></progress>
+        </div>
+
+        <div id="mapAnalysisResults" class="field" style="display:none">
+          <span>Покрытие маршрута по OSM</span>
+          <div class="metrics">
+            <div><span>Классифицировано</span><b id="coverageMetric">—</b></div>
+            <div><span>Болото</span><b id="wetlandMetric">—</b></div>
+            <div><span>Вода</span><b id="waterCrossMetric">—</b></div><div class="metric">
+              <div class="k">Броды</div>
+              <div class="v" id="fordCountMetric">—</div><div class="ford-km-list" id="fordKmList">Броды: —</div>
+          <div class="ford-km-list bridge-km-list" id="bridgeFordKmList">По мосту: —</div>
+            </div>
+          </div>
+          <div class="metrics">
+            <div><span>Тропа</span><b id="trailMetric">—</b></div>
+            <div><span>Грунт</span><b id="dirtMetric">—</b></div>
+            <div><span>Асфальт</span><b id="pavedMetric">—</b></div>
+          </div>
+          <div class="muted" id="mapAnalysisNote">—</div>
+          <canvas id="surfaceStripCanvas" height="90"></canvas>
+          <div class="surface-legend" aria-label="Легенда покрытия">
+            <div><span class="surface-swatch sw-wetland"></span><span>Болото / wetland</span></div>
+            <div><span class="surface-swatch sw-water"></span><span>Вода / река</span></div>
+            <div><span class="surface-swatch sw-trail"></span><span>Тропа</span></div>
+            <div><span class="surface-swatch sw-dirt"></span><span>Грунт / гравий / земля</span></div>
+            <div><span class="surface-swatch sw-paved"></span><span>Асфальт / твёрдое покрытие</span></div>
+            <div><span class="surface-swatch sw-unknown"></span><span>Неизвестно / нет данных OSM</span></div>
+          </div>
+        </div>
+
+        <div class="profiles-main">
+          <div class="field">
+          <span>Профиль высоты по километражу</span>
+          <canvas id="elevationDistanceCanvas" height="220"></canvas>
+        </div>
+          <div class="field">
+          <span>Профиль высоты по расчётному времени</span>
+          <canvas id="elevationTimeCanvas" height="220"></canvas>
+          <div class="muted">Время строится по базовому темпу, набору высоты и текущей модели сложности.</div>
+        </div>
+        </div>
+
+        
+        <div class="grid2">
+          
+          <div class="field">
+            <span>ITRA Km-effort / Endurance Points</span>
+            <div class="metrics" style="margin:0">
+              <div><span>Km-effort</span><b id="itraKmEffort">—</b></div>
+              <div><span>ITRA Points</span><b id="itraPoints">—</b></div>
+            </div>
+
+          <div class="field">
+            <span>Сложность рельефа по GPX</span>
+            <div class="metrics" style="margin:0">
+              <div><span>Trail Difficulty</span><b id="trailDifficulty">—</b></div>
+              <div><span>&gt;15% уклона</span><b id="steep15Metric">—</b></div>
+              <div><span>Вертикаль / км</span><b id="vertPerKmMetric">—</b></div>
+            </div>
+            <div class="muted" id="trailDifficultyLabel">—</div>
+          </div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div><span>Дистанция</span><b id="distMetric">—</b></div>
+          <div><span>Набор</span><b id="gainMetric">—</b></div>
+          <div><span>Сброс</span><b id="lossMetric">—</b></div>
+        </div>
+
+        
+
+        
+</div>
+    </section>
+
+    <section id="training" class="tabpanel">
+      <div class="card">
+        <h2>Тренировки</h2>
+        <div class="upload-box">
+          <b>Скриншот тренировки</b>
+          <input id="trainingScreenshot" type="file" accept="image/*">
+          <button class="action ready" id="trainingOcrBtn" type="button">Распознать текст со скриншота</button>
+          <div class="status" id="trainingOcrStatus">Выберите один скриншот тренировки. OCR выполняется на сервере Render.</div>
+          <label class="field">
+            <span>Распознанный текст</span>
+            <textarea id="trainingOcrText" rows="7" placeholder="Здесь появится текст со скриншота. Его можно исправить вручную."></textarea>
+          </label>
+        </div>
+
+        <p class="muted">Добавь один скриншот Garmin/Strava. Приложение хранит их локально; ключевые цифры можно внести вручную или скопировать через iPhone Live Text. Интернет не нужен.</p>
+        <div class="upload">
+          <strong>Скриншот тренировки</strong>
+          <input id="shotFiles" type="file" accept="image/*">
+          <span id="shotsName"><span class="file-check">○</span> Файл не выбран</span>
+          <button id="shotsLoadBtn" type="button" class="primary action-idle" disabled>Загрузить и обработать скриншот</button>
+          <span id="shotsStatus">1. Выберите один скриншот.</span>
+          <progress id="shotsProgress" value="0" max="100" style="width:100%;display:none"></progress>
+        </div>
+
+        <div class="grid2">
+          <label class="field"><span>Контрольная дистанция, км</span><input id="refDist" type="number" step="1" value="1"></label>
+          <label class="field"><span>Набор, м</span><input id="refGain" type="number" step="1" value="1"></label>
+          <label class="field"><span>Средний пульс</span><input id="refAvgHr" type="number" step="1" value="1"></label>
+          <label class="field"><span>Макс. пульс</span><input id="refMaxHr" type="number" step="1" value="1"></label>
+          <label class="field"><span>Время, мин</span><input id="refMinutes" type="number" step="1" value="1"></label>
+          <label class="field"><span>LTHR, если известен</span><input id="lthr" type="number" step="1" value="1"></label>
+        </div>
+
+        <button id="ocrBtn" class="primary">Заполнить из текста</button>
+        <div id="ocrStatus" class="muted">Автономный режим: OCR-библиотека не требуется. На iPhone можно использовать Live Text и вставить распознанный текст в поле скриншота.</div>
+        <div id="shotsList"></div>
+      </div>
+    </section>
+
+    <section id="roster" class="tabpanel">
+      <div class="card">
+        <h2>Стартовый список</h2>
+        <div class="upload">
+          <strong>Стартовый список XLSX / CSV</strong>
+          <input id="rosterFile" type="file" accept=".xlsx,.xls,.csv,text/csv">
+          <span id="rosterName"><span class="file-check">○</span> Файл не выбран</span>
+          <button id="rosterLoadBtn" type="button" class="primary" disabled>Загрузить и обработать стартовый список</button>
+          <span id="rosterStatus">1. Выберите файл стартового списка.</span>
+          <progress id="rosterProgress" value="0" max="100" style="width:100%;display:none"></progress>
+        </div>
+        <div class="grid2">
+          <div class="openrouter-settings">
+          <div class="openrouter-status-row">
+            <b>OpenRouter</b>
+            <span id="openRouterStatus" class="or-status or-checking">проверка…</span>
+          </div>
+          <label class="field">
+            <span>OpenRouter API key (необязательно)</span>
+            <input id="openRouterKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false"
+                   placeholder="sk-or-v1-…">
+          </label>
+          <div class="key-actions">
+            <button id="saveOpenRouterKeyBtn" type="button" class="secondary">Сохранить ключ на этом iPhone</button>
+            <button id="clearOpenRouterKeyBtn" type="button" class="secondary">Удалить</button>
+          </div>
+          <div class="muted">Если поле пустое, используется OPENROUTER_API_KEY из Render. Введённый здесь ключ хранится только в localStorage этого браузера.</div>
+        </div>
+
+        <div class="itra-online-box">
+          <button id="itraLookupBtn" type="button" class="secondary action-ready">Загрузить ITRA через AI</button>
+          <div id="itraLookupStatus" class="muted">После загрузки стартового списка нажмите кнопку для поиска ITRA PI участников.</div>
+        </div>
+        <label class="field">
+            <span>Зачёт</span>
+            <select id="genderFilter">
+              <option>Все</option>
+              <option selected>Женщины</option>
+              <option>Мужчины</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Непредсказуемость</span>
+            <input id="sigma" type="number" min="5" max="45" value="20">
+          </label>
+        </div>
+        <p class="muted">XLSX и CSV читаются прямо на iPhone без внешних библиотек. Если PI нет в файле, его можно ввести вручную.</p>
+        <div class="table-wrap">
+          <table id="rosterTable">
+            <thead><tr><th>Спортсмен</th><th>PI</th><th>Техника</th><th>Выносливость</th><th>Форма</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="result" class="tabpanel">
+      <div class="card">
+        <div class="row between">
+          <h2>Итог</h2>
+          <button id="calcBtn" class="primary">Рассчитать</button>
+        </div>
+        <div class="metrics big">
+          <div><span>Прогноз финиша</span><b id="finishMetric">—</b></div>
+          <div><span>TOP‑3</span><b id="podiumMetric">—</b></div>
+          <div><span>TOP‑10</span><b id="top10Metric">—</b></div>
+          <div><span>TOP‑30</span><b id="top30Metric">—</b></div>
+          <div><span>TOP‑50</span><b id="top50Metric">—</b></div>
+          <div><span>Победа</span><b id="winMetric">—</b></div>
+          <div><span>Место модели</span><b id="rankMetric">—</b></div>
+        </div>
+
+        <h3>Пульс по участкам</h3>
+        <div class="table-wrap">
+          <table id="planTable">
+            <thead><tr><th>Км</th><th>Пульс</th><th>Режим</th><th>Темп</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <h3>Главные соперники</h3>
+        <div class="table-wrap">
+          <table id="rivalsTable">
+            <thead><tr><th>#</th><th>Спортсмен</th><th>PI</th><th>Сила</th><th>Угроза</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <button id="saveBtn" class="secondary">Сохранить расчёт на iPhone</button>
+        <div id="saveStatus" class="muted"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Модель оценочная: броды, погода, питание и состояние покрытия могут сильно менять результат.
+  </footer>
+
+  <script src="app.js"></script>
+<footer class="app-footer">Sidorenko Pavel (c) 2026</footer>
+</body>
+</html>
