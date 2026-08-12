@@ -993,9 +993,7 @@ $('ocrBtn').addEventListener('click', ()=>{
 
 function applyOCR(text){
   const low=text.toLowerCase().replace(',','.');
-  let m=low.match(/(\d+(?:\.\d+)?)\s*км/); if(m)$('refDist').value=m[1];
-  m=low.match(/(?:набор|elevation|gain|\+)\D{0,8}(\d{2,5})\s*м/); if(m)$('refGain').value=m[1];
-  m=low.match(/(?:средн\w*\s*пульс|avg\s*hr|average heart rate)\D{0,12}(\d{2,3})/); if(m)$('refAvgHr').value=m[1];
+
   m=low.match(/(?:макс\w*\s*пульс|max\s*hr|max heart rate)\D{0,12}(\d{2,3})/); if(m)$('refMaxHr').value=m[1];
 }
 
@@ -1146,15 +1144,15 @@ function renderRoster(){
 $('genderFilter').addEventListener('change',renderRoster);
 
 function estimateLTHR(){
-  const known=+$('lthr').value||0; if(known)return known;
-  const hr=+$('refAvgHr').value||0, mins=+$('refMinutes').value||100;
+
+
   if(mins<=50)return Math.round(hr*.98);
   if(mins<=100)return Math.round(hr*1.01);
   return Math.round(hr*1.03);
 }
 function formScore(){
   let s=0;
-  const d=+$('refDist').value||0,g=+$('refGain').value||0,hr=+$('refAvgHr').value||0;
+
   if(d>=25)s+=4; else if(d>=15)s+=2;
   if(g>=800)s+=3; else if(g>=500)s+=2;
   if(hr>=180)s+=2;
@@ -1164,10 +1162,8 @@ function formScore(){
 
 function hasAnalysisData(){
   const pi=Number($('itraPi')?.value||0);
-  const training=
-    Number($('refDist')?.value||0)>0 ||
-    Number($('refGain')?.value||0)>0 ||
-    Number($('refAvgHr')?.value||0)>0 ||
+  const training=(state.bestTraining && Object.values(state.bestTraining).some(v=>v!==null && v!=='')) || 
+
     (Array.isArray(state.shots) && state.shots.length>0);
   const roster=Array.isArray(state.roster) && state.roster.length>0;
   return Number(state.dist||0)>0 && (pi>0 || training || roster);
@@ -1450,7 +1446,7 @@ $('saveBtn').addEventListener('click',()=>{
   const payload={
     athlete:$('athleteName').value, pi:$('itraPi').value,
     route:{dist:state.dist,gain:state.gain,loss:state.loss},
-    training:{dist:$('refDist').value,gain:$('refGain').value,avgHr:$('refAvgHr').value,maxHr:$('refMaxHr').value,lthr:$('lthr').value},
+
     roster:state.roster,
     savedAt:new Date().toISOString()
   };
@@ -1472,6 +1468,7 @@ window.addEventListener('DOMContentLoaded',clearMapAnalysisOnPageStart);
 
 
 function resetTrainingOcr(){
+  if($('ocrSlowWarning')) $('ocrSlowWarning').style.display='none';
   if($('ocrMeta')) $('ocrMeta').style.display='grid';
   if($('ocrRecognitionPercent')) $('ocrRecognitionPercent').textContent='0%';
   if($('ocrElapsedTime')) $('ocrElapsedTime').textContent='0.0 с';
@@ -1502,6 +1499,9 @@ $('trainingOcrBtn')?.addEventListener('click',async()=>{
 
   const ocrStartedAt=performance.now();
   let ocrTimer=setInterval(()=>{if($('ocrElapsedTime')) $('ocrElapsedTime').textContent=((performance.now()-ocrStartedAt)/1000).toFixed(1)+' с';},200);
+  let ocrSlowWarningTimer=setTimeout(()=>{
+    if($('ocrSlowWarning')) $('ocrSlowWarning').style.display='block';
+  },60000);
   setActionState('trainingOcrBtn','loading');
   if(status) status.textContent='Распознаю текст…';
   try{
@@ -1521,6 +1521,8 @@ $('trainingOcrBtn')?.addEventListener('click',async()=>{
     if(status) status.textContent=text?'✓ Текст распознан. Можно исправить вручную.':'✕ Текст не найден.';
     setActionState('trainingOcrBtn',text?'success':'error');
   }catch(err){
+    if(typeof ocrSlowWarningTimer!=='undefined') clearTimeout(ocrSlowWarningTimer);
+    if($('ocrSlowWarning')) $('ocrSlowWarning').style.display='none';
     if(typeof ocrTimer!=='undefined' && ocrTimer){clearInterval(ocrTimer);ocrTimer=null;}
     const failedSec=(performance.now()-ocrStartedAt)/1000;
     if($('ocrMeta')) $('ocrMeta').style.display='grid';
@@ -1539,35 +1541,133 @@ function getOcrRecognitionPercent(metrics){
 }
 
 function parseTrainingMetricsFromText(text){
-  const t=String(text||'').replace(/\u00a0/g,' ').replace(/,/g,'.');
+  const raw=String(text||'')
+    .replace(/\u00a0/g,' ')
+    .replace(/[|]/g,' ')
+    .replace(/,/g,'.')
+    .replace(/\r/g,'')
+    .trim();
+
+  const compact=raw.replace(/[ \t]+/g,' ');
+  const lines=raw.split('\n').map(x=>x.trim()).filter(Boolean);
   const out={};
 
-  const dist=t.match(/(?:дистанц(?:ия|ии)?|distance)\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*(?:км|km)\b/i)
-           || t.match(/\b(\d+(?:\.\d+)?)\s*(?:км|km)\b/i);
-  if(dist) out.distance=Number(dist[1]);
+  function numberKm(s){
+    const m=s.match(/(\d+(?:\.\d+)?)\s*(?:км|km)\b/i);
+    return m?Number(m[1]):null;
+  }
+  function gainM(s){
+    const m=s.match(/(\d{1,5})\s*(?:м|m)\b/i);
+    return m?Number(m[1]):null;
+  }
+  function paceVal(s){
+    const m=s.match(/(\d{1,2})[:.](\d{2})\s*(?:\/\s*(?:км|km)|мин\/км|min\/km)\b/i);
+    return m?`${m[1]}:${m[2]}`:null;
+  }
+  function hrVal(s){
+    const m=s.match(/(\d{2,3})\s*(?:уд\/мин|bpm)\b/i);
+    return m?Number(m[1]):null;
+  }
+  function timeVal(s){
+    let m=s.match(/(\d{1,2}):(\d{2}):(\d{2})\b/);
+    if(m) return `${m[1]}:${m[2]}:${m[3]}`;
+    m=s.match(/(\d{1,2}):(\d{2})\b/);
+    return m?`${m[1]}:${m[2]}`:null;
+  }
 
-  const gain=t.match(/(?:набор(?:\s+высоты)?|elevation\s*gain|ascent)\s*[:\-]?\s*(\d{2,5})\s*(?:м|m)\b/i);
-  if(gain) out.gain=Number(gain[1]);
+  // 1) Explicit label + value patterns across same/next lines.
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i];
+    const next=lines[i+1]||'';
+    const both=line+' '+next;
 
-  const hr=t.match(/(?:средн(?:ий|яя)\s+пульс|avg(?:erage)?\s+hr|average\s+heart\s+rate)\s*[:\-]?\s*(\d{2,3})\b/i);
-  if(hr) out.hr=Number(hr[1]);
+    if(out.distance==null && /(расстояние|дистанция|distance)/i.test(line)){
+      const v=numberKm(line)||numberKm(next)||numberKm(both);
+      if(v!=null) out.distance=v;
+    }
 
-  const pace=t.match(/(?:темп|pace)\s*[:\-]?\s*(\d{1,2})[:.](\d{2})\s*(?:\/км|\/km|min\/km|мин\/км)?/i);
-  if(pace) out.pace=`${pace[1]}:${pace[2]}`;
+    if(out.pace==null && /(средн(?:ий)?\s+темп|темп|pace)/i.test(line)){
+      const v=paceVal(line)||paceVal(next)||paceVal(both);
+      if(v) out.pace=v;
+    }
 
-  const time=t.match(/(?:время|time|elapsed\s*time|moving\s*time)\s*[:\-]?\s*(\d{1,2}):(\d{2}):(\d{2})\b/i)
-           || t.match(/\b(\d{1,2}):(\d{2}):(\d{2})\b/);
-  if(time) out.time=`${time[1]}:${time[2]}:${time[3]}`;
+    if(out.time==null && /(время\s+в\s+движении|moving\s*time)/i.test(line)){
+      const v=timeVal(line)||timeVal(next)||timeVal(both);
+      if(v) out.time=v;
+    }
+
+    if(out.gain==null && /(набор(?:\s+высоты)?|elevation\s*gain|ascent)/i.test(line)){
+      const v=gainM(line)||gainM(next)||gainM(both);
+      if(v!=null) out.gain=v;
+    }
+
+    if(out.hr==null && /(сред\.?\s*пульс|средн(?:ий|яя)\s+пульс|avg(?:erage)?\s+hr|average\s+heart\s+rate)/i.test(line)){
+      const v=hrVal(line)||hrVal(next)||hrVal(both);
+      if(v!=null) out.hr=v;
+    }
+  }
+
+  // 2) Garmin screenshot OCR often returns paired labels and then paired values:
+  // "Расстояние Средний темп" then "8.03 км 5:53 /км"
+  if(out.distance==null || out.pace==null){
+    for(let i=0;i<lines.length-1;i++){
+      if(/расстояние/i.test(lines[i]) && /темп/i.test(lines[i])){
+        const vals=lines[i+1];
+        if(out.distance==null){
+          const v=numberKm(vals); if(v!=null) out.distance=v;
+        }
+        if(out.pace==null){
+          const v=paceVal(vals); if(v) out.pace=v;
+        }
+      }
+    }
+  }
+
+  // "Время в движении Набор высоты" then "47:14 17 м"
+  if(out.time==null || out.gain==null){
+    for(let i=0;i<lines.length-1;i++){
+      if(/время\s+в\s+движении/i.test(lines[i]) && /набор/i.test(lines[i])){
+        const vals=lines[i+1];
+        if(out.time==null){
+          const v=timeVal(vals); if(v) out.time=v;
+        }
+        if(out.gain==null){
+          const v=gainM(vals); if(v!=null) out.gain=v;
+        }
+      }
+    }
+  }
+
+  // "Калории Сред. пульс" then "636 Ккал 155 уд/мин"
+  if(out.hr==null){
+    for(let i=0;i<lines.length-1;i++){
+      if(/сред\.?\s*пульс/i.test(lines[i])){
+        const v=hrVal(lines[i+1])||hrVal(lines[i]);
+        if(v!=null){ out.hr=v; break; }
+      }
+    }
+  }
+
+  // 3) Safe global fallbacks with unit context only.
+  if(out.distance==null){
+    const m=compact.match(/\b(\d+(?:\.\d+)?)\s*(?:км|km)\b/i);
+    if(m) out.distance=Number(m[1]);
+  }
+  if(out.pace==null){
+    const v=paceVal(compact);
+    if(v) out.pace=v;
+  }
+  if(out.hr==null){
+    const v=hrVal(compact);
+    if(v!=null) out.hr=v;
+  }
 
   return out;
 }
 
 function renderTrainingOcrMetrics(metrics){
   const box=$('ocrParsedMetrics');
-  if(!box) return;
-
-  const has=Object.keys(metrics||{}).length>0;
-  box.style.display=has?'grid':'none';
+  if(box) box.style.display='grid';
 
   if($('ocrDistance')) $('ocrDistance').textContent=metrics.distance!=null?`${metrics.distance} км`:'—';
   if($('ocrGain')) $('ocrGain').textContent=metrics.gain!=null?`${metrics.gain} м`:'—';
@@ -1575,8 +1675,12 @@ function renderTrainingOcrMetrics(metrics){
   if($('ocrPace')) $('ocrPace').textContent=metrics.pace?`${metrics.pace} /км`:'—';
   if($('ocrHr')) $('ocrHr').textContent=metrics.hr!=null?`${metrics.hr} уд/мин`:'—';
 
-  // Auto-fill existing training fields when present.
-  if(metrics.distance!=null && $('refDist')) $('refDist').value=String(metrics.distance);
-  if(metrics.gain!=null && $('refGain')) $('refGain').value=String(metrics.gain);
-  if(metrics.hr!=null && $('refAvgHr')) $('refAvgHr').value=String(metrics.hr);
+  // Keep parsed values in state for calculations without manual training fields.
+  state.bestTraining={
+    distance:metrics.distance??null,
+    gain:metrics.gain??null,
+    time:metrics.time??null,
+    pace:metrics.pace??null,
+    hr:metrics.hr??null
+  };
 }
