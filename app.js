@@ -1132,6 +1132,84 @@ function clearResultForecast(){
   if(rt) rt.innerHTML='';
 }
 
+
+function getBestTrainingHr(){
+  const v=Number($('refAvgHr')?.value||state.bestTraining?.hr||0);
+  return Number.isFinite(v) ? v : 0;
+}
+
+function buildHrStrategy(){
+  const dist=Number(state.dist||0);
+  const avgHr=getBestTrainingHr();
+  if(!(dist>0) || !(avgHr>0)) return [];
+
+  // Use best-training HR as an anchor.
+  // Early race = controlled, middle = working range, final = race effort.
+  // Clamp to sane running ranges so OCR mistakes don't create absurd targets.
+  const clamp=(x,a,b)=>Math.max(a,Math.min(b,Math.round(x)));
+
+  const earlyLo=clamp(avgHr-10,120,185);
+  const earlyHi=clamp(avgHr-7,earlyLo,190);
+
+  const midLo=clamp(avgHr-7,120,190);
+  const midHi=clamp(avgHr-3,midLo,195);
+
+  const lateLo=clamp(avgHr-3,120,195);
+  const lateHi=clamp(avgHr+1,lateLo,198);
+
+  const finishLo=clamp(avgHr,120,198);
+  const finishHi=clamp(avgHr+5,finishLo,202);
+
+  const p1=Math.max(1,Math.round(dist*0.52));
+  const p2=Math.max(p1+1,Math.round(dist*0.78));
+  const p3=Math.max(p2+1,Math.round(dist*0.95));
+
+  return [
+    {
+      km:`0–${p1} км`,
+      hr:`${earlyLo}–${earlyHi}`,
+      mode:'На подъёмах держать запас. Короткий выход выше диапазона допустим, но не висеть там постоянно.'
+    },
+    {
+      km:`${p1}–${p2} км`,
+      hr:`${midLo}–${midHi}`,
+      mode:'Рабочий горный пульс. На спусках и лёгких участках дать пульсу опуститься и восстановиться.'
+    },
+    {
+      km:`${p2}–${p3} км`,
+      hr:`${lateLo}–${lateHi}`,
+      mode:'Если питание и ноги в порядке — постепенно повышать усилие. Основная атака.'
+    },
+    {
+      km:`${p3}–${dist.toFixed(1).replace(/\.0$/,'')} км`,
+      hr:`${finishLo}–${finishHi}+`,
+      mode:'Финишный участок. Можно работать без экономии, если нет признаков перегрева или развала.'
+    }
+  ];
+}
+
+function renderHrStrategy(){
+  const tbody=$('hrStrategyTable')?.querySelector('tbody');
+  const summary=$('hrStrategySummary');
+  if(!tbody || !summary) return;
+
+  const rows=buildHrStrategy();
+  tbody.innerHTML='';
+
+  if(!rows.length){
+    summary.textContent='Нужны GPX трассы и средний пульс лучшей тренировки.';
+    return;
+  }
+
+  rows.forEach(r=>{
+    tbody.insertAdjacentHTML('beforeend',
+      `<tr><td>${r.km}</td><td><b>${r.hr}</b></td><td>${r.mode}</td></tr>`);
+  });
+
+  const avgHr=getBestTrainingHr();
+  summary.textContent=`Основа: средний пульс лучшей тренировки ${avgHr} уд/мин. На спусках высокий пульс специально не удерживать.`;
+}
+
 function finishPrediction(){
   if(!state.dist)return 0;
   const base=paceSec($('basePace').value), tech=Math.max(1,computeTrailDifficulty().score), tm=terrainMultiplier();
@@ -1345,7 +1423,8 @@ $('itraLookupBtn')?.addEventListener('click', async ()=>{
 $('calcBtn').addEventListener('click',()=>{
   if(!hasAnalysisData()){
     clearResultForecast();
-    document.querySelector('[data-tab="result"]').click();
+    renderHrStrategy();
+  document.querySelector('[data-tab="result"]').click();
     return;
   }
 
@@ -1419,6 +1498,12 @@ window.addEventListener('DOMContentLoaded',clearMapAnalysisOnPageStart);
 
 
 function clearBestTrainingData(){
+  if($('hrStrategyTable')){
+    const tb=$('hrStrategyTable').querySelector('tbody');
+    if(tb) tb.innerHTML='';
+  }
+  if($('hrStrategySummary')) $('hrStrategySummary').textContent='Стратегия появится после анализа трассы и лучшей тренировки.';
+
   // upper OCR result cards
   if($('ocrDistance')) $('ocrDistance').textContent='—';
   if($('ocrTime')) $('ocrTime').textContent='—';
@@ -1537,6 +1622,7 @@ $('trainingOcrBtn')?.addEventListener('click',async()=>{
     let parsedMetrics=parseTrainingMetricsFromText(text);
     parsedMetrics=normalizeGarminTrainingMetrics(text,parsedMetrics);
     renderTrainingOcrMetrics(parsedMetrics);
+    renderHrStrategy();
     if(typeof ocrTimer!=='undefined' && ocrTimer){clearInterval(ocrTimer);ocrTimer=null;}
     const elapsedSec=(performance.now()-ocrStartedAt)/1000;
     if($('ocrMeta')) $('ocrMeta').style.display='grid';
