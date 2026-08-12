@@ -1456,6 +1456,9 @@ window.addEventListener('DOMContentLoaded',clearMapAnalysisOnPageStart);
 
 
 function resetTrainingOcr(){
+  if($('ocrMeta')) $('ocrMeta').style.display='none';
+  if($('ocrRecognitionPercent')) $('ocrRecognitionPercent').textContent='—';
+  if($('ocrElapsedTime')) $('ocrElapsedTime').textContent='—';
   if($('ocrParsedMetrics')) $('ocrParsedMetrics').style.display='none';
   if($('trainingOcrStatus')) $('trainingOcrStatus').textContent='Скриншот выбран. Нажмите «Распознать текст со скриншота».';
   setActionState('trainingOcrBtn','ready');
@@ -1479,6 +1482,7 @@ $('trainingOcrBtn')?.addEventListener('click',async()=>{
     return;
   }
 
+  const ocrStartedAt=performance.now();
   setActionState('trainingOcrBtn','loading');
   if(status) status.textContent='Распознаю текст…';
   try{
@@ -1494,46 +1498,67 @@ $('trainingOcrBtn')?.addEventListener('click',async()=>{
     const data=await resp.json().catch(()=>({}));
     if(!resp.ok) throw new Error(data.error||`HTTP ${resp.status}`);
     const text=String(data.text||'').trim();
-    renderTrainingOcrMetrics(parseTrainingMetricsFromText(text));
-    if(status) status.textContent=text?'✓ Скриншот распознан. Найденные показатели показаны ниже.':'✕ Показатели не найдены.';
+    const parsedMetrics=parseTrainingMetricsFromText(text);
+    renderTrainingOcrMetrics(parsedMetrics);
+    const elapsedSec=(data.processing_seconds!=null?Number(data.processing_seconds):(performance.now()-ocrStartedAt)/1000);
+    if($('ocrMeta')) $('ocrMeta').style.display='grid';
+    if($('ocrRecognitionPercent')) $('ocrRecognitionPercent').textContent=String(parsedMetrics.confidence||0)+'%';
+    if($('ocrElapsedTime')) $('ocrElapsedTime').textContent=elapsedSec.toFixed(1)+' с';
+    if(status) status.textContent=text?'✓ Показатели распознаны и заполнены ниже.':'✕ Показатели не найдены.';
     setActionState('trainingOcrBtn',text?'success':'error');
   }catch(err){
-    if(status) status.textContent='✕ Ошибка распознавания: '+(err.name==='AbortError'?'таймаут 45 секунд':err.message);
+    if(status) status.textContent='✕ Ошибка распознавания: '+(err.name==='AbortError'?'таймаут 55 секунд':err.message);
     setActionState('trainingOcrBtn','error');
   }
 });
 
 
 function parseTrainingMetricsFromText(text){
-  const t=String(text||'').replace(/\u00a0/g,' ').replace(/,/g,'.');
+  const raw=String(text||'')
+    .replace(/\u00a0/g,' ')
+    .replace(/[|]/g,' ')
+    .replace(/,/g,'.')
+    .replace(/\s+/g,' ')
+    .trim();
+
   const out={};
 
-  const dist=t.match(/(?:дистанц(?:ия|ии)?|distance)\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*(?:км|km)\b/i)
-           || t.match(/\b(\d+(?:\.\d+)?)\s*(?:км|km)\b/i);
-  if(dist) out.distance=Number(dist[1]);
+  // Distance: "Расстояние 5.70 км", "5.70 km", etc.
+  let m=raw.match(/(?:расстояние|дистанция|distance)\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*(?:км|km)\b/i)
+       || raw.match(/\b(\d+(?:\.\d+)?)\s*(?:км|km)\b/i);
+  if(m) out.distance=Number(m[1]);
 
-  const gain=t.match(/(?:набор(?:\s+высоты)?|elevation\s*gain|ascent)\s*[:\-]?\s*(\d{2,5})\s*(?:м|m)\b/i);
-  if(gain) out.gain=Number(gain[1]);
+  // Elevation gain
+  m=raw.match(/(?:набор(?:\s+высоты)?|elevation\s*gain|ascent)\s*[:\-]?\s*(\d{1,5})\s*(?:м|m)\b/i);
+  if(m) out.gain=Number(m[1]);
 
-  const hr=t.match(/(?:средн(?:ий|яя)\s+пульс|avg(?:erage)?\s+hr|average\s+heart\s+rate)\s*[:\-]?\s*(\d{2,3})\b/i);
-  if(hr) out.hr=Number(hr[1]);
+  // Average HR
+  m=raw.match(/(?:средн(?:ий|яя)\s+пульс|сред\.?\s*пульс|avg(?:erage)?\s+hr|average\s+heart\s+rate)\s*[:\-]?\s*(\d{2,3})\s*(?:уд\/мин|bpm)?/i);
+  if(m) out.hr=Number(m[1]);
 
-  const pace=t.match(/(?:темп|pace)\s*[:\-]?\s*(\d{1,2})[:.](\d{2})\s*(?:\/км|\/km|min\/km|мин\/км)?/i);
-  if(pace) out.pace=`${pace[1]}:${pace[2]}`;
+  // Pace: "5:43 /км"
+  m=raw.match(/(?:средн(?:ий)?\s+темп|темп|pace)\s*[:\-]?\s*(\d{1,2})[:.](\d{2})\s*(?:\/км|\/km|min\/km|мин\/км)?/i)
+    || raw.match(/\b(\d{1,2})[:.](\d{2})\s*(?:\/км|\/km)\b/i);
+  if(m) out.pace=`${m[1]}:${m[2]}`;
 
-  const time=t.match(/(?:время|time|elapsed\s*time|moving\s*time)\s*[:\-]?\s*(\d{1,2}):(\d{2}):(\d{2})\b/i)
-           || t.match(/\b(\d{1,2}):(\d{2}):(\d{2})\b/);
-  if(time) out.time=`${time[1]}:${time[2]}:${time[3]}`;
+  // Moving/elapsed time - accept MM:SS and H:MM:SS.
+  m=raw.match(/(?:время\s+в\s+движении|moving\s*time|время|elapsed\s*time)\s*[:\-]?\s*(\d{1,2}):(\d{2}):(\d{2})\b/i);
+  if(m) out.time=`${m[1]}:${m[2]}:${m[3]}`;
+  else{
+    m=raw.match(/(?:время\s+в\s+движении|moving\s*time|время|elapsed\s*time)\s*[:\-]?\s*(\d{1,2}):(\d{2})\b/i);
+    if(m) out.time=`0:${m[1]}:${m[2]}`;
+  }
+
+  // Confidence based on how many expected metrics were successfully recognized.
+  const expected=5;
+  const found=['distance','gain','time','pace','hr'].filter(k=>out[k]!=null).length;
+  out.confidence=Math.round((found/expected)*100);
 
   return out;
 }
-
 function renderTrainingOcrMetrics(metrics){
   const box=$('ocrParsedMetrics');
-  if(!box) return;
-
-  const has=Object.keys(metrics||{}).length>0;
-  box.style.display=has?'grid':'none';
+  if(box) box.style.display='grid';
 
   if($('ocrDistance')) $('ocrDistance').textContent=metrics.distance!=null?`${metrics.distance} км`:'—';
   if($('ocrGain')) $('ocrGain').textContent=metrics.gain!=null?`${metrics.gain} м`:'—';
@@ -1541,8 +1566,17 @@ function renderTrainingOcrMetrics(metrics){
   if($('ocrPace')) $('ocrPace').textContent=metrics.pace?`${metrics.pace} /км`:'—';
   if($('ocrHr')) $('ocrHr').textContent=metrics.hr!=null?`${metrics.hr} уд/мин`:'—';
 
-  // Auto-fill existing training fields when present.
-  if(metrics.distance!=null && $('refDist')) $('refDist').value=String(metrics.distance);
-  if(metrics.gain!=null && $('refGain')) $('refGain').value=String(metrics.gain);
-  if(metrics.hr!=null && $('refAvgHr')) $('refAvgHr').value=String(metrics.hr);
+  const setAny=(ids,val)=>{
+    if(val==null) return;
+    for(const id of ids){
+      const el=$(id);
+      if(el){ el.value=String(val); break; }
+    }
+  };
+
+  setAny(['refDist','trainingDistance','trainDist'],metrics.distance);
+  setAny(['refGain','trainingGain','trainGain'],metrics.gain);
+  setAny(['refAvgHr','trainingHr','trainHr'],metrics.hr);
+  setAny(['refPace','trainingPace','trainPace'],metrics.pace);
+  setAny(['refTime','trainingTime','trainTime'],metrics.time);
 }
