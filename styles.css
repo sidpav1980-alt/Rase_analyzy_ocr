@@ -322,3 +322,13 @@ button.action-error:disabled {
     font-size:18px;
   }
 }
+
+.ocr-preview{
+  margin-top:10px;
+  border:1px solid #263247;
+  border-radius:14px;
+  padding:12px 14px;
+  background:#0b1424;
+}
+.ocr-preview-title{font-size:13px;color:#94a3b8;margin-bottom:8px}
+.ocr-preview-text{font-size:15px;line-height:1.45;white-space:pre-line;color:#e5e7eb}

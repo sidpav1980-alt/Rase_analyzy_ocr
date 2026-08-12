@@ -1376,6 +1376,8 @@ window.addEventListener('DOMContentLoaded',clearMapAnalysisOnPageStart);
 
 
 function resetTrainingOcr(){
+  if($('ocrPreview')) $('ocrPreview').style.display='none';
+  if($('ocrPreviewText')) $('ocrPreviewText').textContent='';
   if($('ocrMeta')) $('ocrMeta').style.display='grid';
   if($('ocrRecognitionPercent')) $('ocrRecognitionPercent').textContent='0%';
   if($('ocrElapsedTime')) $('ocrElapsedTime').textContent='0.0 с';
@@ -1430,6 +1432,7 @@ $('trainingOcrBtn')?.addEventListener('click',async()=>{
     const text=String(data.text||'').trim();
     const parsedMetrics=parseTrainingMetricsFromText(text);
     renderTrainingOcrMetrics(parsedMetrics);
+    renderOcrPreview(parsedMetrics);
     if(ocrTimer){clearInterval(ocrTimer);ocrTimer=null;}
     const elapsedSec=(performance.now()-ocrStartedAt)/1000;
     if($('ocrMeta')) $('ocrMeta').style.display='grid';
@@ -1443,15 +1446,29 @@ $('trainingOcrBtn')?.addEventListener('click',async()=>{
     if($('ocrMeta')) $('ocrMeta').style.display='grid';
     if($('ocrRecognitionPercent')) $('ocrRecognitionPercent').textContent='0%';
     if($('ocrElapsedTime')) $('ocrElapsedTime').textContent=failedSec.toFixed(1)+' с';
-    if(status) status.textContent='✕ Ошибка распознавания: '+(err.name==='AbortError'?'таймаут 45 секунд':err.message);
+    if(status) status.textContent='✕ Ошибка распознавания: '+(err.name==='AbortError'?'таймаут 30 секунд':err.message);
     setActionState('trainingOcrBtn','error');
   }
 });
 
 
 
+
+function renderOcrPreview(metrics){
+  const box=$('ocrPreview'), out=$('ocrPreviewText');
+  if(!box || !out) return;
+  const rows=[];
+  if(metrics?.distance!=null && metrics.distance!=='') rows.push('Расстояние: '+metrics.distance+' км');
+  if(metrics?.time) rows.push('Время в движении: '+metrics.time);
+  if(metrics?.pace) rows.push('Средний темп: '+metrics.pace+' /км');
+  if(metrics?.hr!=null && metrics.hr!=='') rows.push('Средний пульс: '+metrics.hr+' уд/мин');
+  if(metrics?.gain!=null && metrics.gain!=='') rows.push('Набор: '+metrics.gain+' м');
+  out.textContent=rows.join('\n');
+  box.style.display=rows.length?'block':'none';
+}
+
 function getOcrRecognitionPercent(metrics){
-  const keys=['distance','gain','time','pace','hr'];
+  const keys=['distance','time','pace','hr'];
   const found=keys.filter(k=>metrics && metrics[k]!==undefined && metrics[k]!==null && metrics[k]!=='').length;
   return Math.round(found/keys.length*100);
 }

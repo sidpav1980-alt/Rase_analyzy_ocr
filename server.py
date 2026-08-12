@@ -45,7 +45,7 @@ def osm_proxy():
     last_error=None
     for endpoint in OVERPASS_ENDPOINTS:
         try:
-            r=requests.post(endpoint,data={"data":query},headers=UA,timeout=35)
+            r=requests.post(endpoint,data={"data":query},headers=UA,timeout=24)
             if r.ok:
                 return jsonify(r.json())
             last_error=f"{endpoint} -> HTTP {r.status_code}"
@@ -440,16 +440,16 @@ def training_ocr():
                 img,
                 lang="rus+eng",
                 config="--psm 6",
-                timeout=35
+                timeout=24
             )
         except RuntimeError as e:
             if "timeout" in str(e).lower():
-                return jsonify({"error":"OCR timeout"}),504
+                return jsonify({"error":"OCR timeout — 24 секунды"}),504
             text=pytesseract.image_to_string(
                 img,
                 lang="eng",
                 config="--psm 6",
-                timeout=35
+                timeout=24
             )
 
         text=re.sub(r"\n{3,}","\n\n",text or "").strip()
@@ -503,7 +503,7 @@ def itra_batch():
 def health():
     return jsonify({
         "ok":True,
-        "version":"0.70",
+        "version":"0.73",
         "itra_enabled":bool(OPENROUTER_API_KEY),
         "model":OPENROUTER_MODEL
     })

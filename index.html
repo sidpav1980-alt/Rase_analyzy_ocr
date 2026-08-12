@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="app-version">v0.70 ONLINE FULL</div>
+<div class="app-version">v0.73 ONLINE FULL</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Trail Race Analyzer</div>
@@ -43,7 +43,7 @@
 
     <nav class="tabs">
       <button class="tab active" data-tab="route">1. Трасса</button>
-      <button class="tab" data-tab="training">2. Тренировки</button>
+      <button class="tab" data-tab="training">2. Лучшая тренировка</button>
       <button class="tab" data-tab="roster">3. Стартовый</button>
       <button class="tab" data-tab="result">4. Итог</button>
     </nav>
@@ -157,7 +157,8 @@
 
     <section id="training" class="tabpanel">
       <div class="card">
-        <h2>Тренировки</h2>
+        <h2>Лучшая тренировка</h2>
+        <p class="muted">Самая сильная тренировка определяется по высокому среднему пульсу и лучшим показателям дистанции, набора и темпа.</p>
         <div class="upload-box">
           <b>Скриншот тренировки</b>
           <input id="trainingScreenshot" class="training-file-input" type="file" accept="image/*">
@@ -167,12 +168,16 @@
             <div><span>Распознано показателей</span><b id="ocrRecognitionPercent">—</b></div>
             <div><span>Время обработки</span><b id="ocrElapsedTime">—</b></div>
           </div>
+          <div class="ocr-preview" id="ocrPreview" style="display:none">
+            <div class="ocr-preview-title">Превью распознавания</div>
+            <div id="ocrPreviewText" class="ocr-preview-text"></div>
+          </div>
 
           <div id="ocrParsedMetrics" class="ocr-parsed" style="display:none">
-            <div><span>Дистанция</span><b id="ocrDistance">—</b></div>
-            <div><span>Набор</span><b id="ocrGain">—</b></div>
-            <div><span>Время</span><b id="ocrTime">—</b></div>
-            <div><span>Темп</span><b id="ocrPace">—</b></div>
+            <div><span>Расстояние</span><b id="ocrDistance">—</b></div>
+            <div></div>
+            <div><span>Время в движении</span><b id="ocrTime">—</b></div>
+            <div><span>Средний темп</span><b id="ocrPace">—</b></div>
             <div><span>Средний пульс</span><b id="ocrHr">—</b></div>
           </div>
         </div>
