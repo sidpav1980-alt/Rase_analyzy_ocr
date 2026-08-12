@@ -1147,14 +1147,27 @@ $('genderFilter').addEventListener('change',renderRoster);
 
 function estimateLTHR(){
   const known=+$('lthr').value||0; if(known)return known;
-  const hr=+$('refAvgHr').value||0, mins=+$('refMinutes').value||100;
+  const hr=+$('refAvgHr').value||0, mins=trainingMovingMinutes()||100;
   if(mins<=50)return Math.round(hr*.98);
   if(mins<=100)return Math.round(hr*1.01);
   return Math.round(hr*1.03);
 }
 
 function movingTimeMinutes(){
-  const el=$('refTime');
+  const el=$('refMinutes');
+  if(!el) return 0;
+  const s=String(el.value||'').trim().replace(',','.');
+  let m=s.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
+  if(m) return Number(m[1])*60+Number(m[2])+Number(m[3])/60;
+  m=s.match(/^(\d{1,3}):(\d{2})$/);
+  if(m) return Number(m[1])+Number(m[2])/60;
+  const n=Number(s);
+  return Number.isFinite(n)?n:0;
+}
+
+
+function trainingMovingMinutes(){
+  const el=$('refMinutes');
   if(!el) return 0;
   const s=String(el.value||'').trim().replace(',','.');
   let m=s.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
@@ -1495,7 +1508,7 @@ function clearBestTrainingData(){
 
   // lower editable fields
   if($('refDist')) $('refDist').value='';
-  if($('refTime')) $('refTime').value='';
+  if($('refMinutes')) $('refMinutes').value='';
   if($('refPace')) $('refPace').value='';
   if($('refAvgHr')) $('refAvgHr').value='';
 
@@ -1669,7 +1682,7 @@ function normalizeGarminTrainingMetrics(text, metrics){
 
 
 function setMovingTimeFieldFromOCR(value){
-  const el=$('refTime');
+  const el=$('refMinutes');
   if(!el || !value) return;
 
   const s=String(value).trim();

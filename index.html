@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="app-version">v0.81 ONLINE FULL</div>
+<div class="app-version">v0.82 ONLINE FULL</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Trail Race Analyzer</div>
@@ -193,17 +193,14 @@
         </div>
 
         <div class="grid2">
-          <label class="field"><span>Расстояние, км</span><input id="refDist" type="number" step="1" value="1"></label>
-          <label class="field"><span>Набор, м</span><input id="refGain" type="number" step="1" value="1"></label>
-          <label class="field">
-          <span>Средний темп</span>
-          <input id="refPace" inputmode="text" placeholder="5:53">
-        </label>
-        <label class="field"><span>Средний пульс</span><input id="refAvgHr" type="number" step="1" value="1"></label>
-          <label class="field"><span>Макс. пульс</span><input id="refMaxHr" type="number" step="1" value="1"></label>
-          <label class="field"><span>Время в движении</span><input id="refMinutes" type="number" step="1" value="1"></label>
-          <label class="field"><span>LTHR, если известен</span><input id="lthr" type="number" step="1" value="1"></label>
+          <label class="field"><span>Расстояние, км</span><input id="refDist" type="number" step="0.01" placeholder="8.03"></label>
+          <label class="field"><span>Время в движении</span><input id="refMinutes" type="text" inputmode="numeric" placeholder="47:14"></label>
+          <label class="field"><span>Средний темп</span><input id="refPace" type="text" inputmode="numeric" placeholder="5:53"></label>
+          <label class="field"><span>Средний пульс</span><input id="refAvgHr" type="number" step="1" placeholder="155"></label>
         </div>
+        <input id="refGain" type="hidden" value="0">
+        <input id="refMaxHr" type="hidden" value="0">
+        <input id="lthr" type="hidden" value="0">
 
         <button id="ocrBtn" class="primary">Заполнить из текста</button>
         <div id="ocrStatus" class="muted">Автономный режим: OCR-библиотека не требуется. На iPhone можно использовать Live Text и вставить распознанный текст в поле скриншота.</div>
