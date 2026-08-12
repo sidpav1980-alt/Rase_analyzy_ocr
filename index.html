@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="app-version">v0.63 ONLINE FULL</div>
+<div class="app-version">v0.65 ONLINE FULL</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Trail Race Analyzer</div>
@@ -35,19 +35,7 @@
           <span>ITRA PI</span>
           <input id="itraPi" type="number" min="0" max="1000" value="0">
         </label>
-
-        <div class="own-itra-profile-box">
-          <label class="field">
-            <span>ITRA профиль / Runner ID</span>
-            <input id="ownItraProfile" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
-                   placeholder="https://itra.run/RunnerSpace/... или Runner ID">
-          </label>
-          <div class="muted">Вставьте ссылку ITRA или Runner ID. PI берётся только из блока «ITRA Performance Index». ИИ не используется.</div>
         </div>
-
-        <div class="own-itra-box">
-          <button id="ownItraLookupBtn" type="button" class="secondary action-ready">Загрузить мой ITRA по ссылке</button>
-          <div id="ownItraLookupStatus" class="muted">Возьмёт имя спортсмена выше, найдёт профиль ITRA и подставит PI.</div>
         </div>
 
       </div>
@@ -173,15 +161,19 @@
         <div class="upload-box">
           <b>Скриншот тренировки</b>
           <input id="trainingScreenshot" type="file" accept="image/*">
-          <button class="action ready" id="trainingOcrBtn" type="button">Распознать текст со скриншота</button>
-          <div class="status" id="trainingOcrStatus">Выберите один скриншот тренировки. OCR выполняется на сервере Render.</div>
-          <label class="field">
-            <span>Распознанный текст</span>
-            <textarea id="trainingOcrText" rows="7" placeholder="Здесь появится текст со скриншота. Его можно исправить вручную."></textarea>
-          </label>
+          <button class="action ready" id="trainingOcrBtn" type="button">Загрузить и распознать</button>
+          <div class="status" id="trainingOcrStatus">Выберите один скриншот. После распознавания будут показаны только найденные показатели.</div>
+
+          <div id="ocrParsedMetrics" class="ocr-parsed" style="display:none">
+            <div><span>Дистанция</span><b id="ocrDistance">—</b></div>
+            <div><span>Набор</span><b id="ocrGain">—</b></div>
+            <div><span>Время</span><b id="ocrTime">—</b></div>
+            <div><span>Темп</span><b id="ocrPace">—</b></div>
+            <div><span>Средний пульс</span><b id="ocrHr">—</b></div>
+          </div>
         </div>
 
-        <p class="muted">Добавь один скриншот Garmin/Strava. Приложение хранит их локально; ключевые цифры можно внести вручную или скопировать через iPhone Live Text. Интернет не нужен.</p>
+        <p class="muted">Добавь один скриншот Garmin/Strava. После OCR приложение покажет только найденные показатели и подставит их в поля тренировки.</p>
         <div class="upload">
           <strong>Скриншот тренировки</strong>
           <input id="shotFiles" type="file" accept="image/*">

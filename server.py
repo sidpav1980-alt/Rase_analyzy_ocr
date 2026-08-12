@@ -409,7 +409,7 @@ def training_ocr():
     if pytesseract is None:
         return jsonify({"error":"pytesseract Python package is not installed"}),500
     if not tess:
-        return jsonify({"error":"Tesseract OCR binary is not installed on Render. Deploy the Docker version v0.63."}),500
+        return jsonify({"error":"Tesseract OCR binary is not installed on Render"}),500
 
     f=request.files.get("image")
     if not f:
@@ -420,50 +420,43 @@ def training_ocr():
         if not raw:
             return jsonify({"error":"Empty image"}),400
 
-        img=Image.open(io.BytesIO(raw)).convert("RGB")
+        img=Image.open(io.BytesIO(raw)).convert("L")
 
-        # Upscale small phone screenshots a bit for OCR stability.
+        # Resize to a sensible width; huge screenshots are slow on free Render.
         w,h=img.size
-        if w < 1400:
-            scale=1400/max(1,w)
-            img=img.resize((int(w*scale),int(h*scale)))
+        target_w=1400
+        if w>target_w:
+            scale=target_w/w
+            img=img.resize((target_w,max(1,int(h*scale))))
+        elif w<900:
+            scale=900/max(1,w)
+            img=img.resize((900,max(1,int(h*scale))))
+
+        # Slight thresholding improves UI screenshots.
+        img=img.point(lambda p: 255 if p>175 else 0)
 
         try:
-            text=pytesseract.image_to_string(img,lang="rus+eng",config="--psm 6")
-        except Exception:
-            text=pytesseract.image_to_string(img,lang="eng",config="--psm 6")
+            text=pytesseract.image_to_string(
+                img,
+                lang="rus+eng",
+                config="--psm 6",
+                timeout=35
+            )
+        except RuntimeError as e:
+            if "timeout" in str(e).lower():
+                return jsonify({"error":"OCR timeout"}),504
+            text=pytesseract.image_to_string(
+                img,
+                lang="eng",
+                config="--psm 6",
+                timeout=35
+            )
 
         text=re.sub(r"\n{3,}","\n\n",text or "").strip()
         return jsonify({"text":text})
     except Exception as e:
         return jsonify({"error":f"OCR failed: {e}"}),500
 
-@app.post("/api/itra-own")
-def itra_own():
-    payload=request.get_json(silent=True) or {}
-    name=str(payload.get("name","")).strip()
-    profile=str(payload.get("profile","")).strip()
-
-    if not profile:
-        return jsonify({"error":"ITRA profile URL or Runner ID required"}),400
-
-    try:
-        direct=search_direct_itpa(name,profile)
-    except Exception as e:
-        return jsonify({"error":str(e)}),400
-
-    if direct and direct.get("pi") is not None:
-        return jsonify({"result":direct})
-
-    return jsonify({
-        "result":{
-            "name":name or profile,
-            "pi":None,
-            "source":None,
-            "confidence":0
-        },
-        "error":"ITRA Performance Index not found in supplied profile"
-    }),404
 
 @app.post("/api/itra-batch")
 def itra_batch():
@@ -510,7 +503,7 @@ def itra_batch():
 def health():
     return jsonify({
         "ok":True,
-        "version":"0.63",
+        "version":"0.65",
         "itra_enabled":bool(OPENROUTER_API_KEY),
         "model":OPENROUTER_MODEL
     })

@@ -22,23 +22,7 @@ function setActionState(id,state){
 function resetOwnItraForNewGPX(){
   const piEl=getAthletePiElement ? getAthletePiElement() : ($('athletePi')||$('itraPi')||$('pi'));
   if(piEl) piEl.value='0';
-
-  const profileEl=$('ownItraProfile');
-  if(profileEl) profileEl.value='';
-
-  const ownStatus=$('ownItraLookupStatus');
-  if(ownStatus) ownStatus.textContent='ITRA не загружен. PI = 0.';
-
-  const ownBtn=$('ownItraLookupBtn');
-  if(ownBtn){
-    ownBtn.disabled=false;
-    setActionState('ownItraLookupBtn','ready');
-  }
-
-  try{ localStorage.removeItem('trailOwnItraProfile'); }catch(e){}
 }
-
-
 function clearMapAnalysisOnPageStart(){
   try{ localStorage.removeItem('trailMapAnalysis'); }catch(e){}
 
@@ -1284,10 +1268,6 @@ $('mapAnalyzeBtn')?.addEventListener('click',async ()=>{
 
 
 
-function getAthleteNameValue(){
-  const el=$('athleteName');
-  return el ? el.value.trim() : '';
-}
 function getAthletePiElement(){
   return $('athletePi') || $('itraPi') || $('pi');
 }
@@ -1345,68 +1325,6 @@ function initOpenRouterKeyUI(){
 }
 
 
-$('ownItraLookupBtn')?.addEventListener('click', async ()=>{
-  const name=getAthleteNameValue();
-  const piEl=getAthletePiElement();
-
-  const profile=$('ownItraProfile') ? $('ownItraProfile').value.trim() : '';
-  if(!profile){
-    $('ownItraLookupStatus').textContent='✕ Укажите ссылку ITRA или Runner ID.';
-    setActionState('ownItraLookupBtn','error');
-    return;
-  }
-
-  const btn=$('ownItraLookupBtn');
-  btn.disabled=true;
-  setActionState('ownItraLookupBtn','working');
-  $('ownItraLookupStatus').textContent='Ищу профиль ITRA: '+(profile||name)+'…';
-
-  try{
-    const resp=await fetch('/api/itra-own',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({name,profile})
-    });
-
-    if(!resp.ok){
-      let detail='';
-      try{
-        const e=await resp.json();
-        detail=e.error||'';
-      }catch(e){}
-      throw new Error('HTTP '+resp.status+(detail?' · '+detail:''));
-    }
-
-    const data=await resp.json();
-    const result=data.result||null;
-
-    if(!result || result.pi===null || result.pi===undefined){
-      if(piEl) piEl.value='0';
-      throw new Error('ITRA Performance Index не найден по указанной ссылке');
-    }
-
-    if(piEl) piEl.value=String(result.pi);
-    $('ownItraLookupStatus').textContent='✓ ITRA PI найден: '+result.pi;
-    setActionState('ownItraLookupBtn','success');
-
-    // Persist current profile locally when possible.
-    try{
-      localStorage.setItem('trailOwnItraProfile',JSON.stringify({
-        name,
-        pi:Number(result.pi),
-        source:result.source||null,
-        profile:($('ownItraProfile')?$('ownItraProfile').value.trim():''),
-        savedAt:new Date().toISOString()
-      }));
-    }catch(e){}
-  }catch(err){
-    const piEl=getAthletePiElement(); if(piEl) piEl.value='0';
-    $('ownItraLookupStatus').textContent='✕ Ошибка ITRA: '+(err.message||String(err));
-    setActionState('ownItraLookupBtn','error');
-  }finally{
-    btn.disabled=false;
-  }
-});
 
 
 $('itraLookupBtn')?.addEventListener('click', async ()=>{
@@ -1531,17 +1449,6 @@ window.addEventListener('DOMContentLoaded',initOpenRouterKeyUI);
 window.addEventListener('DOMContentLoaded',syncMapAnalyzeButton);
 
 
-function restoreOwnItraProfile(){
-  try{
-    const p=JSON.parse(localStorage.getItem('trailOwnItraProfile')||'null');
-    if(!p) return;
-    const nameEl=$('athleteName'), piEl=getAthletePiElement(), profileEl=$('ownItraProfile');
-    if(nameEl && (!nameEl.value || nameEl.value==='Noname')) nameEl.value=p.name||'Noname';
-    if(piEl && p.pi) piEl.value=String(p.pi);
-    if(profileEl && p.profile) profileEl.value=p.profile;
-  }catch(e){}
-}
-window.addEventListener('DOMContentLoaded',restoreOwnItraProfile);
 
 
 window.addEventListener('DOMContentLoaded',clearMapAnalysisOnPageStart);
@@ -1549,7 +1456,7 @@ window.addEventListener('DOMContentLoaded',clearMapAnalysisOnPageStart);
 
 
 function resetTrainingOcr(){
-  if($('trainingOcrText')) $('trainingOcrText').value='';
+  if($('ocrParsedMetrics')) $('ocrParsedMetrics').style.display='none';
   if($('trainingOcrStatus')) $('trainingOcrStatus').textContent='Скриншот выбран. Нажмите «Распознать текст со скриншота».';
   setActionState('trainingOcrBtn','ready');
 }
@@ -1576,15 +1483,66 @@ $('trainingOcrBtn')?.addEventListener('click',async()=>{
   if(status) status.textContent='Распознаю текст…';
   try{
     const fd=new FormData(); fd.append('image',file);
-    const resp=await fetch('/api/training-ocr',{method:'POST',body:fd});
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),45000);
+    let resp;
+    try{
+      resp=await fetch('/api/training-ocr',{method:'POST',body:fd,signal:controller.signal});
+    }finally{
+      clearTimeout(timeout);
+    }
     const data=await resp.json().catch(()=>({}));
     if(!resp.ok) throw new Error(data.error||`HTTP ${resp.status}`);
     const text=String(data.text||'').trim();
-    $('trainingOcrText').value=text;
-    if(status) status.textContent=text?'✓ Текст распознан. Можно исправить вручную.':'✕ Текст не найден.';
+    renderTrainingOcrMetrics(parseTrainingMetricsFromText(text));
+    if(status) status.textContent=text?'✓ Скриншот распознан. Найденные показатели показаны ниже.':'✕ Показатели не найдены.';
     setActionState('trainingOcrBtn',text?'success':'error');
   }catch(err){
-    if(status) status.textContent='✕ Ошибка распознавания: '+err.message;
+    if(status) status.textContent='✕ Ошибка распознавания: '+(err.name==='AbortError'?'таймаут 45 секунд':err.message);
     setActionState('trainingOcrBtn','error');
   }
 });
+
+
+function parseTrainingMetricsFromText(text){
+  const t=String(text||'').replace(/\u00a0/g,' ').replace(/,/g,'.');
+  const out={};
+
+  const dist=t.match(/(?:дистанц(?:ия|ии)?|distance)\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*(?:км|km)\b/i)
+           || t.match(/\b(\d+(?:\.\d+)?)\s*(?:км|km)\b/i);
+  if(dist) out.distance=Number(dist[1]);
+
+  const gain=t.match(/(?:набор(?:\s+высоты)?|elevation\s*gain|ascent)\s*[:\-]?\s*(\d{2,5})\s*(?:м|m)\b/i);
+  if(gain) out.gain=Number(gain[1]);
+
+  const hr=t.match(/(?:средн(?:ий|яя)\s+пульс|avg(?:erage)?\s+hr|average\s+heart\s+rate)\s*[:\-]?\s*(\d{2,3})\b/i);
+  if(hr) out.hr=Number(hr[1]);
+
+  const pace=t.match(/(?:темп|pace)\s*[:\-]?\s*(\d{1,2})[:.](\d{2})\s*(?:\/км|\/km|min\/km|мин\/км)?/i);
+  if(pace) out.pace=`${pace[1]}:${pace[2]}`;
+
+  const time=t.match(/(?:время|time|elapsed\s*time|moving\s*time)\s*[:\-]?\s*(\d{1,2}):(\d{2}):(\d{2})\b/i)
+           || t.match(/\b(\d{1,2}):(\d{2}):(\d{2})\b/);
+  if(time) out.time=`${time[1]}:${time[2]}:${time[3]}`;
+
+  return out;
+}
+
+function renderTrainingOcrMetrics(metrics){
+  const box=$('ocrParsedMetrics');
+  if(!box) return;
+
+  const has=Object.keys(metrics||{}).length>0;
+  box.style.display=has?'grid':'none';
+
+  if($('ocrDistance')) $('ocrDistance').textContent=metrics.distance!=null?`${metrics.distance} км`:'—';
+  if($('ocrGain')) $('ocrGain').textContent=metrics.gain!=null?`${metrics.gain} м`:'—';
+  if($('ocrTime')) $('ocrTime').textContent=metrics.time||'—';
+  if($('ocrPace')) $('ocrPace').textContent=metrics.pace?`${metrics.pace} /км`:'—';
+  if($('ocrHr')) $('ocrHr').textContent=metrics.hr!=null?`${metrics.hr} уд/мин`:'—';
+
+  // Auto-fill existing training fields when present.
+  if(metrics.distance!=null && $('refDist')) $('refDist').value=String(metrics.distance);
+  if(metrics.gain!=null && $('refGain')) $('refGain').value=String(metrics.gain);
+  if(metrics.hr!=null && $('refAvgHr')) $('refAvgHr').value=String(metrics.hr);
+}
