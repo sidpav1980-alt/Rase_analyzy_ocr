@@ -1921,13 +1921,13 @@ function riegelExponentForDistance(targetKm,refKm){
 
 function flatRaceAnchorForTarget(){
   const ref=state.raceReferences?.flatRace;
-  if(!ref || !(ref.dist>=10) || !(ref.elapsedSec>0)) return null;
+  if(!ref || !(ref.dist>=5) || !(ref.elapsedSec>0)) return null;
 
   const targetKm=Number(state.dist||0);
   const exponent=riegelExponentForDistance(targetKm,ref.dist);
   const calibrationSpeed=Math.max(0.5,Number(ref.calibratedFlatSpeed||ref.avgSpeed));
 
-  const refKm=Math.max(10,Math.min(ref.dist,15));
+  const refKm=Math.max(5,Math.min(ref.dist,15));
   const refSec=(refKm*1000)/calibrationSpeed;
   const targetSec=refSec*Math.pow(targetKm/refKm,exponent);
   const targetPaceSec=targetSec/Math.max(0.001,targetKm);
@@ -2200,7 +2200,7 @@ function calculateRaceForecast(){
 
   const flatAnchor=flatRaceAnchorForTarget();
   if(!flatAnchor){
-    throw new Error('Скоростная плоская GPX должна быть не менее 10 км и содержать корректное время');
+    throw new Error('Скоростная плоская GPX должна быть не менее 5 км и содержать корректное время');
   }
 
   const effort=Number($('raceEffortPct')?.value||100);
@@ -2745,9 +2745,9 @@ function bindRaceReference(role){
       const text=await readFileIOS(f);
       const parsed=parseTimedActivityGPX(text);
 
-      if(role==='flatRace' && parsed.dist < 10){
+      if(role==='flatRace' && parsed.dist < 5){
         throw new Error(
-          `Скоростная плоская GPX должна быть не менее 10 км. В файле: ${parsed.dist.toFixed(2)} км.`
+          `Скоростная плоская GPX должна быть не менее 5 км. В файле: ${parsed.dist.toFixed(2)} км.`
         );
       }
 
