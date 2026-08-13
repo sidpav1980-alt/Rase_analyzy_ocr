@@ -1067,6 +1067,16 @@ function renderMapAnalysis(result){
     bridgeKms:[...bridgeKms]
   };
   state.mapAnalysisReadyForCurrentGpx=true;
+
+  // New route analysis becomes the source of automatic segment boundaries.
+  // Reset any previously entered manual table step back to AUTO.
+  const stepEl=$('forecastStepKm');
+  if(stepEl) stepEl.value='';
+  if($('recalcForecastStepBtn')){
+    $('recalcForecastStepBtn').disabled=true;
+    setActionState('recalcForecastStepBtn','idle');
+  }
+
   applyForecastModeColors();
 
   $('mapAnalysisResults').style.display='block';
