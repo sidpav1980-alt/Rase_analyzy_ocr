@@ -2541,30 +2541,96 @@ function calculateRaceForecast(){
     });
   }
 
-  // v0.44: on very steep mountain routes, the strength GPX is the primary reality check.
-  // A flat/VO2 anchor must not predict a dramatically faster time than demonstrated
-  // on a comparable high-vertical trail. Scale the strength reference by km-effort
-  // (distance + ascent/100) and allow only a modest race-day improvement.
+  // v0.52: steep-course reality checks.
+  // 1) Strength GPX becomes increasingly important when the race has much more
+  //    ascent per km than the strength reference.
+  // 2) If the race GPX itself contains timestamps (same-course prior effort),
+  //    that real moving time is an additional anchor on very vertical routes.
+
   const strengthRef=state.raceReferences?.strength;
+  const routeGainNow=Math.max(0,Number(state.gain||0));
+  const routeDistNow=Math.max(0.1,Number(state.dist||0));
+  const routeVD=routeGainNow/routeDistNow; // m+/km
+
+  let strengthRealityFloorSec=0;
+  let sameCourseFloorSec=0;
+
   if(strengthRef && Number(strengthRef.elapsedSec)>0 && Number(strengthRef.dist)>0){
-    const routeGainNow=Math.max(0,Number(state.gain||0));
-    const routeVD=routeGainNow/Math.max(0.1,Number(state.dist||0));
     const refVD=Math.max(0,Number(strengthRef.gain||0))/Math.max(0.1,Number(strengthRef.dist||0));
-    if(routeVD>=60 && refVD>=35){
-      const targetEffortKm=Number(state.dist||0)+routeGainNow/100;
+
+    if(routeVD>=50 && refVD>=20){
+      const targetEffortKm=routeDistNow+routeGainNow/100;
       const refEffortKm=Number(strengthRef.dist||0)+Math.max(0,Number(strengthRef.gain||0))/100;
-      const scaledStrengthSec=Number(strengthRef.elapsedSec)*Math.pow(
+
+      let scaledStrengthSec=Number(strengthRef.elapsedSec)*Math.pow(
         Math.max(0.25,targetEffortKm/Math.max(0.25,refEffortKm)),1.06
       );
-      // Race conditions may be faster than training, but cap the assumed gain at 15%.
-      const strengthFloorSec=scaledStrengthSec*0.85;
-      if(totalSec<strengthFloorSec){
-        const scale=strengthFloorSec/Math.max(1,totalSec);
+
+      // Nonlinear vertical-density penalty.
+      // If target VD is 2–3x the strength reference, km-effort alone is too optimistic.
+      const vdRatio=routeVD/Math.max(20,refVD);
+      let verticalPenalty=1;
+
+      if(routeVD>80){
+        const absoluteExcess=(routeVD-80)/80;
+        verticalPenalty *= 1 + Math.min(0.28,0.13*Math.pow(absoluteExcess,1.15));
+      }
+      if(vdRatio>1.35){
+        verticalPenalty *= 1 + Math.min(0.30,0.12*Math.pow(vdRatio-1.35,1.20));
+      }
+
+      scaledStrengthSec*=verticalPenalty;
+
+      // Race day may be better than training, but less improvement is allowed
+      // as vertical density becomes extreme.
+      const allowedGain =
+        routeVD>=140 ? 0.08 :
+        routeVD>=110 ? 0.10 :
+        routeVD>=80  ? 0.12 : 0.15;
+
+      strengthRealityFloorSec=scaledStrengthSec*(1-allowedGain);
+
+      if(totalSec<strengthRealityFloorSec){
+        const scale=strengthRealityFloorSec/Math.max(1,totalSec);
         totalSec=0;
-        detailed.forEach(s=>{ s.sec*=scale; totalSec+=s.sec; s.cumSec=totalSec; });
+        detailed.forEach(s=>{
+          s.sec*=scale;
+          totalSec+=s.sec;
+          s.cumSec=totalSec;
+        });
       }
     }
   }
+
+  // Same-course anchor: if the route GPX has timestamps, it may be a previously
+  // completed activity on this exact profile. On extreme vertical terrain,
+  // do not assume an enormous unexplained improvement over that real moving time.
+  const routeTimes=getTrackTimesFromGPX();
+  if(routeTimes && Number(routeTimes.movingSec)>0 && routeVD>=70){
+    const actualMovingSec=Number(routeTimes.movingSec);
+
+    // Ignore obviously broken timestamps.
+    const actualPace=actualMovingSec/routeDistNow;
+    if(actualPace>=180 && actualPace<=3600){
+      const maxImprovement =
+        routeVD>=140 ? 0.12 :
+        routeVD>=110 ? 0.14 :
+        routeVD>=80  ? 0.16 : 0.18;
+
+      sameCourseFloorSec=actualMovingSec*(1-maxImprovement);
+
+      if(totalSec<sameCourseFloorSec){
+        const scale=sameCourseFloorSec/Math.max(1,totalSec);
+        totalSec=0;
+        detailed.forEach(s=>{
+          s.sec*=scale;
+          totalSec+=s.sec;
+          s.cumSec=totalSec;
+        });
+      }
+    }
+  }
+
 
   // v0.28: durability must react to the uploaded strength and fast-trail files.
   // Previously physiology was mostly diagnostic and replacing the strength GPX
@@ -2677,7 +2743,9 @@ function raceFormulaText(){
     + `Быстрая трейловая GPX влияет на рабочую скорость и рельеф. `
     + `Силовая трейловая GPX влияет на уклон и запас выносливости. `
     + (cap?`Запас выносливости: ${cap.capacityHours.toFixed(1)} ч. `:'')
-    + `Далее применяются Riegel, усталость по длительности, рельеф и анализ покрытия.`;
+    + `Далее применяются Riegel, усталость по длительности, рельеф и анализ покрытия. `
+    + `На очень вертикальных трассах действует нелинейная поправка по м+/км и силовому GPX. `
+    + `Если GPX самой трассы содержит реальные временные метки предыдущего прохождения, его moving time используется как дополнительный reality-check.`;
 }
 
 function surfaceDistanceInRange(samples,fromKm,toKm,cls){
@@ -3144,6 +3212,40 @@ function bindRaceReference(role){
       status.textContent='Анализирую '+raceRefTitle(role)+'…';
       const text=await readFileIOS(f);
       const parsed=parseTimedActivityGPX(text);
+
+      // v0.51: reject a speed/flat GPX when it is loaded as the strength-trail reference.
+      const verticalPerKm=parsed.dist>0 ? parsed.gain/parsed.dist : 0;
+      const avgPace=parsed.dist>0 ? parsed.elapsedSec/parsed.dist : 0;
+
+      if(role==='strength'){
+        const tooFlat = verticalPerKm < 20 || (parsed.dist >= 5 && parsed.gain < 250);
+        const clearlySpeedLike =
+          parsed.dist >= 5 && parsed.dist <= 15 &&
+          avgPace > 0 && avgPace < 330 &&
+          verticalPerKm < 25;
+
+        if(tooFlat || clearlySpeedLike){
+          throw new Error(
+            `Этот GPX не подходит для «Силовой трейловой»: `
+            + `${parsed.dist.toFixed(2)} км · +${Math.round(parsed.gain)} м · `
+            + `${Math.round(verticalPerKm)} м набора/км · ${fmtPaceSecPerKm(avgPace)}. `
+            + `Силовой эталон должен быть действительно горным: минимум 20 м набора/км, `
+            + `а для файла от 5 км — не менее +250 м. `
+            + `Быстрый почти плоский файл загрузите как скоростной эталон.`
+          );
+        }
+      }
+
+      if(role==='flatRace'){
+        const tooMountainous = verticalPerKm > 35 || (parsed.dist >= 5 && parsed.gain > 500);
+        if(tooMountainous){
+          throw new Error(
+            `Этот GPX слишком горный для «Скоростной плоской»: `
+            + `${parsed.dist.toFixed(2)} км · +${Math.round(parsed.gain)} м `
+            + `(${Math.round(verticalPerKm)} м/км). Используйте его как силовую/трейловую тренировку.`
+          );
+        }
+      }
 
       if(role==='flatRace' && parsed.dist < 5){
         throw new Error(
