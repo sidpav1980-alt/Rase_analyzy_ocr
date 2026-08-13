@@ -94,6 +94,7 @@ const state = {
   raceForecast: null,
   forecastMode: null,
   mapAnalysis: null,
+  mapAnalysisReadyForCurrentGpx: false,
   deferredPrompt: null
 };
 
@@ -358,7 +359,10 @@ $('gpxFile').addEventListener('change', e=>{
 
   clearResultForecast();
   selectedGPXFile=e.currentTarget.files&&e.currentTarget.files[0] ? e.currentTarget.files[0] : null;
+  state.mapAnalysis=null;
+  state.mapAnalysisReadyForCurrentGpx=false;
   resetMapAnalysisForNewGPX();
+  applyForecastModeColors();
   resetOwnItraForNewGPX();
   if(!selectedGPXFile){
     $('gpxName').innerHTML='<span id="gpxCheck" class="file-check">○</span> Файл не выбран';
@@ -1062,6 +1066,8 @@ function renderMapAnalysis(result){
     fordCount:fordKms.length,
     bridgeKms:[...bridgeKms]
   };
+  state.mapAnalysisReadyForCurrentGpx=true;
+  applyForecastModeColors();
 
   $('mapAnalysisResults').style.display='block';
   $('coverageMetric').textContent=summary.coverage.toFixed(0)+'%';
@@ -2379,11 +2385,19 @@ function applyForecastModeColors(){
   if(!normal || !analysis) return;
 
   normal.disabled=!ready;
-  analysis.disabled=!ready;
+  const analysisReady=ready && !!state.mapAnalysis && state.mapAnalysisReadyForCurrentGpx===true;
+  analysis.disabled=!analysisReady;
+  analysis.title=analysisReady ? 'Анализ текущего GPX готов' : 'Сначала выполните «Анализ карты» для текущего GPX';
 
   if(!ready){
     setActionState('raceForecastBtn','idle');
     setActionState('raceForecastGpxBtn','idle');
+    return;
+  }
+  if(!analysisReady){
+    setActionState('raceForecastBtn',state.forecastMode==='normal'?'success':'ready');
+    setActionState('raceForecastGpxBtn','idle');
+    if(state.forecastMode==='analysis') state.forecastMode=null;
     return;
   }
 
@@ -2524,6 +2538,10 @@ window.addEventListener('DOMContentLoaded',()=>{
 
 $('raceForecastGpxBtn')?.addEventListener('click',async()=>{
   const btn=$('raceForecastGpxBtn');
+  if(!(state.mapAnalysis && state.mapAnalysisReadyForCurrentGpx===true)){
+    applyForecastModeColors();
+    return;
+  }
   try{
     if(!state.track?.length) throw new Error('Сначала загрузите GPX трассы во вкладке «Трасса».');
     setActionState('raceForecastGpxBtn','working'); btn.disabled=true;
