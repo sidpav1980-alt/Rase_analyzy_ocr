@@ -1619,13 +1619,14 @@ function racePhysiologyFactors(elapsedSec){
     const over=Math.max(0,hours-acidHours);
     hrFactor=Math.max(0.72,Math.exp(-0.055*intensity*over));
   }
-  // Optional VO2max: a deliberately small correction. If blank/invalid, it is neutral (1.00).
-  // VO2max is an aerobic ceiling, not a direct ultra-race pace predictor.
+  // VO2max is mandatory in the online race forecast.
+  // It remains a modest correction because VO2max is an aerobic ceiling,
+  // while HR and duration are the stronger ultra-distance constraints.
   const vo2=Number($('vo2max')?.value||0);
-  let vo2Factor=1;
-  if(vo2>=20 && vo2<=90){
-    vo2Factor=Math.max(0.94,Math.min(1.06,1+(vo2-50)*0.002));
+  if(!(vo2>=20 && vo2<=90)){
+    throw new Error('Введите VO₂max от 20 до 90 мл/кг/мин');
   }
+  const vo2Factor=Math.max(0.94,Math.min(1.06,1+(vo2-50)*0.002));
   return {durationFactor,hrFactor,hrRatio,acidHours,exponent,vo2Factor,vo2};
 }
 
@@ -1676,6 +1677,10 @@ function calculateRaceForecast(){
   }
   if(!allRaceReferencesReady()){
     throw new Error('Загрузите все 3 эталонные GPX тренировки');
+  }
+  const vo2Required=Number($('vo2max')?.value||0);
+  if(!(vo2Required>=20 && vo2Required<=90)){
+    throw new Error('Введите обязательный VO₂max от 20 до 90 мл/кг/мин');
   }
   const effort=Number($('raceEffortPct')?.value||100);
   const groupKm=Math.max(1,Math.min(10,Number($('forecastStepKm')?.value||5)));
@@ -1734,7 +1739,7 @@ function raceFormulaText(){
     + `Vflat=${info.flatSpeed.toFixed(2)} м/с; `
     + `ln(Fgrade)=${f(c[1])}·G+ ${f(c[2])}·G+² ${f(c[3])}·G− ${f(c[4])}·G−²; `
     + `FfastTrail=${info.fastTrailFactor.toFixed(3)}; fatigueK=${info.fatigueK.toFixed(3)}; `
-    + `Fduration=(T/T10)^−k; FHR=ограничение по пульсу/времени закисления; FVO2=небольшая необязательная поправка VO₂max`;
+    + `Fduration=(T/T10)^−k; FHR=ограничение по пульсу/времени закисления; FVO2=обязательная аэробная поправка VO₂max`;
 }
 
 function renderRaceForecast(){
@@ -1764,7 +1769,7 @@ function renderRaceForecast(){
     if($('raceDurationFactor')) $('raceDurationFactor').textContent=(f.physiology.durationFactor*100).toFixed(0)+'%';
     if($('raceHrFactor')) $('raceHrFactor').textContent=(f.physiology.hrFactor*100).toFixed(0)+'%';
     if($('raceAcidTime')) $('raceAcidTime').textContent=Number.isFinite(f.physiology.acidHours)?f.physiology.acidHours.toFixed(1)+' ч':'нет данных HR';
-    if($('raceVo2Factor')) $('raceVo2Factor').textContent=f.physiology.vo2 ? `${f.physiology.vo2.toFixed(1)} → ${(f.physiology.vo2Factor*100).toFixed(1)}%` : 'не используется';
+    if($('raceVo2Factor')) $('raceVo2Factor').textContent=`${f.physiology.vo2.toFixed(1)} → ${(f.physiology.vo2Factor*100).toFixed(1)}%`;
     $('raceModelSource').textContent=allRaceReferencesReady()
       ? `${state.raceReferences.strength.source} + ${state.raceReferences.fastTrail.source} + ${state.raceReferences.flatRace.source}`
       : 'нужно 3 GPX';
@@ -1801,15 +1806,19 @@ function updateRaceReferenceState(){
   if($('raceModelFormula')) $('raceModelFormula').textContent=raceFormulaText();
 
   const routeReady=state.dist>0 && state.track?.length>1;
+  const vo2=Number($('vo2max')?.value||0);
+  const vo2Ready=vo2>=20 && vo2<=90;
+  const ready=routeReady && count===3 && vo2Ready;
   const btn=$('raceForecastBtn');
   if(btn){
-    btn.disabled=!(routeReady && count===3);
-    setActionState('raceForecastBtn',routeReady && count===3?'ready':'idle');
+    btn.disabled=!ready;
+    setActionState('raceForecastBtn',ready?'ready':'idle');
   }
   if($('raceForecastStatus')){
     if(!routeReady) $('raceForecastStatus').textContent='Сначала загрузите GPX трассы во вкладке «Трасса».';
     else if(count<3) $('raceForecastStatus').textContent=`Трасса готова. Загрузите ещё ${3-count} эталонных GPX.`;
-    else $('raceForecastStatus').textContent='Все 3 тренировки и трасса загружены. Можно считать общий прогноз.';
+    else if(!vo2Ready) $('raceForecastStatus').textContent='Введите обязательный VO₂max (20–90 мл/кг/мин).';
+    else $('raceForecastStatus').textContent='Трасса, 3 тренировки и VO₂max готовы. Можно считать общий прогноз.';
   }
 }
 
@@ -1866,6 +1875,7 @@ bindRaceReference('strength');
 bindRaceReference('fastTrail');
 bindRaceReference('flatRace');
 
+$('vo2max')?.addEventListener('input',updateRaceReferenceState);
 $('raceForecastBtn')?.addEventListener('click',renderRaceForecast);
 $('raceEffortPct')?.addEventListener('change',()=>{if(state.dist>0) renderRaceForecast();});
 $('forecastStepKm')?.addEventListener('change',()=>{if(state.dist>0) renderRaceForecast();});

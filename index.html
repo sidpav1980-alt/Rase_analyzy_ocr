@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="app-version">v0.92 ONLINE FULL</div>
+<div class="app-version">v0.94 ONLINE FULL</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Trail Race Analyzer</div>
@@ -308,8 +308,8 @@
             <input id="forecastStepKm" type="number" min="1" max="10" step="1" value="5">
           </label>
           <label class="field">
-            <span>VO₂max, мл/кг/мин (необязательно)</span>
-            <input id="vo2max" type="number" min="20" max="90" step="0.1" placeholder="например 55">
+            <span>VO₂max, мл/кг/мин — обязательно</span>
+            <input id="vo2max" type="number" min="20" max="90" step="0.1" placeholder="например 55" required>
           </label>
         </div>
 
@@ -320,7 +320,7 @@
           <div><span>Прогноз движения</span><b id="raceForecastTime">—</b></div>
           <div><span>Средний темп</span><b id="raceForecastPace">—</b></div>
           <div><span>Диапазон ±10%</span><b id="raceForecastRange">—</b></div>
-          <div><span>Калибровка</span><b id="raceModelSource">activity preset</b></div>
+          <div><span>Калибровка</span><b id="raceModelSource">нужно 3 GPX + VO₂max</b></div>
         </div>
 
         <div class="metrics big">
