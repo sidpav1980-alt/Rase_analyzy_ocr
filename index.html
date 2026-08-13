@@ -14,7 +14,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 </head>
 <body>
-<div class="app-version">v0.04 ONLINE FULL</div>
+<div class="app-version">v0.05 ONLINE FULL</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Trail Race Analyzer</div>
@@ -44,7 +44,7 @@
 
     <nav class="tabs">
       <button class="tab active" data-tab="route">1. Трасса</button>
-      <button class="tab" data-tab="roster">2. Стартовый</button>
+      <button class="tab" data-tab="roster">2. ChatGPT</button>
       <button class="tab" data-tab="forecast">3. Прогноз</button>
       <button class="tab" data-tab="result">4. Итог</button>
     </nav>
@@ -169,6 +169,16 @@
 
     <section id="roster" class="tabpanel">
       <div class="card">
+        <h2>ChatGPT</h2>
+        <label class="field">
+          <span>OpenAI API key</span>
+          <input id="openAiKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-…">
+        </label>
+        <div class="key-actions">
+          <button id="clearOpenAiKeyBtn" type="button" class="secondary">Очистить ключ</button>
+        </div>
+        <p class="muted">Ключ не сохраняется в localStorage и действует только до закрытия вкладки. Для постоянного и более безопасного варианта задайте OPENAI_API_KEY на сервере Render.</p>
+        <div style="display:none">
         <h2>Стартовый список</h2>
         <div class="upload">
           <strong>Стартовый список XLSX / CSV</strong>
@@ -219,6 +229,7 @@
             <thead><tr><th>Спортсмен</th><th>PI</th><th>Техника</th><th>Выносливость</th><th>Форма</th></tr></thead>
             <tbody></tbody>
           </table>
+        </div>
         </div>
       </div>
     </section>
@@ -283,6 +294,8 @@
         </div>
 
         <button id="raceForecastBtn" class="primary action-ready" type="button">Рассчитать прогноз по трассе</button>
+        <button id="raceForecastGpxBtn" class="secondary action-ready" type="button">Рассчитать прогноз по трассе с анализом GPX</button>
+        <div id="raceForecastGpxNote" class="muted">При анализе GPX каждый обнаруженный брод добавляет +40 секунд к прогнозу.</div>
         <div id="raceForecastStatus" class="muted">Сначала загрузите GPX трассы во вкладке «Трасса».</div>
 
         <div class="metrics big">

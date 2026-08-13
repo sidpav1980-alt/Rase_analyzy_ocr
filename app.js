@@ -92,6 +92,7 @@ const state = {
   },
   raceModel: null,
   raceForecast: null,
+  mapAnalysis: null,
   deferredPrompt: null
 };
 
@@ -1044,6 +1045,7 @@ function renderMapAnalysis(result){
   const fordGroups=groupFordKmPoints(crossings.fords);
   const fordKms=fordGroups.map(g=>g.start);
   const bridgeKms=crossings.bridges;
+  state.mapAnalysis={result, fordKms:[...fordKms], fordCount:fordKms.length, bridgeKms:[...bridgeKms]};
 
   $('mapAnalysisResults').style.display='block';
   $('coverageMetric').textContent=summary.coverage.toFixed(0)+'%';
@@ -1933,11 +1935,32 @@ function raceFormulaText(){
     + `Fduration=(T/T10)^−k; FHR=ограничение по пульсу/времени закисления; FVO2=обязательная аэробная поправка VO₂max`;
 }
 
-function renderRaceForecast(){
+function renderRaceForecast(options={}){
   const tbody=$('raceForecastTable')?.querySelector('tbody');
   if(!tbody) return;
   try{
     const f=calculateRaceForecast();
+    const fordKms=Array.isArray(options.fordKms)?options.fordKms:[];
+    const fordPenaltyPer=Number(options.fordPenaltyPerSec)||0;
+    if(fordPenaltyPer>0 && fordKms.length){
+      let cumExtra=0;
+      f.groups.forEach(g=>{
+        const count=fordKms.filter(km=>km>=g.from-1e-9 && km<g.to+1e-9).length;
+        const extra=count*fordPenaltyPer;
+        g.sec+=extra;
+        g.recommendedSec=(g.recommendedSec||0)+extra;
+        g.paceSec=g.sec/Math.max(0.001,g.distM/1000);
+        cumExtra+=extra;
+        g.cumSec+=cumExtra;
+      });
+      f.fordCount=fordKms.length;
+      f.fordPenaltySec=fordKms.length*fordPenaltyPer;
+      f.totalSec+=f.fordPenaltySec;
+      f.avgPaceSec=f.totalSec/state.dist;
+      f.lowSec=f.totalSec*0.90;
+      f.highSec=f.totalSec*1.10;
+      f.physiology=racePhysiologyFactors(f.totalSec);
+    }
     state.raceForecast=f;
     tbody.innerHTML='';
     f.groups.forEach(g=>{
@@ -1965,7 +1988,7 @@ function renderRaceForecast(){
       ? `${state.raceReferences.strength.source} + ${state.raceReferences.fastTrail.source} + ${state.raceReferences.flatRace.source}`
       : 'нужно 3 GPX';
     $('raceModelFormula').textContent=raceFormulaText();
-    $('raceForecastStatus').textContent=`✓ Общий прогноз по 3 GPX: ${state.dist.toFixed(1)} км. Темпы участков нормированы к среднему прогнозному темпу.`;
+    $('raceForecastStatus').textContent=f.fordPenaltySec ? `✓ Прогноз с анализом GPX: ${state.dist.toFixed(1)} км · бродов ${f.fordCount} · +${f.fordPenaltySec} с (${f.fordCount} × 40 с).` : `✓ Общий прогноз по 3 GPX: ${state.dist.toFixed(1)} км. Темпы участков нормированы к среднему прогнозному темпу.`;
     setActionState('raceForecastBtn','success');
   }catch(err){
     tbody.innerHTML='';
@@ -2065,6 +2088,36 @@ function bindRaceReference(role){
 bindRaceReference('strength');
 bindRaceReference('fastTrail');
 bindRaceReference('flatRace');
+
+$('clearOpenAiKeyBtn')?.addEventListener('click',()=>{
+  const el=$('openAiKey'); if(el) el.value='';
+  try{sessionStorage.removeItem('openAiApiKey');}catch(e){}
+});
+$('openAiKey')?.addEventListener('input',e=>{
+  try{sessionStorage.setItem('openAiApiKey',e.currentTarget.value||'');}catch(err){}
+});
+window.addEventListener('DOMContentLoaded',()=>{
+  try{const k=sessionStorage.getItem('openAiApiKey')||''; if($('openAiKey')) $('openAiKey').value=k;}catch(e){}
+});
+
+$('raceForecastGpxBtn')?.addEventListener('click',async()=>{
+  const btn=$('raceForecastGpxBtn');
+  try{
+    if(!state.track?.length) throw new Error('Сначала загрузите GPX трассы во вкладке «Трасса».');
+    setActionState('raceForecastGpxBtn','working'); btn.disabled=true;
+    if(!state.mapAnalysis){
+      if($('raceForecastStatus')) $('raceForecastStatus').textContent='⏳ Анализирую GPX/OSM и ищу броды…';
+      const result=await analyzeMapOSM();
+      renderMapAnalysis(result);
+    }
+    const fordKms=state.mapAnalysis?.fordKms||[];
+    renderRaceForecast({fordKms,fordPenaltyPerSec:40});
+    setActionState('raceForecastGpxBtn','success');
+  }catch(err){
+    if($('raceForecastStatus')) $('raceForecastStatus').textContent='✕ '+(err.message||String(err));
+    setActionState('raceForecastGpxBtn','error');
+  }finally{btn.disabled=false;}
+});
 
 $('vo2max')?.addEventListener('input',updateRaceReferenceState);
 $('raceForecastBtn')?.addEventListener('click',renderRaceForecast);

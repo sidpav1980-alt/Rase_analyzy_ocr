@@ -1,4 +1,4 @@
-# Trail Race Analyzer v0.04 ONLINE FULL
+# Trail Race Analyzer v0.05 ONLINE FULL
 
 Изменения анализа карты:
 - показана подсказка: среднее время анализа — 15 секунд;
