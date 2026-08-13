@@ -2082,7 +2082,13 @@ function renderRaceForecast(options={}){
       : 'нужно 3 GPX';
     $('raceModelFormula').textContent=raceFormulaText();
     $('raceForecastStatus').textContent=f.fordPenaltySec ? `✓ Прогноз с анализом GPX: ${state.dist.toFixed(1)} км · бродов ${f.fordCount} · +${f.fordPenaltySec} с (${f.fordCount} × 40 с).` : `✓ Общий прогноз по 3 GPX: ${state.dist.toFixed(1)} км. Темпы участков нормированы к среднему прогнозному темпу.`;
-    setActionState('raceForecastBtn','success');
+    if(options.analysisMode){
+      setActionState('raceForecastBtn','ready');
+      setActionState('raceForecastGpxBtn','success');
+    }else{
+      setActionState('raceForecastBtn','success');
+      setActionState('raceForecastGpxBtn','ready');
+    }
   }catch(err){
     tbody.innerHTML='';
     $('raceForecastStatus').textContent='✕ '+(err.message||String(err));
