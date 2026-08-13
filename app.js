@@ -300,6 +300,7 @@ function parseGPX(text){
   });
 
   const out=smoothElevations(raw);
+  state.hasElevation=raw.filter(p=>Number.isFinite(p.ele)).length>=2;
 
   // Count ascent/descent only after a 3 m threshold to avoid tiny GPS noise.
   let gain=0,loss=0,lastAccepted=null;
@@ -326,8 +327,8 @@ function parseGPX(text){
 state.dist=total/1000;state.gain=gain;state.loss=loss;
   syncMapAnalyzeButton();
   $('distMetric').textContent=state.dist.toFixed(1)+' км';
-  $('gainMetric').textContent=Math.round(gain)+' м';
-  $('lossMetric').textContent=Math.round(loss)+' м';
+  $('gainMetric').textContent=state.hasElevation ? Math.round(gain)+' м' : 'нет данных';
+  $('lossMetric').textContent=state.hasElevation ? Math.round(loss)+' м' : 'нет данных';
   updateItraDifficulty();
   updateTrailDifficulty();
   drawTrackProfiles();
@@ -346,6 +347,7 @@ $('basePace').addEventListener('change',()=>{ if(state.track&&state.track.length
 window.addEventListener('resize',()=>{ if(state.track&&state.track.length) drawTrackProfiles(); });
 
 $('gpxFile').addEventListener('change', e=>{
+  state.hasElevation=false;
   state.raceForecast=null;
   if($('raceForecastTable')) $('raceForecastTable').querySelector('tbody').innerHTML='';
   if($('raceForecastTime')) $('raceForecastTime').textContent='—';
@@ -386,7 +388,9 @@ $('gpxLoadBtn').addEventListener('click',async ()=>{
     await new Promise(r=>setTimeout(r,30));
     parseGPX(text);
     prog.value=100;
-    $('gpxStatus').textContent='✓ GPX обработан: '+state.dist.toFixed(1)+' км · +'+Math.round(state.gain)+' м · −'+Math.round(state.loss)+' м';
+    $('gpxStatus').textContent=state.hasElevation
+      ? '✓ GPX обработан: '+state.dist.toFixed(1)+' км · +'+Math.round(state.gain)+' м · −'+Math.round(state.loss)+' м'
+      : '⚠ GPX обработан: '+state.dist.toFixed(1)+' км. В файле нет данных высоты — профиль высоты, набор и сброс не рассчитываются.';
     syncMapAnalyzeButton(); setActionState('gpxLoadBtn','success');
     setTimeout(()=>{prog.style.display='none';},1200);
   }catch(err){
@@ -651,7 +655,10 @@ function drawElevationCanvas(canvasId, xMode){
   if(pts.length<2){
     ctx.fillStyle='#94a3b8';
     ctx.font='14px system-ui,-apple-system,sans-serif';
-    ctx.fillText('Загрузите GPX для построения профиля',16,30);
+    const msg=(state.track?.length && state.hasElevation===false)
+      ? 'В GPX нет данных высоты'
+      : 'Загрузите GPX для построения профиля';
+    ctx.fillText(msg,16,30);
     return;
   }
 
@@ -2024,9 +2031,14 @@ function updateRaceReferenceState(){
   const vo2Ready=vo2>=20 && vo2<=90;
   const ready=routeReady && count===3 && vo2Ready;
   const btn=$('raceForecastBtn');
+  const gpxBtn=$('raceForecastGpxBtn');
   if(btn){
     btn.disabled=!ready;
     setActionState('raceForecastBtn',ready?'ready':'idle');
+  }
+  if(gpxBtn){
+    gpxBtn.disabled=!ready;
+    setActionState('raceForecastGpxBtn',ready?'ready':'idle');
   }
   if($('raceForecastStatus')){
     if(!routeReady) $('raceForecastStatus').textContent='Сначала загрузите GPX трассы во вкладке «Трасса».';
@@ -2116,7 +2128,12 @@ $('raceForecastGpxBtn')?.addEventListener('click',async()=>{
   }catch(err){
     if($('raceForecastStatus')) $('raceForecastStatus').textContent='✕ '+(err.message||String(err));
     setActionState('raceForecastGpxBtn','error');
-  }finally{btn.disabled=false;}
+  }finally{
+    const count=['strength','fastTrail','flatRace'].filter(k=>state.raceReferences[k]).length;
+    const vo2=Number($('vo2max')?.value||0);
+    const ready=state.dist>0 && state.track?.length>1 && count===3 && vo2>=20 && vo2<=90;
+    btn.disabled=!ready;
+  }
 });
 
 $('vo2max')?.addEventListener('input',updateRaceReferenceState);

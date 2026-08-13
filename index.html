@@ -14,7 +14,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 </head>
 <body>
-<div class="app-version">v0.05 ONLINE FULL</div>
+<div class="app-version">v0.06 ONLINE FULL</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Trail Race Analyzer</div>
@@ -178,7 +178,7 @@
           <button id="clearOpenAiKeyBtn" type="button" class="secondary">Очистить ключ</button>
         </div>
         <p class="muted">Ключ не сохраняется в localStorage и действует только до закрытия вкладки. Для постоянного и более безопасного варианта задайте OPENAI_API_KEY на сервере Render.</p>
-        <div style="display:none">
+        <div>
         <h2>Стартовый список</h2>
         <div class="upload">
           <strong>Стартовый список XLSX / CSV</strong>
@@ -294,7 +294,7 @@
         </div>
 
         <button id="raceForecastBtn" class="primary action-ready" type="button">Рассчитать прогноз по трассе</button>
-        <button id="raceForecastGpxBtn" class="secondary action-ready" type="button">Рассчитать прогноз по трассе с анализом GPX</button>
+        <button id="raceForecastGpxBtn" class="primary action-idle" type="button" disabled>Рассчитать прогноз по трассе с анализом GPX</button>
         <div id="raceForecastGpxNote" class="muted">При анализе GPX каждый обнаруженный брод добавляет +40 секунд к прогнозу.</div>
         <div id="raceForecastStatus" class="muted">Сначала загрузите GPX трассы во вкладке «Трасса».</div>
 
