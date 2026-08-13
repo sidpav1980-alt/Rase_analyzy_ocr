@@ -1692,8 +1692,14 @@ function parseTimedActivityGPX(text){
     const lat=Number(n.getAttribute('lat')), lon=Number(n.getAttribute('lon'));
     const e=n.getElementsByTagName('ele')[0]||n.getElementsByTagNameNS('*','ele')[0];
     const t=n.getElementsByTagName('time')[0]||n.getElementsByTagNameNS('*','time')[0];
+
+    let hrNode=null;
+    const descendants=[...n.getElementsByTagName('*')];
+    hrNode=descendants.find(x=>String(x.localName||x.nodeName||'').toLowerCase()==='hr')||null;
+
     const ele=e?Number(e.textContent):NaN;
     const ts=t?Date.parse(t.textContent):NaN;
+    const hr=hrNode?Number(hrNode.textContent):NaN;
     if(!Number.isFinite(lat)||!Number.isFinite(lon)||!Number.isFinite(ele)||!Number.isFinite(ts)) continue;
     if(prev){
       const d=haversine(prev.lat,prev.lon,lat,lon)/1000;
@@ -1701,7 +1707,7 @@ function parseTimedActivityGPX(text){
       const de=ele-prev.ele;
       if(de>0) gain+=de;
     }
-    pts.push({km,lat,lon,ele,ts});
+    pts.push({km,lat,lon,ele,ts,hr:Number.isFinite(hr)&&hr>=50&&hr<=230?hr:NaN});
     prev={lat,lon,ele};
   }
   if(pts.length<10 || pts[pts.length-1].km<1) throw new Error('Недостаточно данных activity');
@@ -1719,7 +1725,10 @@ function parseTimedActivityGPX(text){
       const progress=((pts[i].km+pts[st].km)/2)/totalKm;
       // reject stops, teleportation and extreme GPS spikes
       if(dt>=15 && dt<=1800 && speed>=0.20 && speed<=8 && Math.abs(grade)<0.60){
-        samples.push({speed,grade,progress});
+        const h1=Number(pts[st].hr),h2=Number(pts[i].hr);
+        const hrs=[h1,h2].filter(x=>Number.isFinite(x)&&x>=50&&x<=230);
+        const hr=hrs.length?hrs.reduce((a,b)=>a+b,0)/hrs.length:NaN;
+        samples.push({speed,grade,progress,hr});
       }
       st=i;
     }
@@ -1758,6 +1767,21 @@ function parseTimedActivityGPX(text){
   const climbDensity=totalKm>0?gain/totalKm:0;
   const durationHours=elapsedSec/3600;
 
+  const pointHrs=pts.map(p=>Number(p.hr)).filter(x=>Number.isFinite(x)&&x>=50&&x<=230);
+  const avgHr=pointHrs.length?pointHrs.reduce((a,b)=>a+b,0)/pointHrs.length:NaN;
+
+  const hrSamples=samples.filter(s=>Number.isFinite(s.hr)&&s.hr>=50&&s.hr<=230);
+  let hrSpeedSlope=30;
+  if(hrSamples.length>=8){
+    const xs=hrSamples.map(s=>s.speed/Math.max(0.5,avgSpeed));
+    const ys=hrSamples.map(s=>s.hr);
+    const mx=xs.reduce((a,b)=>a+b,0)/xs.length;
+    const my=ys.reduce((a,b)=>a+b,0)/ys.length;
+    const cov=xs.reduce((a,v,i)=>a+(v-mx)*(ys[i]-my),0);
+    const vr=xs.reduce((a,v)=>a+(v-mx)*(v-mx),0);
+    if(vr>1e-6) hrSpeedSlope=Math.max(10,Math.min(55,cov/vr));
+  }
+
   return {
     coeff,
     source:'uploaded activity',
@@ -1766,6 +1790,9 @@ function parseTimedActivityGPX(text){
     gain,
     elapsedSec,
     avgSpeed,
+    avgHr:Number.isFinite(avgHr)?avgHr:0,
+    hrPointCount:pointHrs.length,
+    hrSpeedSlope,
     calibratedFlatSpeed,
     calibrationStats:{
       flatQ50:q50,
@@ -1828,6 +1855,38 @@ function combinedRaceModelInfo(){
 
   return {flatSpeed,gradeCoeff,fatigueK,fastTrailFactor,strengthW,fastW};
 }
+function trainingHrCalibration(){
+  const refs=Object.values(state.raceReferences||{}).filter(Boolean);
+  const withHr=refs.filter(r=>Number(r.avgHr)>60 && Number(r.avgHr)<220);
+  const manual=Number($('refAvgHr')?.value||state.bestTraining?.hr||0);
+  const lthr=Number($('lthr')?.value||0);
+
+  if(withHr.length){
+    let wSum=0, hrSum=0, slopeSum=0, slopeW=0;
+    for(const r of withHr){
+      const hours=Math.max(0.5,Number(r.elapsedSec||0)/3600);
+      const w=Math.max(0.7,Math.min(2.0,Math.sqrt(hours)));
+      hrSum+=Number(r.avgHr)*w;
+      wSum+=w;
+      if(Number(r.hrSpeedSlope)>0){
+        slopeSum+=Number(r.hrSpeedSlope)*w;
+        slopeW+=w;
+      }
+    }
+    return {
+      anchorHr:hrSum/Math.max(0.001,wSum),
+      speedSlope:slopeW?slopeSum/slopeW:30,
+      source:`GPX: ${withHr.length}/3 с пульсом`,
+      count:withHr.length,
+      lthr:lthr>0?lthr:0
+    };
+  }
+
+  if(manual>60) return {anchorHr:manual,speedSlope:30,source:'ручной средний пульс',count:0,lthr:lthr>0?lthr:0};
+  if(lthr>0) return {anchorHr:lthr*0.90,speedSlope:30,source:'LTHR',count:0,lthr};
+  return null;
+}
+
 function racePhysiologyFactors(predictedSec){
   const refs=Object.values(state.raceReferences||{}).filter(Boolean);
   const T=Math.max(0.5,predictedSec/3600);
@@ -2543,27 +2602,37 @@ function renderRaceForecast(options={}){
       f.highSec=f.totalSec*1.10;
       f.physiology=racePhysiologyFactors(f.totalSec);
     }
-    // HR forecast from uploaded training HR + predicted local pace.
-    // Faster-than-average sections raise HR, slower sections lower it; race progression
-    // adds a controlled drift so the start is conservative and the finish can be harder.
-    const trainingHr=Number($('refAvgHr')?.value||state.bestTraining?.hr||0);
-    const lthrForecast=estimateLTHR();
+    // v0.39: HR comes from the uploaded training GPXs and the predicted pace of this segment.
+    const hrCal=trainingHrCalibration();
     const forecastHrForGroup=(g)=>{
-      if(!(trainingHr>0) && !(lthrForecast>0)) return '—';
-      const anchor=trainingHr>0 ? trainingHr : lthrForecast*0.90;
-      const raceAvg=Math.max(1,f.avgPaceSec||g.paceSec);
-      const paceRatio=raceAvg/Math.max(1,g.paceSec); // >1 = faster local section
+      if(!hrCal) return '—';
+
+      const raceAvg=Math.max(1,Number(f.avgPaceSec||g.paceSec));
+      const localPace=Math.max(1,Number(g.paceSec||raceAvg));
+      const speedRatio=raceAvg/localPace;
       const progress=Math.max(0,Math.min(1,((g.from+g.to)/2)/Math.max(0.1,state.dist)));
-      let center=anchor + (paceRatio-1)*32 + (progress-0.35)*8;
-      if(lthrForecast>0){
-        const ceiling=lthrForecast*(progress<0.75?0.96:progress<0.95?0.99:1.03);
-        center=Math.min(center,ceiling);
+
+      let center=hrCal.anchorHr + (speedRatio-1)*hrCal.speedSlope;
+      center += progress<0.20 ? -6 :
+                progress<0.55 ? -3 :
+                progress<0.80 ? 0 :
+                progress<0.95 ? 3 : 6;
+
+      const grade=Number(g.grade||0);
+      if(grade>0.02) center+=Math.min(5,grade*55);
+      if(grade<-0.02) center-=Math.min(4,Math.abs(grade)*35);
+
+      if(hrCal.lthr>0){
+        const maxFrac=progress<0.25?0.94:
+                      progress<0.75?0.97:
+                      progress<0.95?1.00:1.03;
+        center=Math.min(center,hrCal.lthr*maxFrac);
       }
-      center=Math.max(105,Math.min(195,center));
-      const spread=progress<0.25?3:progress<0.85?3:4;
+
+      center=Math.max(105,Math.min(198,center));
+      const spread=progress<0.25?3:progress<0.90?3:4;
       return `${Math.round(center-spread)}–${Math.round(center+spread)}`;
     };
-
     state.raceForecast=f;
     tbody.innerHTML='';
     f.groups.forEach(g=>{
@@ -2618,7 +2687,13 @@ function renderRaceForecast(options={}){
       ? `${state.raceReferences.strength.source} + ${state.raceReferences.fastTrail.source} + ${state.raceReferences.flatRace.source}`
       : 'нужно 3 GPX';
     $('raceModelFormula').textContent=raceFormulaText();
+    const hrSource=trainingHrCalibration();
     $('raceForecastStatus').textContent=f.fordPenaltySec ? `✓ Прогноз с анализом GPX: ${state.dist.toFixed(1)} км · бродов ${f.fordCount} · +${f.fordPenaltySec} с (${f.fordCount} × 40 с).` : `✓ Общий прогноз по 3 GPX: ${state.dist.toFixed(1)} км. Темпы участков нормированы к среднему прогнозному темпу.`;
+    if(hrSource){
+      $('raceForecastStatus').textContent += ` Целевой пульс: ${hrSource.source}.`;
+    }else{
+      $('raceForecastStatus').textContent += ' В GPX нет HR — целевой пульс не рассчитан.';
+    }
     state.forecastMode=options.analysisMode?'analysis':'normal';
     applyForecastModeColors();
     updateFinalCalcAvailability();
@@ -2847,7 +2922,8 @@ function bindRaceReference(role){
 
       status.textContent=
         `✓ ${parsed.dist.toFixed(2)} км · +${Math.round(parsed.gain)} м · `
-        + `${fmtClockSec(parsed.elapsedSec)} · ${fmtPaceSecPerKm(parsed.elapsedSec/parsed.dist)}`;
+        + `${fmtClockSec(parsed.elapsedSec)} · ${fmtPaceSecPerKm(parsed.elapsedSec/parsed.dist)}`
+        + (parsed.avgHr>0?` · HR ${Math.round(parsed.avgHr)}`:' · HR нет');
       setActionState(btnId,'success');
       updateRaceReferenceState();
 
