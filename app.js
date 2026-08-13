@@ -1592,42 +1592,38 @@ function combinedRaceModelInfo(){
   return {flatSpeed,gradeCoeff,fatigueK,fastTrailFactor};
 }
 
-function racePhysiologyFactors(elapsedSec){
-  const r=state.raceReferences||{};
-  const flatSec=Math.max(20*60, Number(r.flatRace?.elapsedSec||42*60));
-  const longSec=Math.max(Number(r.strength?.elapsedSec||0), Number(r.fastTrail?.elapsedSec||0));
-  const hours=Math.max(0,elapsedSec/3600);
+function racePhysiologyFactors(predictedSec){
+  const refs=Object.values(state.raceRefs||{}).filter(Boolean);
+  const T=Math.max(0.5,predictedSec/3600);
+  const longRef=state.raceRefs?.strength || refs.slice().sort((a,b)=>(b.durationSec||0)-(a.durationSec||0))[0];
+  const T10=Math.max(0.5,(longRef?.durationSec||3600)/3600);
+  const k=Math.max(0.10,Math.min(0.32,0.16 + Math.max(0,3-T10)*0.025 - Math.max(0,T10-4)*0.012));
+  const durationFactor=Math.max(0.68,Math.min(1.03,Math.pow(Math.max(1,T/T10),-k)));
 
-  // Duration/endurance decay: short flat-race speed cannot be transferred unchanged to an ultra.
-  // A genuinely long trail reference softens, but never removes, the decay.
-  const longHours=longSec/3600;
-  const durability=Math.max(0,Math.min(1,(longHours-1)/5));
-  const exponent=0.115-(0.035*durability); // ~0.115 without long work, ~0.080 after 6h reference
-  const durationRatio=Math.max(1,(elapsedSec+flatSec)/flatSec);
-  const durationFactor=Math.max(0.68,Math.pow(durationRatio,-exponent));
+  const vo2=Number($('vo2max')?.value||0);
+  if(!(vo2>=20 && vo2<=90)) throw new Error('Введите VO₂max от 20 до 90 мл/кг/мин');
+  const vo2Factor=Math.max(0.94,Math.min(1.06,1+(vo2-50)*0.002));
 
-  // HR / acidification proxy. This is not blood lactate measurement: it prevents a high-HR
-  // training effort from being extrapolated unchanged for many hours.
-  const avgHr=Number($('refAvgHr')?.value||0);
-  const lthr=estimateLTHR();
-  let hrFactor=1, hrRatio=0, acidHours=Infinity;
+  const hrVals=refs.map(r=>Number(r.avgHr||0)).filter(x=>x>60);
+  const avgHr=hrVals.length?hrVals.reduce((a,b)=>a+b,0)/hrVals.length:0;
+  const lthr=Number($('lthr')?.value||0);
+  let hrFactor=1,hrRatio=0,acidHours=0,acidSource='';
+
   if(avgHr>0 && lthr>0){
     hrRatio=avgHr/lthr;
-    // Above ~90% LTHR the sustainable window shortens rapidly.
-    const intensity=Math.max(0,(hrRatio-0.90)/0.10);
-    acidHours=Math.max(0.75, 5.5-4.5*Math.min(1,intensity));
-    const over=Math.max(0,hours-acidHours);
-    hrFactor=Math.max(0.72,Math.exp(-0.055*intensity*over));
+    acidHours=hrRatio>=1.02?0.75:hrRatio>=0.98?1.5:hrRatio>=0.94?2.5:hrRatio>=0.90?4:hrRatio>=0.86?6:10;
+    acidSource='HR/LTHR';
+    if(T>acidHours) hrFactor=Math.max(0.72,Math.pow(acidHours/T,0.10));
+  }else{
+    // VO2max fallback: sustainable aerobic fraction falls with duration.
+    const sustainableFrac=Math.max(0.62,Math.min(0.90,0.90-0.09*Math.log2(Math.max(1,T))));
+    const reserve=Math.max(0.92,Math.min(1.08,1+(vo2-50)*0.004));
+    hrFactor=Math.max(0.70,Math.min(1.0,sustainableFrac*reserve/0.90));
+    // Near-threshold endurance estimate, not a lactate measurement.
+    acidHours=Math.max(1.0,Math.min(3.0,2.0+(vo2-50)*0.025));
+    acidSource='VO₂max';
   }
-  // VO2max is mandatory in the online race forecast.
-  // It remains a modest correction because VO2max is an aerobic ceiling,
-  // while HR and duration are the stronger ultra-distance constraints.
-  const vo2=Number($('vo2max')?.value||0);
-  if(!(vo2>=20 && vo2<=90)){
-    throw new Error('Введите VO₂max от 20 до 90 мл/кг/мин');
-  }
-  const vo2Factor=Math.max(0.94,Math.min(1.06,1+(vo2-50)*0.002));
-  return {durationFactor,hrFactor,hrRatio,acidHours,exponent,vo2Factor,vo2};
+  return {durationFactor,hrFactor,hrRatio,acidHours,exponent:k,vo2Factor,vo2,acidSource};
 }
 
 function raceModelSpeed(grade,progress,effortPct=100,elapsedSec=0){
@@ -1768,7 +1764,7 @@ function renderRaceForecast(){
     $('raceForecastRange').textContent=`${fmtClockSec(f.lowSec)}–${fmtClockSec(f.highSec)}`;
     if($('raceDurationFactor')) $('raceDurationFactor').textContent=(f.physiology.durationFactor*100).toFixed(0)+'%';
     if($('raceHrFactor')) $('raceHrFactor').textContent=(f.physiology.hrFactor*100).toFixed(0)+'%';
-    if($('raceAcidTime')) $('raceAcidTime').textContent=Number.isFinite(f.physiology.acidHours)?f.physiology.acidHours.toFixed(1)+' ч':'нет данных HR';
+    if($('raceAcidTime')) $('raceAcidTime').textContent=Number.isFinite(f.physiology.acidHours)?f.physiology.acidHours.toFixed(1)+' ч':'—';
     if($('raceVo2Factor')) $('raceVo2Factor').textContent=`${f.physiology.vo2.toFixed(1)} → ${(f.physiology.vo2Factor*100).toFixed(1)}%`;
     $('raceModelSource').textContent=allRaceReferencesReady()
       ? `${state.raceReferences.strength.source} + ${state.raceReferences.fastTrail.source} + ${state.raceReferences.flatRace.source}`
