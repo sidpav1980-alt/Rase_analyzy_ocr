@@ -1950,22 +1950,28 @@ function raceFormulaText(){
 }
 
 
-function trailDistanceInRange(samples,fromKm,toKm){
+
+function surfaceDistanceInRange(samples,fromKm,toKm,cls){
   if(!Array.isArray(samples) || samples.length<2) return 0;
   const s=[...samples]
     .filter(x=>Number.isFinite(Number(x?.km)))
     .sort((a,b)=>Number(a.km)-Number(b.km));
+
   let km=0;
   for(let i=0;i<s.length-1;i++){
     const a=Number(s[i].km), b=Number(s[i+1].km);
     if(!(b>a)) continue;
-    // Treat the class of the sample at the start of the interval as the interval class.
-    if(s[i].cls!=='trail') continue;
+    if(s[i].cls!==cls) continue;
+
     const left=Math.max(fromKm,a);
     const right=Math.min(toKm,b);
     if(right>left) km+=right-left;
   }
   return km;
+}
+
+function trailDistanceInRange(samples,fromKm,toKm){
+  return surfaceDistanceInRange(samples,fromKm,toKm,'trail');
 }
 
 function renderRaceForecast(options={}){
@@ -1977,27 +1983,44 @@ function renderRaceForecast(options={}){
     const fordPenaltyPer=Number(options.fordPenaltyPerSec)||0;
     const trailSamples=Array.isArray(options.trailSamples)?options.trailSamples:[];
     const trailPenaltyPerKmSec=Number(options.trailPenaltyPerKmSec)||0;
+    const dirtPenaltyPerKmSec=Number(options.dirtPenaltyPerKmSec)||0;
     let extraTotal=0;
     let fordExtraTotal=0;
     let trailExtraTotal=0;
+    let dirtExtraTotal=0;
     let totalTrailKm=0;
+    let totalDirtKm=0;
 
-    // Add local penalties to each recommended forecast group.
-    // Ford: +40 sec each. Trail: +60 sec per actual OSM-classified trail km.
-    if((fordPenaltyPer>0 && fordKms.length) || (trailPenaltyPerKmSec>0 && trailSamples.length)){
+    // Analysis-mode local penalties:
+    // ford: +40 sec each;
+    // trail: +60 sec per OSM trail km;
+    // dirt: +30 sec per OSM dirt/ground/gravel km.
+    if(
+      (fordPenaltyPer>0 && fordKms.length) ||
+      (trailPenaltyPerKmSec>0 && trailSamples.length) ||
+      (dirtPenaltyPerKmSec>0 && trailSamples.length)
+    ){
       let cumExtra=0;
       f.groups.forEach(g=>{
         const fordCount=fordKms.filter(km=>km>=g.from-1e-9 && km<g.to+1e-9).length;
         const fordExtra=fordCount*fordPenaltyPer;
 
         const trailKm=trailPenaltyPerKmSec>0
-          ? trailDistanceInRange(trailSamples,g.from,g.to)
+          ? surfaceDistanceInRange(trailSamples,g.from,g.to,'trail')
           : 0;
         const trailExtra=trailKm*trailPenaltyPerKmSec;
 
-        const extra=fordExtra+trailExtra;
+        const dirtKm=dirtPenaltyPerKmSec>0
+          ? surfaceDistanceInRange(trailSamples,g.from,g.to,'dirt')
+          : 0;
+        const dirtExtra=dirtKm*dirtPenaltyPerKmSec;
+
+        const extra=fordExtra+trailExtra+dirtExtra;
+
         g.trailKm=trailKm;
+        g.dirtKm=dirtKm;
         g.fordCount=fordCount;
+
         g.sec+=extra;
         g.recommendedSec=(g.recommendedSec||0)+extra;
         g.paceSec=g.sec/Math.max(0.001,g.distM/1000);
@@ -2007,14 +2030,22 @@ function renderRaceForecast(options={}){
 
         fordExtraTotal+=fordExtra;
         trailExtraTotal+=trailExtra;
+        dirtExtraTotal+=dirtExtra;
         totalTrailKm+=trailKm;
+        totalDirtKm+=dirtKm;
       });
 
-      extraTotal=fordExtraTotal+trailExtraTotal;
+      extraTotal=fordExtraTotal+trailExtraTotal+dirtExtraTotal;
+
       f.fordCount=fordKms.length;
       f.fordPenaltySec=fordExtraTotal;
+
       f.trailKm=totalTrailKm;
       f.trailPenaltySec=trailExtraTotal;
+
+      f.dirtKm=totalDirtKm;
+      f.dirtPenaltySec=dirtExtraTotal;
+
       f.analysisPenaltySec=extraTotal;
 
       f.totalSec+=extraTotal;
@@ -2135,6 +2166,13 @@ function bindRaceReference(role){
       status.textContent='Анализирую '+raceRefTitle(role)+'…';
       const text=await readFileIOS(f);
       const parsed=parseTimedActivityGPX(text);
+
+      if(role==='flatRace' && parsed.dist < 10){
+        throw new Error(
+          `Гоночная (плоская) GPX должна быть не менее 10 км. В файле: ${parsed.dist.toFixed(2)} км.`
+        );
+      }
+
       parsed.source=f.name;
       state.raceReferences[role]=parsed;
 
@@ -2184,6 +2222,7 @@ $('raceForecastGpxBtn')?.addEventListener('click',async()=>{
       fordPenaltyPerSec:40,
       trailSamples,
       trailPenaltyPerKmSec:60,
+      dirtPenaltyPerKmSec:30,
       analysisMode:true
     });
     setActionState('raceForecastGpxBtn','success');
