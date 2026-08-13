@@ -12,9 +12,21 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="stylesheet" href="styles.css">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+
+<style>
+/* v0.08: визуальный разделитель между кнопками прогноза */
+#forecastAnalyzeGpxBtn, #forecastWithGpxAnalysis, .forecast-gpx-analysis-btn {
+  margin-top: 14px !important;
+}
+.forecast-action-separator {
+  height: 14px;
+  width: 100%;
+  flex-basis: 100%;
+}
+</style>
 </head>
 <body>
-<div class="app-version">v0.06 ONLINE FULL</div>
+<div class="app-version">v0.08 ONLINE FULL</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Trail Race Analyzer</div>
@@ -171,7 +183,7 @@
       <div class="card">
         <h2>ChatGPT</h2>
         <label class="field">
-          <span>OpenAI API key</span>
+          <span>ChatGPT / OpenAI API key</span>
           <input id="openAiKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-…">
         </label>
         <div class="key-actions">
@@ -189,22 +201,7 @@
           <progress id="rosterProgress" value="0" max="100" style="width:100%;display:none"></progress>
         </div>
         <div class="grid2">
-          <div class="openrouter-settings">
-          <div class="openrouter-status-row">
-            <b>OpenRouter</b>
-            <span id="openRouterStatus" class="or-status or-checking">проверка…</span>
-          </div>
-          <label class="field">
-            <span>OpenRouter API key (необязательно)</span>
-            <input id="openRouterKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false"
-                   placeholder="sk-or-v1-…">
-          </label>
-          <div class="key-actions">
-            <button id="saveOpenRouterKeyBtn" type="button" class="secondary">Сохранить ключ на этом iPhone</button>
-            <button id="clearOpenRouterKeyBtn" type="button" class="secondary">Удалить</button>
-          </div>
-          <div class="muted">Если поле пустое, используется OPENROUTER_API_KEY из Render. Введённый здесь ключ хранится только в localStorage этого браузера.</div>
-        </div>
+          
 
         <div class="itra-online-box">
           <button id="itraLookupBtn" type="button" class="secondary action-ready">Загрузить ITRA через AI</button>
@@ -267,7 +264,8 @@
             <div class="muted">Например, быстрая плоская десятка. Даёт базовый темп и скорость без большого влияния рельефа.</div>
             <input id="flatRaceActivityFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml,*/*">
             <span id="flatRaceActivityName"><span class="file-check">○</span> Файл не выбран</span>
-            <button id="flatRaceActivityLoadBtn" type="button" class="primary action-idle" disabled>Загрузить Гоночную (плоскую) GPX</button>
+            <div class="forecast-action-separator" aria-hidden="true"></div>
+<button id="flatRaceActivityLoadBtn" type="button" class="primary action-idle" disabled>Загрузить Гоночную (плоскую) GPX</button>
             <span id="flatRaceActivityStatus">Не загружена.</span>
           </div>
         </div>
