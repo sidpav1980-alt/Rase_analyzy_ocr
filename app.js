@@ -2629,25 +2629,36 @@ function updateFinalCalcAvailability(){
 
 
 function clearRaceForecastUI(){
-  const ids=[
+  const simpleIds=[
     'raceForecastTime',
     'raceForecastPace',
     'raceForecastRange',
-    'raceCalibration',
     'raceDurationFactor',
     'raceHrFactor',
-    'raceAcidHours',
+    'raceAcidTime',
     'raceVo2Factor'
   ];
-  ids.forEach(id=>{
+
+  simpleIds.forEach(id=>{
     const el=$(id);
     if(el) el.textContent='—';
   });
 
+  const source=$('raceModelSource');
+  if(source) source.textContent='—';
+
+  const vo2Value=$('raceVo2Value');
+  if(vo2Value) vo2Value.textContent='VO₂max: — мл/кг/мин';
+
   const tbody=$('raceForecastTable')?.querySelector('tbody');
   if(tbody) tbody.innerHTML='';
 
-  if($('raceModelFormula')) $('raceModelFormula').textContent=raceFormulaText();
+  const formula=$('raceModelFormula');
+  if(formula) formula.textContent='—';
+
+  const status=$('raceForecastStatus');
+  if(status) status.textContent='Прогноз очищен. Загрузите новый эталонный GPX.';
+
   clearResultForecast();
 }
 
@@ -2679,6 +2690,7 @@ if($('raceForecastStatus')){
 }
 
 let lastForecastModeBeforeReferenceChange=null;
+const pendingReferenceForecastMode={strength:null,fastTrail:null,flatRace:null};
 
 function bindRaceReference(role){
   const [fileId,nameId,btnId,statusId]=raceRefUI(role);
@@ -2686,14 +2698,24 @@ function bindRaceReference(role){
   if(!fileEl||!nameEl||!btn||!status) return;
 
   fileEl.addEventListener('change',e=>{
-    lastForecastModeBeforeReferenceChange=state.forecastMode || lastForecastModeBeforeReferenceChange;
-    invalidateRaceForecast();
+    const previousMode=state.forecastMode || lastForecastModeBeforeReferenceChange || null;
+    pendingReferenceForecastMode[role]=previousMode;
+    lastForecastModeBeforeReferenceChange=previousMode;
+
+    const f=e.currentTarget.files?.[0]||null;
+    raceRefSelections[role]=f;
+
+    // Remove the previous etalon before clearing the UI, so nothing stale can be reused.
+    state.raceReferences[role]=null;
+    state.raceForecast=null;
+    state.forecastMode=null;
+    clearRaceForecastUI();
+    applyForecastModeColors();
+    updateFinalCalcAvailability();
+
     if($('raceForecastStatus')){
       $('raceForecastStatus').textContent='Эталонный GPX изменён. Старый прогноз очищен. Загрузите выбранный файл.';
     }
-    const f=e.currentTarget.files?.[0]||null;
-    raceRefSelections[role]=f;
-    state.raceReferences[role]=null;
     if(!f){
       nameEl.innerHTML='<span class="file-check">○</span> Файл не выбран';
       btn.disabled=true;
@@ -2713,8 +2735,11 @@ function bindRaceReference(role){
     const f=raceRefSelections[role];
     if(!f) return;
     try{
-      clearRaceForecastUI();
       state.raceForecast=null;
+      state.forecastMode=null;
+      clearRaceForecastUI();
+      applyForecastModeColors();
+      updateFinalCalcAvailability();
       setActionState(btnId,'working');
       status.textContent='Анализирую '+raceRefTitle(role)+'…';
       const text=await readFileIOS(f);
@@ -2735,13 +2760,23 @@ function bindRaceReference(role){
       setActionState(btnId,'success');
       updateRaceReferenceState();
 
-      // Recalculate immediately after replacing an etalon GPX so the displayed
-      // race forecast can never remain from the previous file.
+      // v0.31: after a new etalon has been parsed successfully,
+      // always build a fresh forecast when all inputs are ready.
+      // Prefer the previously selected mode; otherwise use the normal forecast.
       if(forecastInputsReady()){
-        const mode=lastForecastModeBeforeReferenceChange;
-        if(mode==='analysis' && state.mapAnalysis && state.mapAnalysisReadyForCurrentGpx===true){
+        const rememberedMode=
+          pendingReferenceForecastMode[role] ||
+          lastForecastModeBeforeReferenceChange ||
+          'normal';
+
+        if(
+          rememberedMode==='analysis' &&
+          state.mapAnalysis &&
+          state.mapAnalysisReadyForCurrentGpx===true
+        ){
           const fordKms=state.mapAnalysis?.fordKms||[];
           const trailSamples=state.mapAnalysis?.samples||state.mapAnalysis?.result?.samples||[];
+
           renderRaceForecast({
             fordKms,
             fordPenaltyPerSec:40,
@@ -2751,14 +2786,21 @@ function bindRaceReference(role){
             unknownPenaltyPerKmSec:60,
             analysisMode:true
           });
-        }else if(mode==='normal'){
-          renderRaceForecast({analysisMode:false});
         }else{
-          // No prior mode: keep values cleared and require explicit first calculation.
-          updateFinalCalcAvailability();
+          renderRaceForecast({analysisMode:false});
         }
-        if($('raceForecastStatus') && mode){
-          $('raceForecastStatus').textContent += ` · Эталон «${raceRefTitle(role)}» заменён, прогноз пересчитан.`;
+
+        pendingReferenceForecastMode[role]=null;
+        lastForecastModeBeforeReferenceChange=state.forecastMode;
+
+        if($('raceForecastStatus')){
+          $('raceForecastStatus').textContent +=
+            ` · Эталон «${raceRefTitle(role)}» загружен, прогноз рассчитан заново.`;
+        }
+      }else{
+        if($('raceForecastStatus')){
+          $('raceForecastStatus').textContent=
+            'Эталон загружен. Для нового прогноза нужны трасса, все 3 GPX и VO₂max.';
         }
       }
     }catch(err){
