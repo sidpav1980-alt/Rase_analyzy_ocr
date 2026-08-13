@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="app-version">v0.89 ONLINE FULL</div>
+<div class="app-version">v0.91 ONLINE FULL</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Trail Race Analyzer</div>
@@ -318,6 +318,13 @@
           <div><span>Диапазон ±10%</span><b id="raceForecastRange">—</b></div>
           <div><span>Калибровка</span><b id="raceModelSource">activity preset</b></div>
         </div>
+
+        <div class="metrics big">
+          <div><span>Коэффициент длительности</span><b id="raceDurationFactor">—</b></div>
+          <div><span>Ограничение по пульсу</span><b id="raceHrFactor">—</b></div>
+          <div><span>Расчётное время до закисления</span><b id="raceAcidTime">—</b></div>
+        </div>
+        <div class="muted">«Время до закисления» — модельная оценка по среднему пульсу и LTHR, а не измерение лактата.</div>
 
         <div class="field">
           <span>Формула модели</span>

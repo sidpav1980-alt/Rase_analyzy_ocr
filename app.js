@@ -1592,7 +1592,37 @@ function combinedRaceModelInfo(){
   return {flatSpeed,gradeCoeff,fatigueK,fastTrailFactor};
 }
 
-function raceModelSpeed(grade,progress,effortPct=100){
+function racePhysiologyFactors(elapsedSec){
+  const r=state.raceReferences||{};
+  const flatSec=Math.max(20*60, Number(r.flatRace?.elapsedSec||42*60));
+  const longSec=Math.max(Number(r.strength?.elapsedSec||0), Number(r.fastTrail?.elapsedSec||0));
+  const hours=Math.max(0,elapsedSec/3600);
+
+  // Duration/endurance decay: short flat-race speed cannot be transferred unchanged to an ultra.
+  // A genuinely long trail reference softens, but never removes, the decay.
+  const longHours=longSec/3600;
+  const durability=Math.max(0,Math.min(1,(longHours-1)/5));
+  const exponent=0.115-(0.035*durability); // ~0.115 without long work, ~0.080 after 6h reference
+  const durationRatio=Math.max(1,(elapsedSec+flatSec)/flatSec);
+  const durationFactor=Math.max(0.68,Math.pow(durationRatio,-exponent));
+
+  // HR / acidification proxy. This is not blood lactate measurement: it prevents a high-HR
+  // training effort from being extrapolated unchanged for many hours.
+  const avgHr=Number($('refAvgHr')?.value||0);
+  const lthr=estimateLTHR();
+  let hrFactor=1, hrRatio=0, acidHours=Infinity;
+  if(avgHr>0 && lthr>0){
+    hrRatio=avgHr/lthr;
+    // Above ~90% LTHR the sustainable window shortens rapidly.
+    const intensity=Math.max(0,(hrRatio-0.90)/0.10);
+    acidHours=Math.max(0.75, 5.5-4.5*Math.min(1,intensity));
+    const over=Math.max(0,hours-acidHours);
+    hrFactor=Math.max(0.72,Math.exp(-0.055*intensity*over));
+  }
+  return {durationFactor,hrFactor,hrRatio,acidHours,exponent};
+}
+
+function raceModelSpeed(grade,progress,effortPct=100,elapsedSec=0){
   const info=combinedRaceModelInfo();
   if(!info) return NaN;
 
@@ -1607,8 +1637,9 @@ function raceModelSpeed(grade,progress,effortPct=100){
     info.fatigueK*Math.max(0,Math.min(1,progress))
   );
   const effortFactor=Math.max(70,Math.min(130,effortPct))/100;
+  const phys=racePhysiologyFactors(elapsedSec);
 
-  const v=info.flatSpeed*gradeFactor*info.fastTrailFactor*fatigueFactor*effortFactor;
+  const v=info.flatSpeed*gradeFactor*info.fastTrailFactor*fatigueFactor*phys.durationFactor*phys.hrFactor*effortFactor;
   return Math.max(0.25,Math.min(7,v));
 }
 
@@ -1647,7 +1678,7 @@ function calculateRaceForecast(){
   let totalSec=0;
   const detailed=[];
   for(const s of micro){
-    const v=raceModelSpeed(s.grade,s.progress,effort);
+    const v=raceModelSpeed(s.grade,s.progress,effort,totalSec);
     const sec=s.dm/v;
     totalSec+=sec;
     detailed.push({...s,v,sec,cumSec:totalSec});
@@ -1682,7 +1713,8 @@ function calculateRaceForecast(){
     highSec:totalSec*1.10,
     effort,
     groupKm,
-    groups
+    groups,
+    physiology: racePhysiologyFactors(totalSec)
   };
 }
 
@@ -1694,7 +1726,8 @@ function raceFormulaText(){
   return `v = Vflat × Fgrade × FfastTrail × Ffatigue × Effort; `
     + `Vflat=${info.flatSpeed.toFixed(2)} м/с; `
     + `ln(Fgrade)=${f(c[1])}·G+ ${f(c[2])}·G+² ${f(c[3])}·G− ${f(c[4])}·G−²; `
-    + `FfastTrail=${info.fastTrailFactor.toFixed(3)}; fatigueK=${info.fatigueK.toFixed(3)}`;
+    + `FfastTrail=${info.fastTrailFactor.toFixed(3)}; fatigueK=${info.fatigueK.toFixed(3)}; `
+    + `Fduration=(T/T10)^−k; FHR=ограничение по пульсу/времени закисления`;
 }
 
 function renderRaceForecast(){
@@ -1721,6 +1754,9 @@ function renderRaceForecast(){
     $('raceForecastTime').textContent=fmtClockSec(f.totalSec);
     $('raceForecastPace').textContent=fmtPaceSecPerKm(f.avgPaceSec);
     $('raceForecastRange').textContent=`${fmtClockSec(f.lowSec)}–${fmtClockSec(f.highSec)}`;
+    if($('raceDurationFactor')) $('raceDurationFactor').textContent=(f.physiology.durationFactor*100).toFixed(0)+'%';
+    if($('raceHrFactor')) $('raceHrFactor').textContent=(f.physiology.hrFactor*100).toFixed(0)+'%';
+    if($('raceAcidTime')) $('raceAcidTime').textContent=Number.isFinite(f.physiology.acidHours)?f.physiology.acidHours.toFixed(1)+' ч':'нет данных HR';
     $('raceModelSource').textContent=allRaceReferencesReady()
       ? `${state.raceReferences.strength.source} + ${state.raceReferences.fastTrail.source} + ${state.raceReferences.flatRace.source}`
       : 'нужно 3 GPX';
