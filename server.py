@@ -501,10 +501,51 @@ def itra_batch():
 def health():
     return jsonify({
         "ok":True,
-        "version":"0.97",
+        "version":"0.98",
         "itra_enabled":bool(OPENROUTER_API_KEY),
         "model":OPENROUTER_MODEL
     })
 
 if __name__=="__main__":
     app.run(host="0.0.0.0",port=int(os.getenv("PORT","10000")))
+
+
+def _parse_width_m(tags):
+    if not isinstance(tags, dict): return None
+    raw=tags.get("width")
+    if raw is None: return None
+    s=str(raw).strip().lower().replace(",", ".")
+    try:
+        if "cm" in s:
+            return float(re.sub(r"[^0-9.+-]", "", s))/100.0
+        return float(re.sub(r"[^0-9.+-]", "", s))
+    except Exception:
+        return None
+
+def _filter_and_dedupe_fords(fords):
+    if not isinstance(fords, list): return []
+    cleaned=[]
+    for f in fords:
+        if not isinstance(f, dict): continue
+        w=f.get("width_m")
+        if w is None: w=_parse_width_m(f.get("tags") or {})
+        if w is not None and w < 1.0:
+            continue
+        if w is not None: f["width_m"]=w
+        cleaned.append(f)
+    cleaned.sort(key=lambda x: float(x.get("km", 1e9)))
+    out=[]
+    for f in cleaned:
+        km=float(f.get("km", 1e9))
+        fid=f.get("osm_id") or f.get("way_id") or f.get("id")
+        name=(f.get("name") or (f.get("tags") or {}).get("name") or "").strip().lower()
+        dup=False
+        for p in reversed(out):
+            pkm=float(p.get("km", -1e9))
+            if km-pkm > 0.30: break
+            pid=p.get("osm_id") or p.get("way_id") or p.get("id")
+            pname=(p.get("name") or (p.get("tags") or {}).get("name") or "").strip().lower()
+            if (fid and pid and fid==pid) or (name and pname and name==pname) or (not fid and not pid and not name and not pname):
+                dup=True; break
+        if not dup: out.append(f)
+    return out

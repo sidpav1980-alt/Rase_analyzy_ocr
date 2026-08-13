@@ -839,6 +839,34 @@ function drawSurfaceStrip(samples){
   ctx.fillText(end,w-tw,74);
 }
 
+
+function filterFordCandidatesClient(fords){
+  if(!Array.isArray(fords)) return [];
+  const out=[];
+  const arr=fords.filter(f=>{
+    const w=Number(f?.width_m ?? f?.width);
+    return !(Number.isFinite(w) && w<1.0);
+  }).sort((a,b)=>Number(a?.km||0)-Number(b?.km||0));
+
+  for(const f of arr){
+    const km=Number(f?.km);
+    const id=f?.osm_id ?? f?.way_id ?? f?.id ?? null;
+    const name=String(f?.name ?? f?.tags?.name ?? '').trim().toLowerCase();
+    let dup=false;
+    for(let i=out.length-1;i>=0;i--){
+      const p=out[i], pkm=Number(p?.km);
+      if(Number.isFinite(km)&&Number.isFinite(pkm)&&km-pkm>0.30) break;
+      const pid=p?.osm_id ?? p?.way_id ?? p?.id ?? null;
+      const pname=String(p?.name ?? p?.tags?.name ?? '').trim().toLowerCase();
+      if((id!=null&&pid!=null&&id===pid) || (name&&pname&&name===pname) || (!id&&!pid&&!name&&!pname)){
+        dup=true; break;
+      }
+    }
+    if(!dup) out.push(f);
+  }
+  return out;
+}
+
 async function analyzeMapOSM(){
   if(!state.track || !state.track.length) throw new Error('Сначала обработайте GPX');
   const pts=sampleTrackPoints(220);
@@ -872,6 +900,11 @@ async function analyzeMapOSM(){
   }
 
   const data=await resp.json();
+    if(Array.isArray(data.fords)){
+      data.fords=filterFordCandidatesClient(data.fords);
+      data.ford_kms=data.fords.map(f=>Number(f.km)).filter(Number.isFinite);
+      data.ford_count=data.fords.length;
+    }
   const elements=data.elements||[];
 
   const samples=pts.map(p=>({km:p.km,cls:classifyPointFromOSM(p,elements)}));
