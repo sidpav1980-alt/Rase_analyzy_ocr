@@ -545,6 +545,7 @@ function computeTrailDifficulty(){
   let steep15Dist=0;
   let steep10Dist=0;
   let steep20Dist=0;
+  let steepDown15Dist=0;
   let maxGrade=0;
   let reversals=0;
   let prevSign=0;
@@ -561,6 +562,7 @@ function computeTrailDifficulty(){
     if(absGrade>=10) steep10Dist+=dk;
     if(absGrade>=15) steep15Dist+=dk;
     if(absGrade>=20) steep20Dist+=dk;
+    if(grade<=-15) steepDown15Dist+=dk;
     if(absGrade>maxGrade && absGrade<80) maxGrade=absGrade;
 
     const sign=de>1 ? 1 : (de<-1 ? -1 : 0);
@@ -580,42 +582,49 @@ function computeTrailDifficulty(){
   const steep15Pct=totalHoriz>0 ? (steep15Dist/totalHoriz)*100 : 0;
   const steep10Pct=totalHoriz>0 ? (steep10Dist/totalHoriz)*100 : 0;
   const steep20Pct=totalHoriz>0 ? (steep20Dist/totalHoriz)*100 : 0;
+  const steepDown15Pct=totalHoriz>0 ? (steepDown15Dist/totalHoriz)*100 : 0;
 
-  // Trail Difficulty 0-10.
-  // Weights emphasize vertical density and sustained steepness.
+  // Trail Difficulty 0-10, v0.43.
+  // Short repeated steep climbs/descents matter more; long climbs are only
+  // an extra factor and can no longer pull a punchy course score too low.
   let score=0;
 
-  // vertical density: 0..3.5
-  score += Math.min(3.5, vertPerKm/30);
+  // Vertical density: 0..3.0. Around 25-30 m+/km is already meaningful.
+  score += Math.min(3.0, vertPerKm/22);
 
-  // steepness exposure: 0..3.0
-  score += Math.min(1.5, steep10Pct/20);
-  score += Math.min(1.0, steep15Pct/18);
-  score += Math.min(0.5, steep20Pct/15);
+  // Exposure to steep terrain: 0..3.6.
+  // These intentionally overlap: a >20% section is harder than a plain >10% one.
+  score += Math.min(1.4, steep10Pct/18);
+  score += Math.min(1.4, steep15Pct/14);
+  score += Math.min(0.8, steep20Pct/12);
 
-  // profile ruggedness / reversals: 0..1.5
+  // Steep descents add eccentric/technical load: 0..0.8.
+  score += Math.min(0.8, steepDown15Pct/12);
+
+  // Profile ruggedness / repeated up-down changes: 0..1.2.
   const revPer10=(reversals/Math.max(state.dist,1))*10;
-  score += Math.min(1.5, revPer10/8);
+  score += Math.min(1.2, revPer10/9);
 
-  // sustained climbs: 0..1.0
-  score += Math.min(1.0, longClimbs/6);
+  // Sustained climbs are a bonus, not a prerequisite for difficulty: 0..0.5.
+  score += Math.min(0.5, longClimbs/8);
 
-  // very steep max grade: 0..1.0
-  if(maxGrade>=30) score+=1.0;
-  else if(maxGrade>=20) score+=0.7;
-  else if(maxGrade>=15) score+=0.4;
+  // Max grade contributes modestly because a single GPS spike can exaggerate it.
+  if(maxGrade>=30) score+=0.6;
+  else if(maxGrade>=20) score+=0.45;
+  else if(maxGrade>=15) score+=0.3;
 
   score=Math.max(0,Math.min(10,score));
 
   let label='Почти плоская';
-  if(score>=9) label='Очень тяжёлая / альпийская';
-  else if(score>=7) label='Тяжёлая';
-  else if(score>=5) label='Средняя';
-  else if(score>=3) label='Лёгкий трейл';
+  if(score>=8.5) label='Очень тяжёлая / альпийская';
+  else if(score>=6.5) label='Тяжёлая';
+  else if(score>=4.5) label='Средняя';
+  else if(score>=2.5) label='Лёгкий трейл';
 
   return {
     score,
     steep15Pct,
+    steepDown15Pct,
     vertPerKm,
     maxGrade,
     reversals,
@@ -630,7 +639,7 @@ function updateTrailDifficulty(){
   if(s) s.textContent=(state.dist>0)?d.score.toFixed(1)+'/10':'—';
   if(p) p.textContent=(state.dist>0)?d.steep15Pct.toFixed(1)+'%':'—';
   if(v) v.textContent=(state.dist>0)?d.vertPerKm.toFixed(0)+' м/км':'—';
-  if(l) l.textContent=(state.dist>0)?`${d.label} · max уклон ${d.maxGrade.toFixed(0)}% · подъёмов >500 м: ${d.longClimbs}`:'—';
+  if(l) l.textContent=(state.dist>0)?`${d.label} · max уклон ${d.maxGrade.toFixed(0)}% · подъёмов длиной >500 м: ${d.longClimbs}`:'—';
   return d;
 }
 
@@ -2422,6 +2431,31 @@ function calculateRaceForecast(){
       totalSec+=s.sec;
       s.cumSec=totalSec;
     });
+  }
+
+  // v0.44: on very steep mountain routes, the strength GPX is the primary reality check.
+  // A flat/VO2 anchor must not predict a dramatically faster time than demonstrated
+  // on a comparable high-vertical trail. Scale the strength reference by km-effort
+  // (distance + ascent/100) and allow only a modest race-day improvement.
+  const strengthRef=state.raceReferences?.strength;
+  if(strengthRef && Number(strengthRef.elapsedSec)>0 && Number(strengthRef.dist)>0){
+    const routeGainNow=Math.max(0,Number(state.gain||0));
+    const routeVD=routeGainNow/Math.max(0.1,Number(state.dist||0));
+    const refVD=Math.max(0,Number(strengthRef.gain||0))/Math.max(0.1,Number(strengthRef.dist||0));
+    if(routeVD>=60 && refVD>=35){
+      const targetEffortKm=Number(state.dist||0)+routeGainNow/100;
+      const refEffortKm=Number(strengthRef.dist||0)+Math.max(0,Number(strengthRef.gain||0))/100;
+      const scaledStrengthSec=Number(strengthRef.elapsedSec)*Math.pow(
+        Math.max(0.25,targetEffortKm/Math.max(0.25,refEffortKm)),1.06
+      );
+      // Race conditions may be faster than training, but cap the assumed gain at 15%.
+      const strengthFloorSec=scaledStrengthSec*0.85;
+      if(totalSec<strengthFloorSec){
+        const scale=strengthFloorSec/Math.max(1,totalSec);
+        totalSec=0;
+        detailed.forEach(s=>{ s.sec*=scale; totalSec+=s.sec; s.cumSec=totalSec; });
+      }
+    }
   }
 
   // v0.28: durability must react to the uploaded strength and fast-trail files.
