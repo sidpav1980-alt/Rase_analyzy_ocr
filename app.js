@@ -343,12 +343,33 @@ function readFileIOS(file){
   });
 }
 let selectedGPXFile=null;
+let mapAnalysisAbortController=null;
+let mapAnalysisRunId=0;
+
+function abortMapAnalysisForNewGpx(){
+  mapAnalysisRunId++;
+  if(mapAnalysisAbortController){
+    try{ mapAnalysisAbortController.abort(); }catch(e){}
+    mapAnalysisAbortController=null;
+  }
+  stopMapAnalysisTimer();
+  const p=$('mapAnalyzeProgress');
+  if(p){ p.value=0; p.style.display='none'; }
+  const btn=$('mapAnalyzeBtn');
+  if(btn){
+    btn.disabled=true;
+    setActionState('mapAnalyzeBtn','idle');
+  }
+  const status=$('mapAnalyzeStatus');
+  if(status) status.textContent='Анализ карты остановлен. Сначала обработайте новый GPX.';
+}
 
 
 $('basePace').addEventListener('change',()=>{ if(state.track&&state.track.length) drawTrackProfiles(); });
 window.addEventListener('resize',()=>{ if(state.track&&state.track.length) drawTrackProfiles(); });
 
 $('gpxFile').addEventListener('change', e=>{
+  abortMapAnalysisForNewGpx();
   invalidateRaceForecast();
   state.hasElevation=false;
   state.raceForecast=null;
@@ -377,6 +398,7 @@ $('gpxFile').addEventListener('change', e=>{
 });
 
 $('gpxLoadBtn').addEventListener('click',async ()=>{
+  abortMapAnalysisForNewGpx();
   if(!selectedGPXFile){
     $('gpxStatus').textContent='✕ Сначала выберите GPX.'; setActionState('gpxLoadBtn','error');
     return;
@@ -861,6 +883,8 @@ function analyzeWaterCrossings(samples,elements=[]){
 
   function finish(endKm){
     const len=Math.max(0,endKm-startKm);
+    // Ignore tiny OSM/GPS water fragments: a crossing must be at least 2 metres.
+    if(len<0.002) return;
     if(len>0.30) return;
     const mid=(startKm+endKm)/2;
     if(bridgeNearKm(mid)) bridges.push(mid);
@@ -968,7 +992,7 @@ function filterFordCandidatesClient(fords){
   const arr=fords
     .filter(f=>{
       const w=Number(f?.width_m ?? f?.width);
-      return !(Number.isFinite(w) && w<1.0);
+      return !(Number.isFinite(w) && w<2.0);
     })
     .filter(f=>Number.isFinite(Number(f?.km)))
     .sort((a,b)=>Number(a.km)-Number(b.km));
@@ -987,12 +1011,19 @@ function filterFordCandidatesClient(fords){
 async function analyzeMapOSM(){
   startMapAnalysisTimer();
   if(!state.track || !state.track.length) throw new Error('Сначала обработайте GPX');
+
+  const runId=++mapAnalysisRunId;
+  if(mapAnalysisAbortController){
+    try{ mapAnalysisAbortController.abort(); }catch(e){}
+  }
+  mapAnalysisAbortController=new AbortController();
+  const controller=mapAnalysisAbortController;
+
   const pts=sampleTrackPoints(220);
   const query=buildOverpassQuery(pts);
 
   $('mapAnalyzeStatus').textContent='⏳ Отправляю запрос через Render proxy…';
 
-  const controller=new AbortController();
   const timer=setTimeout(()=>controller.abort(),45000);
 
   let resp;
@@ -1008,6 +1039,12 @@ async function analyzeMapOSM(){
     clearTimeout(timer);
   }
 
+  if(runId!==mapAnalysisRunId || controller.signal.aborted){
+    const err=new Error('Анализ карты остановлен');
+    err.name='AbortError';
+    throw err;
+  }
+
   if(!resp.ok){
     let detail='';
     try{
@@ -1018,6 +1055,12 @@ async function analyzeMapOSM(){
   }
 
   const data=await resp.json();
+  if(runId!==mapAnalysisRunId || controller.signal.aborted){
+    const err=new Error('Анализ карты остановлен');
+    err.name='AbortError';
+    throw err;
+  }
+  mapAnalysisAbortController=null;
     normalizeFordData(data);
     {
       let rawFordKm=[];
@@ -1488,7 +1531,9 @@ $('mapAnalyzeBtn')?.addEventListener('click',async ()=>{
   p.style.display='block'; p.value=15;
   $('mapAnalyzeStatus').textContent='⏳ Запрашиваю OSM/Overpass…';
   try{
+    const myRunId=mapAnalysisRunId+1;
     const result=await analyzeMapOSM();
+    if(myRunId!==mapAnalysisRunId) return;
     p.value=85;
     renderMapAnalysis(result);
     p.value=100;
@@ -1498,10 +1543,16 @@ $('mapAnalyzeBtn')?.addEventListener('click',async ()=>{
     setTimeout(()=>p.style.display='none',1200);
   }catch(err){
     p.style.display='none';
-    $('mapAnalyzeStatus').textContent='✕ Ошибка анализа карты: '+(err.message||String(err));
-    setActionState('mapAnalyzeBtn','error');
+    if(err?.name==='AbortError'){
+      $('mapAnalyzeStatus').textContent='Анализ карты остановлен.';
+      setActionState('mapAnalyzeBtn','idle');
+    }else{
+      $('mapAnalyzeStatus').textContent='✕ Ошибка анализа карты: '+(err.message||String(err));
+      setActionState('mapAnalyzeBtn','error');
+    }
   }finally{
-    btn.disabled=false;
+    mapAnalysisAbortController=null;
+    syncMapAnalyzeButton();
   }
 });
 
