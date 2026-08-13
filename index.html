@@ -36,7 +36,7 @@
 </style>
 </head>
 <body>
-<div class="app-version">v0.16 ONLINE FULL</div>
+<div class="app-version">v0.18 ONLINE FULL</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Trail Race Analyzer</div>
@@ -240,8 +240,10 @@
             <input id="raceEffortPct" type="number" min="70" max="130" step="1" value="100">
           </label>
           <label class="field">
-            <span>Шаг таблицы, км</span>
-            <input id="forecastStepKm" type="number" min="1" max="10" step="1" value="5">
+            <span>Шаг таблицы, км — необязательно</span>
+            <input id="forecastStepKm" type="number" min="1" max="10" step="0.5" value="" placeholder="авто">
+            <small class="muted">Пусто = авто: если «Анализ трассы» выполнен, границы берутся по покрытию, бродам и мостам; если анализ не выполнен — таблица строится по 5 км.</small>
+            <button id="recalcForecastStepBtn" type="button" class="secondary action-idle" disabled>Перерасчитать по шагу</button>
           </label>
           <label class="field">
             <span>VO₂max, мл/кг/мин — обязательно</span>
@@ -279,7 +281,7 @@
 
         <h3>Время прохождения участков</h3>
         <div id="recommendedPaceNote" class="muted">
-          Темп в таблице — рекомендуемый, а не максимальный. Он привязан к среднему прогнозному темпу всей гонки и меняется умеренно по рельефу.
+          Темп в таблице — рекомендуемый, а не максимальный. По умолчанию границы участков берутся из «Анализа трассы»: асфальт, тропа, грунт, вода/болото, броды и мосты. Ручной шаг используется только если поле заполнено.
         </div>
         <div class="table-wrap">
           <table id="raceForecastTable">

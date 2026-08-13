@@ -1893,6 +1893,143 @@ function longDistanceEnduranceFactor(baseSec,vo2){
   return 1+extra;
 }
 
+
+function forecastCustomStepKm(){
+  const raw=String($('forecastStepKm')?.value||'').trim();
+  if(!raw) return 0;
+  const n=Number(raw);
+  return Number.isFinite(n) && n>=1 && n<=10 ? n : 0;
+}
+
+function forecastSurfaceAtKm(km){
+  const samples=state.mapAnalysis?.samples||state.mapAnalysis?.result?.samples||[];
+  if(!Array.isArray(samples)||!samples.length) return '';
+  let best=samples[0],bestD=Math.abs(Number(samples[0].km||0)-km);
+  for(let i=1;i<samples.length;i++){
+    const d=Math.abs(Number(samples[i].km||0)-km);
+    if(d<bestD){best=samples[i];bestD=d;}
+  }
+  return String(best?.cls||'');
+}
+
+function autoForecastBoundariesFromAnalysis(){
+  const dist=Number(state.dist||0);
+  const samples=(state.mapAnalysis?.samples||state.mapAnalysis?.result?.samples||[])
+    .filter(x=>Number.isFinite(Number(x?.km)))
+    .sort((a,b)=>Number(a.km)-Number(b.km));
+  if(!samples.length) return [0,dist];
+
+  const boundaries=[0,dist];
+  let lastClass=String(samples[0]?.cls||'unknown');
+  let lastBoundary=0;
+
+  for(let i=1;i<samples.length;i++){
+    const km=Number(samples[i].km);
+    const cls=String(samples[i]?.cls||'unknown');
+    if(cls!==lastClass && km-lastBoundary>=0.25 && dist-km>=0.15){
+      boundaries.push(km);
+      lastBoundary=km;
+    }
+    if(cls!==lastClass) lastClass=cls;
+  }
+
+  const eventKms=[
+    ...(state.mapAnalysis?.fordKms||[]),
+    ...(state.mapAnalysis?.bridgeKms||[])
+  ].map(Number).filter(Number.isFinite);
+
+  for(const km of eventKms){
+    if(km>0.1 && km<dist-0.1) boundaries.push(km);
+  }
+
+  const clean=[...new Set(boundaries.map(x=>Math.max(0,Math.min(dist,Number(x)))))]
+    .filter(Number.isFinite).sort((a,b)=>a-b);
+
+  const out=[clean[0]||0];
+  for(let i=1;i<clean.length;i++){
+    const x=clean[i];
+    if(x-out[out.length-1]<0.15 && x<dist) continue;
+    out.push(x);
+  }
+  if(out[out.length-1]!==dist) out.push(dist);
+  return out;
+}
+
+function buildForecastGroups(detailed){
+  const customStep=forecastCustomStepKm();
+  const groups=[];
+
+  if(customStep>0){
+    let current=null;
+    for(const s of detailed){
+      const bucket=Math.floor(s.from/customStep)*customStep;
+      if(!current||current.bucket!==bucket){
+        if(current) groups.push(current);
+        current={bucket,from:s.from,to:s.to,distM:0,gain:0,loss:0,sec:0,cumSec:0,weightedGrade:0,segmentMode:'step'};
+      }
+      current.to=s.to;
+      current.distM+=s.dm;
+      current.sec+=s.sec;
+      current.cumSec=s.cumSec;
+      current.weightedGrade+=s.grade*s.dm;
+      if(s.de>0) current.gain+=s.de; else current.loss+=-s.de;
+    }
+    if(current) groups.push(current);
+    return {groups,groupKm:customStep,mode:'step'};
+  }
+
+  if(!state.mapAnalysis){
+    // No route analysis: safe default = 5 km rows.
+    const fallbackStep=5;
+    let current=null;
+    for(const s of detailed){
+      const bucket=Math.floor(s.from/fallbackStep)*fallbackStep;
+      if(!current||current.bucket!==bucket){
+        if(current) groups.push(current);
+        current={bucket,from:s.from,to:s.to,distM:0,gain:0,loss:0,sec:0,cumSec:0,weightedGrade:0,segmentMode:'fallback5'};
+      }
+      current.to=s.to;
+      current.distM+=s.dm;
+      current.sec+=s.sec;
+      current.cumSec=s.cumSec;
+      current.weightedGrade+=s.grade*s.dm;
+      if(s.de>0) current.gain+=s.de; else current.loss+=-s.de;
+    }
+    if(current) groups.push(current);
+    return {groups,groupKm:fallbackStep,mode:'fallback5'};
+  }
+
+  const bounds=autoForecastBoundariesFromAnalysis();
+  for(let bi=0;bi<bounds.length-1;bi++){
+    const from=bounds[bi],to=bounds[bi+1];
+    const g={bucket:bi,from,to,distM:0,gain:0,loss:0,sec:0,cumSec:0,weightedGrade:0,segmentMode:'auto'};
+    for(const s of detailed){
+      const left=Math.max(from,s.from),right=Math.min(to,s.to);
+      if(right<=left) continue;
+      const frac=(right-left)/Math.max(1e-9,s.to-s.from);
+      const dm=s.dm*frac;
+      g.distM+=dm;
+      g.sec+=s.sec*frac;
+      g.weightedGrade+=s.grade*dm;
+      const de=s.de*frac;
+      if(de>0) g.gain+=de; else g.loss+=-de;
+    }
+    if(g.distM>=20){
+      g.surface=forecastSurfaceAtKm((from+to)/2);
+      g.fordAtStart=(state.mapAnalysis?.fordKms||[]).some(k=>Math.abs(Number(k)-from)<0.12);
+      g.bridgeAtStart=(state.mapAnalysis?.bridgeKms||[]).some(k=>Math.abs(Number(k)-from)<0.12);
+      g.cumSec=groups.length?groups[groups.length-1].cumSec+g.sec:g.sec;
+      groups.push(g);
+    }
+  }
+  return {groups,groupKm:0,mode:'auto'};
+}
+
+function forecastSurfaceLabel(cls){
+  const m={paved:'асфальт',trail:'тропа',dirt:'грунт',wetland:'болото',water:'вода',unknown:'неизвестно'};
+  return m[String(cls||'')]||'';
+}
+
 function calculateRaceForecast(){
   if(!(state.dist>0) || !(state.track?.length>1)){
     throw new Error('Сначала загрузите GPX трассы');
@@ -1912,7 +2049,7 @@ function calculateRaceForecast(){
   }
 
   const effort=Number($('raceEffortPct')?.value||100);
-  const groupKm=Math.max(1,Math.min(10,Number($('forecastStepKm')?.value||5)));
+  const requestedStepKm=forecastCustomStepKm();
   const micro=buildRaceMicroSegments();
   if(!micro.length) throw new Error('Не удалось разбить трассу на участки');
 
@@ -1961,22 +2098,10 @@ function calculateRaceForecast(){
     });
   }
 
-  const groups=[];
-  let current=null;
-  for(const s of detailed){
-    const bucket=Math.floor(s.from/groupKm)*groupKm;
-    if(!current || current.bucket!==bucket){
-      if(current) groups.push(current);
-      current={bucket,from:s.from,to:s.to,distM:0,gain:0,loss:0,sec:0,cumSec:0,weightedGrade:0};
-    }
-    current.to=s.to;
-    current.distM+=s.dm;
-    current.sec+=s.sec;
-    current.cumSec=s.cumSec;
-    current.weightedGrade+=s.grade*s.dm;
-    if(s.de>0) current.gain+=s.de; else current.loss+=-s.de;
-  }
-  if(current) groups.push(current);
+  const grouped=buildForecastGroups(detailed);
+  const groups=grouped.groups;
+  const groupKm=grouped.groupKm;
+  const segmentMode=grouped.mode;
 
   const avgRacePaceSec=totalSec/state.dist;
 
@@ -2040,6 +2165,7 @@ function calculateRaceForecast(){
     highSec:totalSec*1.05,
     effort,
     groupKm,
+    segmentMode,
     groups,
     physiology,
     flatAnchor,
@@ -2171,9 +2297,12 @@ function renderRaceForecast(options={}){
     f.groups.forEach(g=>{
       const from=g.from.toFixed(1).replace('.0','');
       const to=Math.min(state.dist,g.to).toFixed(1).replace('.0','');
+      const autoLabel=g.segmentMode==='auto'
+        ? [forecastSurfaceLabel(g.surface),g.fordAtStart?'брод':'',g.bridgeAtStart?'мост':''].filter(Boolean).join(' · ')
+        : '';
       tbody.insertAdjacentHTML('beforeend',
         `<tr>
-          <td>${from}–${to}</td>
+          <td>${from}–${to}${autoLabel?`<small class="forecast-segment-label">${autoLabel}</small>`:''}</td>
           <td>+${Math.round(g.gain)} / −${Math.round(g.loss)} м</td>
           <td>${(g.grade*100).toFixed(1)}%</td>
           <td>${fmtPaceSecPerKm(g.paceSec)}</td>
@@ -2425,6 +2554,48 @@ $('raceForecastGpxBtn')?.addEventListener('click',async()=>{
   }
 });
 
+
+function updateForecastStepRecalcButton(){
+  const btn=$('recalcForecastStepBtn');
+  if(!btn) return;
+  const raw=String($('forecastStepKm')?.value||'').trim();
+  const step=Number(raw);
+  const valid=raw!=='' && Number.isFinite(step) && step>=1 && step<=10;
+  btn.disabled=!(valid && state.raceForecast);
+  setActionState('recalcForecastStepBtn',btn.disabled?'idle':'ready');
+}
+
+function recalculateForecastWithCurrentMode(){
+  if(state.forecastMode==='analysis'){
+    if(!state.mapAnalysis) throw new Error('Сначала выполните анализ трассы.');
+    const fordKms=state.mapAnalysis?.fordKms||[];
+    const trailSamples=state.mapAnalysis?.samples||state.mapAnalysis?.result?.samples||[];
+    renderRaceForecast({
+      fordKms,
+      fordPenaltyPerSec:40,
+      trailSamples,
+      trailPenaltyPerKmSec:60,
+      dirtPenaltyPerKmSec:30,
+      analysisMode:true
+    });
+  }else{
+    renderRaceForecast({analysisMode:false});
+  }
+}
+
+$('recalcForecastStepBtn')?.addEventListener('click',()=>{
+  try{
+    setActionState('recalcForecastStepBtn','working');
+    recalculateForecastWithCurrentMode();
+    setActionState('recalcForecastStepBtn','success');
+  }catch(err){
+    if($('raceForecastStatus')) $('raceForecastStatus').textContent='✕ '+(err.message||String(err));
+    setActionState('recalcForecastStepBtn','error');
+  }
+});
+
+$('forecastStepKm')?.addEventListener('input',updateForecastStepRecalcButton);
+
 $('vo2max')?.addEventListener('input',()=>{
   if(state.raceForecast) invalidateRaceForecast();
   updateRaceReferenceState();
@@ -2433,7 +2604,7 @@ $('raceForecastBtn')?.addEventListener('click',()=>{
   renderRaceForecast({analysisMode:false});
 });
 $('raceEffortPct')?.addEventListener('change',()=>{invalidateRaceForecast(); updateRaceReferenceState();});
-$('forecastStepKm')?.addEventListener('change',()=>{invalidateRaceForecast(); updateRaceReferenceState();});
+$('forecastStepKm')?.addEventListener('change',updateForecastStepRecalcButton);
 
 window.addEventListener('DOMContentLoaded',()=>{
   if($('raceModelFormula')) $('raceModelFormula').textContent=raceFormulaText();
