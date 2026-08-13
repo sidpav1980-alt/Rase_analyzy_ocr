@@ -1950,8 +1950,7 @@ function autoForecastBoundariesFromAnalysis(){
   }
 
   const eventKms=[
-    ...(state.mapAnalysis?.fordKms||[]),
-    ...(state.mapAnalysis?.bridgeKms||[])
+    ...(state.mapAnalysis?.fordKms||[])
   ].map(Number).filter(Number.isFinite);
 
   for(const km of eventKms){
@@ -2038,7 +2037,30 @@ function buildForecastGroups(detailed){
       groups.push(g);
     }
   }
-  return {groups,groupKm:0,mode:'auto'};
+  // Merge adjacent AUTO rows when they are genuinely the same route type.
+  // A ford/bridge starts a new event row and therefore must not be swallowed
+  // by the preceding ordinary surface row.
+  const merged=[];
+  for(const g of groups){
+    const prev=merged[merged.length-1];
+    const sameSurface=prev && String(prev.surface||'')===String(g.surface||'');
+    const eventBoundary=!!g.fordAtStart;
+    const prevEvent=prev && !!prev.fordAtStart;
+    if(prev && sameSurface && !eventBoundary && !prevEvent){
+      prev.to=g.to;
+      prev.distM+=g.distM;
+      prev.gain+=g.gain;
+      prev.loss+=g.loss;
+      prev.sec+=g.sec;
+      prev.weightedGrade+=g.weightedGrade;
+      prev.cumSec=(merged.length>1?merged[merged.length-2].cumSec:0)+prev.sec;
+    }else{
+      const copy={...g};
+      copy.cumSec=(merged.length?merged[merged.length-1].cumSec:0)+copy.sec;
+      merged.push(copy);
+    }
+  }
+  return {groups:merged,groupKm:0,mode:'auto'};
 }
 
 function forecastSurfaceLabel(cls){
@@ -2314,7 +2336,7 @@ function renderRaceForecast(options={}){
       const from=g.from.toFixed(1).replace('.0','');
       const to=Math.min(state.dist,g.to).toFixed(1).replace('.0','');
       const autoLabel=g.segmentMode==='auto'
-        ? [forecastSurfaceLabel(g.surface),g.fordAtStart?'брод':'',g.bridgeAtStart?'мост':''].filter(Boolean).join(' · ')
+        ? [forecastSurfaceLabel(g.surface),g.fordAtStart?'брод':''].filter(Boolean).join(' · ')
         : '';
       tbody.insertAdjacentHTML('beforeend',
         `<tr>
