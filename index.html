@@ -24,9 +24,19 @@
   flex-basis: 100%;
 }
 </style>
+
+<style>
+/* v0.09: реальный визуальный разделитель между кнопками прогноза */
+#raceForecastBtn {
+  margin-bottom: 18px !important;
+}
+#raceForecastGpxBtn {
+  margin-top: 0 !important;
+}
+</style>
 </head>
 <body>
-<div class="app-version">v0.08 ONLINE FULL</div>
+<div class="app-version">v0.10 ONLINE FULL</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Trail Race Analyzer</div>
@@ -293,7 +303,7 @@
 
         <button id="raceForecastBtn" class="primary action-ready" type="button">Рассчитать прогноз по трассе</button>
         <button id="raceForecastGpxBtn" class="primary action-idle" type="button" disabled>Рассчитать прогноз по трассе с анализом GPX</button>
-        <div id="raceForecastGpxNote" class="muted">При анализе GPX каждый обнаруженный брод добавляет +40 секунд к прогнозу.</div>
+        <div id="raceForecastGpxNote" class="muted">При прогнозе с анализом GPX учитывается покрытие: каждый обнаруженный брод добавляет +40 секунд, а каждый километр OSM-тропы — +1:00 мин/км к расчётному времени.</div>
         <div id="raceForecastStatus" class="muted">Сначала загрузите GPX трассы во вкладке «Трасса».</div>
 
         <div class="metrics big">

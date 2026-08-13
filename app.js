@@ -1052,7 +1052,14 @@ function renderMapAnalysis(result){
   const fordGroups=groupFordKmPoints(crossings.fords);
   const fordKms=fordGroups.map(g=>g.start);
   const bridgeKms=crossings.bridges;
-  state.mapAnalysis={result, fordKms:[...fordKms], fordCount:fordKms.length, bridgeKms:[...bridgeKms]};
+  state.mapAnalysis={
+    result,
+    samples:[...samples],
+    summary:{...summary},
+    fordKms:[...fordKms],
+    fordCount:fordKms.length,
+    bridgeKms:[...bridgeKms]
+  };
 
   $('mapAnalysisResults').style.display='block';
   $('coverageMetric').textContent=summary.coverage.toFixed(0)+'%';
@@ -1942,6 +1949,25 @@ function raceFormulaText(){
     + `Fduration=(T/T10)^−k; FHR=ограничение по пульсу/времени закисления; FVO2=обязательная аэробная поправка VO₂max`;
 }
 
+
+function trailDistanceInRange(samples,fromKm,toKm){
+  if(!Array.isArray(samples) || samples.length<2) return 0;
+  const s=[...samples]
+    .filter(x=>Number.isFinite(Number(x?.km)))
+    .sort((a,b)=>Number(a.km)-Number(b.km));
+  let km=0;
+  for(let i=0;i<s.length-1;i++){
+    const a=Number(s[i].km), b=Number(s[i+1].km);
+    if(!(b>a)) continue;
+    // Treat the class of the sample at the start of the interval as the interval class.
+    if(s[i].cls!=='trail') continue;
+    const left=Math.max(fromKm,a);
+    const right=Math.min(toKm,b);
+    if(right>left) km+=right-left;
+  }
+  return km;
+}
+
 function renderRaceForecast(options={}){
   const tbody=$('raceForecastTable')?.querySelector('tbody');
   if(!tbody) return;
@@ -1949,20 +1975,49 @@ function renderRaceForecast(options={}){
     const f=calculateRaceForecast();
     const fordKms=Array.isArray(options.fordKms)?options.fordKms:[];
     const fordPenaltyPer=Number(options.fordPenaltyPerSec)||0;
-    if(fordPenaltyPer>0 && fordKms.length){
+    const trailSamples=Array.isArray(options.trailSamples)?options.trailSamples:[];
+    const trailPenaltyPerKmSec=Number(options.trailPenaltyPerKmSec)||0;
+    let extraTotal=0;
+    let fordExtraTotal=0;
+    let trailExtraTotal=0;
+    let totalTrailKm=0;
+
+    // Add local penalties to each recommended forecast group.
+    // Ford: +40 sec each. Trail: +60 sec per actual OSM-classified trail km.
+    if((fordPenaltyPer>0 && fordKms.length) || (trailPenaltyPerKmSec>0 && trailSamples.length)){
       let cumExtra=0;
       f.groups.forEach(g=>{
-        const count=fordKms.filter(km=>km>=g.from-1e-9 && km<g.to+1e-9).length;
-        const extra=count*fordPenaltyPer;
+        const fordCount=fordKms.filter(km=>km>=g.from-1e-9 && km<g.to+1e-9).length;
+        const fordExtra=fordCount*fordPenaltyPer;
+
+        const trailKm=trailPenaltyPerKmSec>0
+          ? trailDistanceInRange(trailSamples,g.from,g.to)
+          : 0;
+        const trailExtra=trailKm*trailPenaltyPerKmSec;
+
+        const extra=fordExtra+trailExtra;
+        g.trailKm=trailKm;
+        g.fordCount=fordCount;
         g.sec+=extra;
         g.recommendedSec=(g.recommendedSec||0)+extra;
         g.paceSec=g.sec/Math.max(0.001,g.distM/1000);
+
         cumExtra+=extra;
         g.cumSec+=cumExtra;
+
+        fordExtraTotal+=fordExtra;
+        trailExtraTotal+=trailExtra;
+        totalTrailKm+=trailKm;
       });
+
+      extraTotal=fordExtraTotal+trailExtraTotal;
       f.fordCount=fordKms.length;
-      f.fordPenaltySec=fordKms.length*fordPenaltyPer;
-      f.totalSec+=f.fordPenaltySec;
+      f.fordPenaltySec=fordExtraTotal;
+      f.trailKm=totalTrailKm;
+      f.trailPenaltySec=trailExtraTotal;
+      f.analysisPenaltySec=extraTotal;
+
+      f.totalSec+=extraTotal;
       f.avgPaceSec=f.totalSec/state.dist;
       f.lowSec=f.totalSec*0.90;
       f.highSec=f.totalSec*1.10;
@@ -2123,7 +2178,14 @@ $('raceForecastGpxBtn')?.addEventListener('click',async()=>{
       renderMapAnalysis(result);
     }
     const fordKms=state.mapAnalysis?.fordKms||[];
-    renderRaceForecast({fordKms,fordPenaltyPerSec:40});
+    const trailSamples=state.mapAnalysis?.samples||state.mapAnalysis?.result?.samples||[];
+    renderRaceForecast({
+      fordKms,
+      fordPenaltyPerSec:40,
+      trailSamples,
+      trailPenaltyPerKmSec:60,
+      analysisMode:true
+    });
     setActionState('raceForecastGpxBtn','success');
   }catch(err){
     if($('raceForecastStatus')) $('raceForecastStatus').textContent='✕ '+(err.message||String(err));
