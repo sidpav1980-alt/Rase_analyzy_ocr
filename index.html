@@ -36,6 +36,303 @@
 </style>
 </head>
 <body>
+<div class="app-version">v0.49 ONLINE FULL</div>
+  <header class="app-header">
+    <div>
+      <div class="eyebrow">Trail Race Analyzer</div>
+      <h1>Гонка → ПЛАН → ФИНИШ</h1>
+    </div>
+    <button id="installBtn" class="ghost" hidden>Установить</button>
+  </header>
+
+  <main>
+    <section class="card hero">
+      <h2>Новая гонка</h2>
+      <p>Загрузи GPX трассы, стартовый список и три GPX-эталона в разделе прогноза. Приложение рассчитает стратегию, прогноз финиша и шансы против соперников.</p>
+    </section>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="route">1. Трек гонки</button>
+      <button class="tab" data-tab="forecast">2. Прогноз</button>
+      <button class="tab" data-tab="roster">3. Стартовый список и баллы ITRA</button>
+      <button class="tab" data-tab="result">4. Итог</button>
+    </nav>
+
+    <section id="route" class="tabpanel active">
+      <div class="card">
+        <h2>Трек гонки</h2>
+        <div class="gpx-pace-row">
+  <div class="gpx-upload-column"><div class="upload">
+          <strong>GPX трассы</strong>
+          <input id="gpxFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml,*/*">
+          <span id="gpxName"><span id="gpxCheck" class="file-check">○</span> Файл не выбран</span>
+          <button id="gpxLoadBtn" type="button" class="primary" disabled>Загрузить и обработать GPX</button>
+          <span id="gpxStatus">1. Выберите файл GPX.</span>
+          <progress id="gpxProgress" value="0" max="100" style="width:100%;display:none"></progress>
+        </div></div>
+  <div class="pace-inline-column"><label class="field">
+            <span>Рассчитать время для темпа, мин/км</span>
+            <input id="basePace" value="5:30">
+          </label></div>
+</div>
+
+        <div class="field traversal-time-block">
+          <span>Фактическое время прохождения</span>
+          <div class="metrics">
+            <div><span>Без пауз</span><b id="movingTimeMetric">—</b><small id="movingPaceMetric">— мин/км</small></div>
+            <div><span>С паузами</span><b id="elapsedTimeMetric">—</b><small id="elapsedPaceMetric">— мин/км</small></div>
+          </div>
+          <div class="muted">Время берётся из временных меток GPX: без пауз — только движение, с паузами — от первой до последней точки.</div>
+        </div>
+
+        <div class="field">
+          <span>Анализ карты</span>
+          <button id="mapAnalyzeBtn" type="button" class="primary action-idle" disabled>Анализ карты</button>
+        <div id="mapTimingNote" class="muted">Среднее время анализа карты — 15 секунд. Максимум — 25 секунд. Максимум — 25 секунд. Если анализ длится больше 15 секунд — повторите снова.</div>
+          <div id="mapAnalyzeStatus" class="muted">Сначала загрузите и обработайте GPX.</div>
+          <progress id="mapAnalyzeProgress" value="0" max="100" style="width:100%;display:none"></progress>
+        </div>
+
+        <div id="mapAnalysisResults" class="field" style="display:none">
+          <span>Покрытие маршрута по OSM</span>
+          <div class="metrics">
+            <div><span>Классифицировано</span><b id="coverageMetric">—</b></div>
+            <div><span>Болото</span><b id="wetlandMetric">—</b></div>
+            <div><span>Вода</span><b id="waterCrossMetric">—</b></div><div class="metric">
+              <div class="k">Броды</div>
+              <div class="v" id="fordCountMetric">—</div><div class="ford-km-list" id="fordKmList">Броды: —</div>
+          <div class="ford-km-list bridge-km-list" id="bridgeFordKmList">По мосту: —</div>
+            </div>
+          </div>
+          <div class="metrics">
+            <div><span>Тропа</span><b id="trailMetric">—</b></div>
+            <div><span>Грунт</span><b id="dirtMetric">—</b></div>
+            <div><span>Асфальт</span><b id="pavedMetric">—</b></div>
+          </div>
+          <div class="muted" id="mapAnalysisNote">—</div>
+          <canvas id="surfaceStripCanvas" height="90"></canvas>
+          <div class="surface-legend" aria-label="Легенда покрытия">
+            <div><span class="surface-swatch sw-wetland"></span><span>Болото / wetland</span></div>
+            <div><span class="surface-swatch sw-water"></span><span>Вода / река</span></div>
+            <div><span class="surface-swatch sw-trail"></span><span>Тропа</span></div>
+            <div><span class="surface-swatch sw-dirt"></span><span>Грунт / гравий / земля</span></div>
+            <div><span class="surface-swatch sw-paved"></span><span>Асфальт / твёрдое покрытие</span></div>
+            <div><span class="surface-swatch sw-unknown"></span><span>Неизвестно / нет данных OSM</span></div>
+          </div>
+        </div>
+
+        <div class="profiles-main">
+          <div class="field">
+          <span>Профиль высоты по километражу</span>
+          <canvas id="elevationDistanceCanvas" height="220"></canvas>
+        </div>
+          <div class="field">
+          <span>Профиль высоты по расчётному времени</span>
+          <canvas id="elevationTimeCanvas" height="220"></canvas>
+          <div class="muted">Время строится по базовому темпу, набору высоты и текущей модели сложности.</div>
+        </div>
+        </div>
+
+        
+        <div class="grid2">
+          
+          <div class="field">
+            <span>ITRA Km-effort / Endurance Points</span>
+            <div class="metrics" style="margin:0">
+              <div><span>Km-effort</span><b id="itraKmEffort">—</b></div>
+              <div><span>ITRA Points</span><b id="itraPoints">—</b></div>
+              <div><span>Trail-adjusted Points</span><b id="itraAdjustedPoints">—</b></div>
+            </div>
+            <div class="muted">ITRA Points — официальный расчёт по Km-effort. Trail-adjusted Points — внутренняя оценка приложения для очень вертикальных трасс.</div>
+
+          <div class="field">
+            <span>Сложность рельефа по GPX</span>
+            <div class="metrics" style="margin:0">
+              <div><span>Trail Difficulty</span><b id="trailDifficulty">—</b></div>
+              <div><span>&gt;15% уклона</span><b id="steep15Metric">—</b></div>
+              <div><span>Вертикаль / км</span><b id="vertPerKmMetric">—</b></div>
+            </div>
+            <div class="muted" id="trailDifficultyLabel">—</div>
+          </div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div><span>Дистанция</span><b id="distMetric">—</b></div>
+          <div><span>Набор</span><b id="gainMetric">—</b></div>
+          <div><span>Сброс</span><b id="lossMetric">—</b></div>
+        </div>
+
+        
+
+        
+</div>
+    </section>
+
+    <div id="legacyTrainingFields" hidden>
+      <input id="refDist" value="">
+      <input id="refMinutes" value="">
+      <input id="refPace" value="">
+      <input id="refAvgHr" value="">
+      <input id="refGain" value="0">
+      <input id="refMaxHr" value="0">
+      <input id="lthr" value="0">
+    </div>
+
+    <section id="forecast" class="tabpanel">
+      <div class="card">
+        <h2>Прогноз на гонку</h2>
+        <p class="muted">
+          Прогноз строится общей моделью по трём отдельным тренировкам: Силовой трейловой GPX, Быстрой трейловой GPX и Скоростной плоской GPX. Для расчёта нужны все три файла.
+        </p>
+
+        
+        <div class="forecast-ref-grid">
+          <div class="upload">
+            <strong>1. Силовая трейловая GPX</strong>
+            <div class="muted">Большой набор и крутые подъёмы. Из неё модель учит, как уклон меняет скорость, и оценивает запас выносливости по длительности и набору.</div>
+            <input id="strengthActivityFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml,*/*">
+            <span id="strengthActivityName"><span class="file-check">○</span> Файл не выбран</span>
+            <button id="strengthActivityLoadBtn" type="button" class="primary action-idle" disabled>Загрузить Силовую трейловую GPX</button>
+            <span id="strengthActivityStatus">Не загружена.</span>
+          </div>
+
+          <div class="upload">
+            <strong>2. Быстрая трейловая GPX</strong>
+            <div class="muted">Быстрый трейл с высоким устойчивым усилием. Даёт рабочую скорость, реакцию на умеренный рельеф и дополнительную оценку выносливости.</div>
+            <input id="fastTrailActivityFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml,*/*">
+            <span id="fastTrailActivityName"><span class="file-check">○</span> Файл не выбран</span>
+            <button id="fastTrailActivityLoadBtn" type="button" class="primary action-idle" disabled>Загрузить Быструю трейловую GPX</button>
+            <span id="fastTrailActivityStatus">Не загружена.</span>
+          </div>
+
+          <div class="upload">
+            <strong>3. Скоростная плоская GPX — минимум 5 км</strong>
+            <div class="muted">Минимальная длина файла — 5 км. Например, быстрая плоская десятка. Даёт базовый темп и скорость без большого влияния рельефа. Если файл заметно медленнее консервативной оценки по VO₂max, скоростной якорь автоматически частично корректируется по VO₂max. Плоская гоночная GPX становится главным скоростным эталоном: её реальное время масштабируется на дистанцию гонки, а затем применяются рельеф, покрытие, броды и физиологические ограничения.</div>
+            <input id="flatRaceActivityFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml,*/*">
+            <span id="flatRaceActivityName"><span class="file-check">○</span> Файл не выбран</span>
+            <div class="forecast-action-separator" aria-hidden="true"></div>
+<button id="flatRaceActivityLoadBtn" type="button" class="primary action-idle" disabled>Загрузить Скоростную плоскую GPX</button>
+            <span id="flatRaceActivityStatus">Не загружена.</span>
+          </div>
+        </div>
+
+        <div id="calcAvailabilityStatus" class="muted">Сначала рассчитайте прогноз во вкладке «Прогноз».</div>
+        <div class="metrics big">
+          <div><span>Эталонов загружено</span><b id="referenceCount">0 / 3</b></div>
+          <div><span>Общая модель</span><b id="combinedModelState">ожидает 3 GPX</b></div>
+        </div>
+
+
+        <div class="grid2">
+          <label class="field">
+            <span>Относительная мощность / усилие, %</span>
+            <input id="raceEffortPct" type="number" min="70" max="130" step="1" value="100">
+          </label>
+          <label class="field">
+            <span>Шаг таблицы, км — необязательно</span>
+            <input id="forecastStepKm" type="number" min="1" max="10" step="0.5" value="" placeholder="авто">
+            <small class="muted">Пусто = авто: если «Анализ трассы» выполнен, границы берутся по покрытию и бродам; мост считается как обычный участок покрытия (например, асфальт) и отдельную строку не создаёт. Если анализ не выполнен — таблица строится по 5 км. После нового анализа трассы ручной шаг автоматически сбрасывается на «авто».</small>
+            <button id="recalcForecastStepBtn" type="button" class="secondary action-idle" disabled>Перерасчитать по шагу</button>
+          </label>
+          <label class="field">
+            <span>VO₂max, мл/кг/мин — обязательно</span>
+            <input id="vo2max" value="52" type="number" min="20" max="90" step="0.1" placeholder="например 55" required>
+          </label>
+        </div>
+
+        <button id="raceForecastBtn" class="primary action-ready" type="button">Рассчитать прогноз по трассе</button>
+        <button id="raceForecastGpxBtn" class="primary action-idle" type="button" disabled>Рассчитать прогноз по трассе с анализом GPX</button>
+        <div id="raceForecastGpxNote" class="muted">Калибровка v0.25 зависит только от данных выбранных GPX: дистанции, времени, темпа, набора, уклонов и структуры скорости. Название файла на расчёт не влияет. После калибровки остальной прогноз считается по общей формуле.<br><br>При прогнозе с анализом GPX учитывается покрытие: каждый обнаруженный брод добавляет +40 секунд; каждый километр OSM-тропы — +1:00 мин/км; каждый километр грунта — +0:30 мин/км; каждый километр «неизвестно» — +1:00 мин/км к расчётному времени.</div>
+        <div id="raceForecastStatus" class="muted">Сначала загрузите GPX трассы во вкладке «Трасса».</div>
+
+        <div class="metrics big">
+          <div><span>Прогноз движения</span><b id="raceForecastTime">—</b></div>
+          <div><span>Средний темп</span><b id="raceForecastPace">—</b></div>
+          <div><span>Диапазон ±10%</span><b id="raceForecastRange">—</b></div>
+          <div><span>Калибровка</span><b id="raceModelSource">нужно 3 GPX + VO₂max</b></div>
+        </div>
+
+        <div class="metrics big">
+          <div><span>Коэффициент длительности</span><b id="raceDurationFactor">—</b></div>
+          <div><span>Ограничение по пульсу</span><b id="raceHrFactor">—</b></div>
+          <div><span>Расчётное время до закисления</span><b id="raceAcidTime">—</b></div>
+          <div><span>Влияние VO₂max</span><b id="raceVo2Factor">—</b><small id="raceVo2Value" class="muted">VO₂max: — мл/кг/мин</small></div>
+        </div>
+        <div class="muted">«Время до закисления» — модельная оценка: при наличии HR/LTHR используется пульс, без них — VO₂max и длительность. Это не измерение лактата.</div>
+
+        <div class="field">
+          <span>Формула модели</span>
+          <div id="raceModelFormula" class="formula-box">—</div>
+          <div class="muted">
+            Это не Garmin Running Power в ваттах. «Мощность / усилие, %» — относительное усилие общей модели трёх тренировок: 100% = базовый расчёт, 95% = экономнее, 105% = агрессивнее.
+          </div>
+        </div>
+
+        <h3>Время прохождения участков</h3>
+        <div id="recommendedPaceNote" class="muted">
+          Темп и пульс в таблице — рекомендуемые, а не максимальные. Целевой пульс берётся из HR внутри загруженных тренировочных GPX и корректируется по предполагаемому темпу, уклону и стадии гонки. Если HR в GPX нет, используется ручной средний пульс/LTHR; если нет и их — выводится «—». По умолчанию границы участков берутся из «Анализа трассы»: асфальт, тропа, грунт, вода/болото и броды. Мост считается как обычное покрытие и отдельно участок не делит. Вода и неизвестное покрытие не могут иметь темп быстрее 6:30/км. Каждый непрерывный водный участок от 2 м считается бродом, если OSM не определил мост. Ручной шаг используется только если поле заполнено.
+        </div>
+        <div class="table-wrap">
+          <table id="raceForecastTable">
+            <thead>
+              <tr>
+                <th>Км</th>
+                <th>+ / −</th>
+                <th>Уклон</th>
+                <th>Рек. темп</th>
+                <th>Целевой пульс</th>
+                <th>Участок</th>
+                <th>Сумма</th>
+                <th>Усилие</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="roster" class="tabpanel">
+      <div class="card">
+        <h2>Стартовый список и баллы ITRA</h2>
+        <label class="field">
+          <span>ChatGPT / OpenAI API key</span>
+          <input id="openAiKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-…">
+        </label>
+        <div class="key-actions">
+          <button id="clearOpenAiKeyBtn" type="button" class="secondary">Очистить ключ</button>
+        </div>
+        <p class="muted">Ключ не сохраняется в localStorage и действует только до закрытия вкладки. Для постоянного и более безопасного варианта задайте OPENAI_API_KEY на сервере Render.</p>
+        <div>
+        <h2>Стартовый список</h2>
+        <div class="upload">
+          <strong>Стартовый список XLSX / CSV</strong>
+          <input id="rosterFile" type="file" accept=".xlsx,.xls,.csv,text/csv">
+          <span id="rosterName"><span class="file-check">○</span> Файл не выбран</span>
+          <button id="rosterLoadBtn" type="button" class="primary" disabled>Загрузить и обработать стартовый список</button>
+          <span id="rosterStatus">1. Выберите файл стартового списка.</span>
+          <progress id="rosterProgress" value="0" max="100" style="width:100%;display:none"></progress>
+        </div>
+        <div class="grid2">
+          
+
+        <div class="itra-online-box">
+          <button id="itraLookupBtn" type="button" class="secondary action-ready">Загрузить ITRA через AI</button>
+          <div id="itraLookupStatus" class="muted">После загрузки стартового списка нажмите кнопку для поиска ITRA PI участников.</div>
+        </div>
+        <label class="field">
+            <span>Зачёт</span>
+            <select id="genderFilter">
+              <option>Все</option>
+              <option selected>Женщины</option>
+              <option>Мужчины</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Непредсказуемость</span>
+            <input id="sigma" type="number" min="5" max="45" value="20">
+          </label>
+        </div>
         <p class="muted">XLSX и CSV читаются прямо на iPhone без внешних библиотек. Если PI нет в файле, его можно ввести вручную.</p>
         <div class="table-wrap">
           <table id="rosterTable">
