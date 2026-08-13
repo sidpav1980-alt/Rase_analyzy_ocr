@@ -36,7 +36,7 @@
 </style>
 </head>
 <body>
-<div class="app-version">v0.14 ONLINE FULL</div>
+<div class="app-version">v0.15 ONLINE FULL</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Trail Race Analyzer</div>
@@ -66,7 +66,7 @@
 
     <nav class="tabs">
       <button class="tab active" data-tab="route">1. Трасса</button>
-      <button class="tab" data-tab="roster">2. ChatGPT</button>
+      <button class="tab" data-tab="roster">2. Стартовый список и баллы ITRA</button>
       <button class="tab" data-tab="forecast">3. Прогноз</button>
       <button class="tab" data-tab="result">4. Итог</button>
     </nav>
@@ -189,59 +189,6 @@
       <input id="lthr" value="0">
     </div>
 
-    <section id="roster" class="tabpanel">
-      <div class="card">
-        <h2>ChatGPT</h2>
-        <label class="field">
-          <span>ChatGPT / OpenAI API key</span>
-          <input id="openAiKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-…">
-        </label>
-        <div class="key-actions">
-          <button id="clearOpenAiKeyBtn" type="button" class="secondary">Очистить ключ</button>
-        </div>
-        <p class="muted">Ключ не сохраняется в localStorage и действует только до закрытия вкладки. Для постоянного и более безопасного варианта задайте OPENAI_API_KEY на сервере Render.</p>
-        <div>
-        <h2>Стартовый список</h2>
-        <div class="upload">
-          <strong>Стартовый список XLSX / CSV</strong>
-          <input id="rosterFile" type="file" accept=".xlsx,.xls,.csv,text/csv">
-          <span id="rosterName"><span class="file-check">○</span> Файл не выбран</span>
-          <button id="rosterLoadBtn" type="button" class="primary" disabled>Загрузить и обработать стартовый список</button>
-          <span id="rosterStatus">1. Выберите файл стартового списка.</span>
-          <progress id="rosterProgress" value="0" max="100" style="width:100%;display:none"></progress>
-        </div>
-        <div class="grid2">
-          
-
-        <div class="itra-online-box">
-          <button id="itraLookupBtn" type="button" class="secondary action-ready">Загрузить ITRA через AI</button>
-          <div id="itraLookupStatus" class="muted">После загрузки стартового списка нажмите кнопку для поиска ITRA PI участников.</div>
-        </div>
-        <label class="field">
-            <span>Зачёт</span>
-            <select id="genderFilter">
-              <option>Все</option>
-              <option selected>Женщины</option>
-              <option>Мужчины</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>Непредсказуемость</span>
-            <input id="sigma" type="number" min="5" max="45" value="20">
-          </label>
-        </div>
-        <p class="muted">XLSX и CSV читаются прямо на iPhone без внешних библиотек. Если PI нет в файле, его можно ввести вручную.</p>
-        <div class="table-wrap">
-          <table id="rosterTable">
-            <thead><tr><th>Спортсмен</th><th>PI</th><th>Техника</th><th>Выносливость</th><th>Форма</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-        </div>
-      </div>
-    </section>
-
-
     <section id="forecast" class="tabpanel">
       <div class="card">
         <h2>Прогноз на гонку</h2>
@@ -352,6 +299,59 @@
         </div>
       </div>
     </section>
+
+    <section id="roster" class="tabpanel">
+      <div class="card">
+        <h2>Стартовый список и баллы ITRA</h2>
+        <label class="field">
+          <span>ChatGPT / OpenAI API key</span>
+          <input id="openAiKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-…">
+        </label>
+        <div class="key-actions">
+          <button id="clearOpenAiKeyBtn" type="button" class="secondary">Очистить ключ</button>
+        </div>
+        <p class="muted">Ключ не сохраняется в localStorage и действует только до закрытия вкладки. Для постоянного и более безопасного варианта задайте OPENAI_API_KEY на сервере Render.</p>
+        <div>
+        <h2>Стартовый список</h2>
+        <div class="upload">
+          <strong>Стартовый список XLSX / CSV</strong>
+          <input id="rosterFile" type="file" accept=".xlsx,.xls,.csv,text/csv">
+          <span id="rosterName"><span class="file-check">○</span> Файл не выбран</span>
+          <button id="rosterLoadBtn" type="button" class="primary" disabled>Загрузить и обработать стартовый список</button>
+          <span id="rosterStatus">1. Выберите файл стартового списка.</span>
+          <progress id="rosterProgress" value="0" max="100" style="width:100%;display:none"></progress>
+        </div>
+        <div class="grid2">
+          
+
+        <div class="itra-online-box">
+          <button id="itraLookupBtn" type="button" class="secondary action-ready">Загрузить ITRA через AI</button>
+          <div id="itraLookupStatus" class="muted">После загрузки стартового списка нажмите кнопку для поиска ITRA PI участников.</div>
+        </div>
+        <label class="field">
+            <span>Зачёт</span>
+            <select id="genderFilter">
+              <option>Все</option>
+              <option selected>Женщины</option>
+              <option>Мужчины</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Непредсказуемость</span>
+            <input id="sigma" type="number" min="5" max="45" value="20">
+          </label>
+        </div>
+        <p class="muted">XLSX и CSV читаются прямо на iPhone без внешних библиотек. Если PI нет в файле, его можно ввести вручную.</p>
+        <div class="table-wrap">
+          <table id="rosterTable">
+            <thead><tr><th>Спортсмен</th><th>PI</th><th>Техника</th><th>Выносливость</th><th>Форма</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        </div>
+      </div>
+    </section>
+
 
     <section id="result" class="tabpanel">
       <div class="card">
