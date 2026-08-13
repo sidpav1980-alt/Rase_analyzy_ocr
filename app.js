@@ -840,10 +840,38 @@ function drawSurfaceStrip(samples){
 }
 
 
+
+function groupFordKmPoints(kms){
+  const pts=(Array.isArray(kms)?kms:[])
+    .map(Number)
+    .filter(Number.isFinite)
+    .sort((a,b)=>a-b);
+
+  const groups=[];
+  let current=null;
+
+  for(const km of pts){
+    if(!current || km-current.start>0.50){
+      if(current) groups.push(current);
+      current={start:km,end:km,points:[km]};
+    }else{
+      current.end=km;
+      current.points.push(km);
+    }
+  }
+  if(current) groups.push(current);
+
+  return groups.map(g=>({
+    start:g.start,
+    end:g.end,
+    points:g.points,
+    label:g.start.toFixed(1)
+  }));
+}
+
 function filterFordCandidatesClient(fords){
   if(!Array.isArray(fords)) return [];
 
-  // 1) Ignore waterways explicitly narrower than 1 m.
   const arr=fords
     .filter(f=>{
       const w=Number(f?.width_m ?? f?.width);
@@ -852,46 +880,14 @@ function filterFordCandidatesClient(fords){
     .filter(f=>Number.isFinite(Number(f?.km)))
     .sort((a,b)=>Number(a.km)-Number(b.km));
 
-  // 2) Merge a GROUP of nearby crossings into one ford.
-  // Important: cluster width is measured from the FIRST crossing,
-  // not transitively from every previous point.
-  // Example: 6.3, 6.5, 6.7 => one ford (6.3–6.7);
-  // 7.1, 7.2 => next ford, because 7.1 is >0.5 km from 6.3.
-  const clusters=[];
-  let current=null;
+  const groups=groupFordKmPoints(arr.map(f=>Number(f.km)));
 
-  for(const f of arr){
-    const km=Number(f.km);
-
-    if(!current || km-current.startKm>0.50){
-      if(current) clusters.push(current);
-      current={
-        startKm:km,
-        endKm:km,
-        members:[f],
-        ...f
-      };
-    }else{
-      current.endKm=km;
-      current.members.push(f);
-
-      // Prefer known width/name/id from any member.
-      if(current.width_m==null && f.width_m!=null) current.width_m=f.width_m;
-      if(!current.name && f.name) current.name=f.name;
-      if(current.osm_id==null && f.osm_id!=null) current.osm_id=f.osm_id;
-    }
-  }
-  if(current) clusters.push(current);
-
-  return clusters.map(c=>({
-    ...c,
-    km:c.startKm,
-    km_start:c.startKm,
-    km_end:c.endKm,
-    km_label:(c.endKm-c.startKm>=0.05)
-      ? `${c.startKm.toFixed(1)}–${c.endKm.toFixed(1)}`
-      : c.startKm.toFixed(1),
-    crossing_count:c.members.length
+  return groups.map(g=>({
+    km:g.start,
+    km_start:g.start,
+    km_end:g.end,
+    km_label:g.label,
+    crossing_count:g.points.length
   }));
 }
 
@@ -928,14 +924,22 @@ async function analyzeMapOSM(){
   }
 
   const data=await resp.json();
-    if(Array.isArray(data.fords)){
-      data.fords=filterFordCandidatesClient(data.fords);
-      data.ford_kms=data.fords.map(f=>Number(f.km)).filter(Number.isFinite);
-      data.ford_labels=data.fords.map(f=>f.km_label || Number(f.km).toFixed(1));
-      data.ford_count=data.fords.length;
-      const fordEl=$('fordKms')||$('fordsKm')||$('fordKmList');
-      if(fordEl && data.ford_labels) fordEl.textContent='Броды на км: '+data.ford_labels.join(', ');
+    {
+      let rawFordKm=[];
+      if(Array.isArray(data.ford_kms)) rawFordKm=data.ford_kms;
+      else if(Array.isArray(data.fords)) rawFordKm=data.fords.map(f=>Number(f?.km)).filter(Number.isFinite);
+
+      const groupedFords=groupFordKmPoints(rawFordKm);
+      data.ford_groups=groupedFords;
+      data.ford_count=groupedFords.length;
+      data.ford_kms=groupedFords.map(g=>g.start);
+      data.ford_labels=groupedFords.map(g=>g.label);
+      const cEl=$('fordCount')||$('fordsCount')||$('ford-count');
+      if(cEl) cEl.textContent=String(data.ford_count);
+      const lEl=$('fordKms')||$('fordsKm')||$('fordKmList')||$('ford-kms');
+      if(lEl) lEl.textContent=data.ford_labels.length ? 'Броды на км: '+data.ford_labels.join(', ') : 'Броды на км: —';
     }
+
   const elements=data.elements||[];
 
   const samples=pts.map(p=>({km:p.km,cls:classifyPointFromOSM(p,elements)}));

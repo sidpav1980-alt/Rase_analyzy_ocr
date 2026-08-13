@@ -5,6 +5,28 @@ import os, re, json, time
 import requests
 from PIL import Image
 import io
+
+
+def _group_ford_kms(kms, span_km=0.50):
+    try:
+        pts=sorted(float(x) for x in (kms or []))
+    except Exception:
+        return [], []
+    groups=[]
+    cur=None
+    for km in pts:
+        if cur is None or km-cur["start"] > span_km:
+            if cur is not None:
+                groups.append(cur)
+            cur={"start":km,"end":km}
+        else:
+            cur["end"]=km
+    if cur is not None:
+        groups.append(cur)
+    starts=[g["start"] for g in groups]
+    labels=[f'{g["start"]:.1f}' for g in groups]
+    return starts, labels
+
 try:
     import pytesseract
 except Exception:
@@ -501,7 +523,7 @@ def itra_batch():
 def health():
     return jsonify({
         "ok":True,
-        "version":"0.99",
+        "version":"0.01",
         "itra_enabled":bool(OPENROUTER_API_KEY),
         "model":OPENROUTER_MODEL
     })
