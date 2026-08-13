@@ -2463,12 +2463,12 @@ function renderRaceForecast(options={}){
     // Analysis-mode local penalties:
     // ford: +40 sec each;
     // trail: +60 sec per OSM trail km;
-    // dirt: +30 sec per OSM dirt/ground/gravel km.
+    // dirt: +30 sec/km; unknown: local pace floor 6:30/km.
     if(
       (fordPenaltyPer>0 && fordKms.length) ||
       (trailPenaltyPerKmSec>0 && trailSamples.length) ||
       (dirtPenaltyPerKmSec>0 && trailSamples.length) ||
-      (unknownPenaltyPerKmSec>0 && trailSamples.length)
+      (trailSamples.length>0)
     ){
       let cumExtra=0;
       f.groups.forEach(g=>{
@@ -2485,12 +2485,20 @@ function renderRaceForecast(options={}){
           : 0;
         const dirtExtra=dirtKm*dirtPenaltyPerKmSec;
 
-        const unknownKm=unknownPenaltyPerKmSec>0
+        const unknownKm=trailSamples.length
           ? surfaceDistanceInRange(trailSamples,g.from,g.to,'unknown')
           : 0;
-        const unknownExtra=unknownKm*unknownPenaltyPerKmSec;
 
-        const extra=fordExtra+trailExtra+dirtExtra+unknownExtra;
+        // Unknown OSM coverage is conservative: the unknown part of a segment
+        // must never be modeled faster than 6:30/km.
+        const groupKm=Math.max(0.001,g.distM/1000);
+        const knownExtra=fordExtra+trailExtra+dirtExtra;
+        const paceAfterKnown=(g.sec+knownExtra)/groupKm;
+        const unknownShare=Math.max(0,Math.min(1,unknownKm/groupKm));
+        const unknownTargetPace=Math.max(paceAfterKnown,390);
+        const unknownExtra=(unknownTargetPace-paceAfterKnown)*unknownShare*groupKm;
+
+        const extra=knownExtra+unknownExtra;
 
         g.trailKm=trailKm;
         g.dirtKm=dirtKm;
@@ -2844,7 +2852,7 @@ function bindRaceReference(role){
             trailSamples,
             trailPenaltyPerKmSec:60,
             dirtPenaltyPerKmSec:30,
-            unknownPenaltyPerKmSec:60,
+            unknownPenaltyPerKmSec:0,
             analysisMode:true
           });
         }else{
@@ -2910,7 +2918,7 @@ $('raceForecastGpxBtn')?.addEventListener('click',async()=>{
       trailSamples,
       trailPenaltyPerKmSec:60,
       dirtPenaltyPerKmSec:30,
-      unknownPenaltyPerKmSec:60,
+      unknownPenaltyPerKmSec:0,
       analysisMode:true
     });
     state.forecastMode='analysis';
@@ -2947,7 +2955,7 @@ function recalculateForecastWithCurrentMode(){
       trailSamples,
       trailPenaltyPerKmSec:60,
       dirtPenaltyPerKmSec:30,
-      unknownPenaltyPerKmSec:60,
+      unknownPenaltyPerKmSec:0,
       analysisMode:true
     });
   }else{
