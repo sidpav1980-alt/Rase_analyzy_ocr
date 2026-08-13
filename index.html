@@ -36,7 +36,7 @@
 </style>
 </head>
 <body>
-<div class="app-version">v0.27 ONLINE FULL</div>
+<div class="app-version">v0.29 ONLINE FULL</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Trail Race Analyzer</div>
@@ -193,14 +193,14 @@
       <div class="card">
         <h2>Прогноз на гонку</h2>
         <p class="muted">
-          Прогноз строится общей моделью по трём отдельным тренировкам: Силовой трейловой GPX, Быстрой трейловой GPX и Гоночной (плоской) GPX. Для расчёта нужны все три файла.
+          Прогноз строится общей моделью по трём отдельным тренировкам: Силовой трейловой GPX, Быстрой трейловой GPX и Скоростной плоской GPX. Для расчёта нужны все три файла.
         </p>
 
         
         <div class="forecast-ref-grid">
           <div class="upload">
             <strong>1. Силовая трейловая GPX</strong>
-            <div class="muted">Большой набор и крутые подъёмы. Из неё модель учит, как уклон меняет скорость.</div>
+            <div class="muted">Большой набор и крутые подъёмы. Из неё модель учит, как уклон меняет скорость, и оценивает запас выносливости по длительности и набору.</div>
             <input id="strengthActivityFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml,*/*">
             <span id="strengthActivityName"><span class="file-check">○</span> Файл не выбран</span>
             <button id="strengthActivityLoadBtn" type="button" class="primary action-idle" disabled>Загрузить Силовую трейловую GPX</button>
@@ -209,7 +209,7 @@
 
           <div class="upload">
             <strong>2. Быстрая трейловая GPX</strong>
-            <div class="muted">Быстрый трейл с высоким устойчивым усилием. Даёт рабочую скорость и реакцию на умеренный рельеф.</div>
+            <div class="muted">Быстрый трейл с высоким устойчивым усилием. Даёт рабочую скорость, реакцию на умеренный рельеф и дополнительную оценку выносливости.</div>
             <input id="fastTrailActivityFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml,*/*">
             <span id="fastTrailActivityName"><span class="file-check">○</span> Файл не выбран</span>
             <button id="fastTrailActivityLoadBtn" type="button" class="primary action-idle" disabled>Загрузить Быструю трейловую GPX</button>
@@ -217,12 +217,12 @@
           </div>
 
           <div class="upload">
-            <strong>3. Гоночная (плоская) GPX — минимум 10 км</strong>
+            <strong>3. Скоростная плоская GPX — минимум 10 км</strong>
             <div class="muted">Минимальная длина файла — 10 км. Например, быстрая плоская десятка. Даёт базовый темп и скорость без большого влияния рельефа. Плоская гоночная GPX становится главным скоростным эталоном: её реальное время масштабируется на дистанцию гонки, а затем применяются рельеф, покрытие, броды и физиологические ограничения.</div>
             <input id="flatRaceActivityFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml,*/*">
             <span id="flatRaceActivityName"><span class="file-check">○</span> Файл не выбран</span>
             <div class="forecast-action-separator" aria-hidden="true"></div>
-<button id="flatRaceActivityLoadBtn" type="button" class="primary action-idle" disabled>Загрузить Гоночную (плоскую) GPX</button>
+<button id="flatRaceActivityLoadBtn" type="button" class="primary action-idle" disabled>Загрузить Скоростную плоскую GPX</button>
             <span id="flatRaceActivityStatus">Не загружена.</span>
           </div>
         </div>

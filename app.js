@@ -2122,6 +2122,69 @@ function forecastSurfaceLabel(cls){
   return m[String(cls||'')]||'';
 }
 
+
+function enduranceCapacityFromReferences(){
+  const r=state.raceReferences||{};
+  const strength=r.strength;
+  const fast=r.fastTrail;
+  if(!strength || !fast) return null;
+
+  function eqHours(ref,role){
+    const sec=Number(ref.elapsedSec||0);
+    const h=Math.max(0.25,sec/3600);
+    const km=Math.max(0.1,Number(ref.dist||0));
+    const gain=Math.max(0,Number(ref.gain||0));
+    const climbDensity=gain/km; // m+/km
+
+    // Vertical load increases the endurance value of the session.
+    // Strength reference is intentionally more influential than fast-trail.
+    const verticalBonus=Math.min(role==='strength'?0.55:0.30,
+      (climbDensity/120)*(role==='strength'?0.55:0.30));
+
+    return h*(1+Math.max(0,verticalBonus));
+  }
+
+  const strengthEq=eqHours(strength,'strength');
+  const fastEq=eqHours(fast,'fast');
+
+  // Both files matter, but the strength/trail-long reference is the main durability source.
+  const capacityHours=0.72*strengthEq+0.28*fastEq;
+
+  return {
+    capacityHours,
+    strengthEqHours:strengthEq,
+    fastEqHours:fastEq
+  };
+}
+
+function enduranceCalibrationFactor(baseSec){
+  const c=enduranceCapacityFromReferences();
+  if(!c) return {factor:1,capacityHours:0,targetHours:baseSec/3600,ratio:1};
+
+  const targetHours=Math.max(0.25,baseSec/3600);
+  const ratio=targetHours/Math.max(0.5,c.capacityHours);
+
+  // If target duration fits inside demonstrated durability, no extra slowdown.
+  // If it exceeds it, pace gradually falls with duration.
+  let factor=1;
+  if(ratio>1){
+    factor=1+Math.min(0.24,Math.pow(ratio-1,1.08)*0.115);
+  }else if(ratio<0.70){
+    // Strong long-duration evidence can slightly reduce the generic ultra penalty,
+    // but never make the forecast unrealistically faster.
+    factor=0.995;
+  }
+
+  return {
+    factor,
+    capacityHours:c.capacityHours,
+    targetHours,
+    ratio,
+    strengthEqHours:c.strengthEqHours,
+    fastEqHours:c.fastEqHours
+  };
+}
+
 function calculateRaceForecast(){
   if(!(state.dist>0) || !(state.track?.length>1)){
     throw new Error('Сначала загрузите GPX трассы');
@@ -2137,7 +2200,7 @@ function calculateRaceForecast(){
 
   const flatAnchor=flatRaceAnchorForTarget();
   if(!flatAnchor){
-    throw new Error('Гоночная (плоская) GPX должна быть не менее 10 км и содержать корректное время');
+    throw new Error('Скоростная плоская GPX должна быть не менее 10 км и содержать корректное время');
   }
 
   const effort=Number($('raceEffortPct')?.value||100);
@@ -2185,6 +2248,19 @@ function calculateRaceForecast(){
     totalSec=0;
     detailed.forEach(s=>{
       s.sec*=ultraFactor;
+      totalSec+=s.sec;
+      s.cumSec=totalSec;
+    });
+  }
+
+  // v0.28: durability must react to the uploaded strength and fast-trail files.
+  // Previously physiology was mostly diagnostic and replacing the strength GPX
+  // could leave the race prediction unchanged.
+  const enduranceCalibration=enduranceCalibrationFactor(totalSec);
+  if(enduranceCalibration.factor!==1){
+    totalSec=0;
+    detailed.forEach(s=>{
+      s.sec*=enduranceCalibration.factor;
       totalSec+=s.sec;
       s.cumSec=totalSec;
     });
@@ -2261,7 +2337,8 @@ function calculateRaceForecast(){
     groups,
     physiology,
     flatAnchor,
-    ultraFactor
+    ultraFactor,
+    enduranceCalibration
   };
 }
 
@@ -2270,19 +2347,18 @@ function raceFormulaText(){
   const anchor=flatRaceAnchorForTarget();
   if(!info || !anchor) return 'Загрузите все 3 эталонные GPX.';
 
-  const refs=Object.values(state.raceReferences||{}).filter(Boolean);
-  const longest=refs.slice().sort((a,b)=>(b.elapsedSec||0)-(a.elapsedSec||0))[0];
-  const longestH=(longest?.elapsedSec||0)/3600;
+  const cap=enduranceCapacityFromReferences();
 
-  return `Калибровка считается по данным загруженных GPX, а не по названию файла. `
-    + `Плоский эталон: ${anchor.rawFileKm.toFixed(1)} км; калибровочный темп `
+  return `Калибровка считается по фактическим данным трёх загруженных GPX. `
+    + `Плоская GPX задаёт скоростной якорь: ${anchor.rawFileKm.toFixed(1)} км, `
     + `${fmtPaceSecPerKm(anchor.refPaceSec)}. `
-    + `После масштабирования дистанции применяется отдельная усталость по длительности: `
-    + `чем дольше прогноз относительно самого длительного загруженного эталона`
-    + `${longestH?` (${longestH.toFixed(1)} ч)`:''}, тем сильнее падает расчётная скорость. `
-    + `Рельеф: динамические веса силовой/быстрой трейловой GPX `
-    + `${(info.strengthW*100).toFixed(0)}%/${(info.fastW*100).toFixed(0)}%. `
-    + `Затем учитываются VO₂max, уклон, а при анализе трассы — тропа, грунт и броды.`;
+    + `Быстрая трейловая GPX влияет на рабочую скорость и реакцию на умеренный рельеф. `
+    + `Силовая трейловая GPX влияет на уклон и запас выносливости: `
+    + `длительность + набор на км преобразуются в эквивалентную длительность. `
+    + (cap?`Расчётный запас выносливости по двум трейловым файлам: ${cap.capacityHours.toFixed(1)} ч. `:'')
+    + `Если прогнозируемая гонка длится дольше этого запаса, вводится дополнительное замедление. `
+    + `Далее учитываются Riegel, рельеф, VO₂max, а при анализе трассы — `
+    + `тропа +1:00/км, грунт +0:30/км, неизвестно +1:00/км и броды +40 с.`;
 }
 
 function surfaceDistanceInRange(samples,fromKm,toKm,cls){
@@ -2431,7 +2507,15 @@ function renderRaceForecast(options={}){
         + `${f.flatAnchor.targetKm.toFixed(1)} км: ${fmtPaceSecPerKm(f.flatAnchor.targetPaceSec)}`;
     }
     $('raceForecastRange').textContent=`${fmtClockSec(f.lowSec)}–${fmtClockSec(f.highSec)}`;
-    if($('raceDurationFactor')) $('raceDurationFactor').textContent=(f.physiology.durationFactor*100).toFixed(0)+'%';
+    if($('raceDurationFactor')){
+      const ec=f.enduranceCalibration;
+      if(ec){
+        const pct=(100/Math.max(1,ec.factor)).toFixed(0);
+        $('raceDurationFactor').textContent=`${pct}% · запас ${ec.capacityHours.toFixed(1)} ч`;
+      }else{
+        $('raceDurationFactor').textContent=(f.physiology.durationFactor*100).toFixed(0)+'%';
+      }
+    }
     if($('raceHrFactor')) $('raceHrFactor').textContent=(f.physiology.hrFactor*100).toFixed(0)+'%';
     if($('raceAcidTime')) $('raceAcidTime').textContent=Number.isFinite(f.physiology.acidHours)?f.physiology.acidHours.toFixed(1)+' ч':'—';
     if($('raceVo2Factor')) {
@@ -2472,7 +2556,7 @@ function raceRefUI(role){
 }
 function raceRefTitle(role){
   return role==='strength'?'Силовая трейловая GPX':
-         role==='fastTrail'?'Быстрая трейловая GPX':'Гоночная (плоская) GPX';
+         role==='fastTrail'?'Быстрая трейловая GPX':'Скоростная плоская GPX';
 }
 
 function forecastInputsReady(){
@@ -2608,7 +2692,7 @@ function bindRaceReference(role){
 
       if(role==='flatRace' && parsed.dist < 10){
         throw new Error(
-          `Гоночная (плоская) GPX должна быть не менее 10 км. В файле: ${parsed.dist.toFixed(2)} км.`
+          `Скоростная плоская GPX должна быть не менее 10 км. В файле: ${parsed.dist.toFixed(2)} км.`
         );
       }
 
@@ -2642,6 +2726,9 @@ function bindRaceReference(role){
         }else{
           // No prior mode: keep values cleared and require explicit first calculation.
           updateFinalCalcAvailability();
+        }
+        if($('raceForecastStatus') && mode){
+          $('raceForecastStatus').textContent += ` · Эталон «${raceRefTitle(role)}» заменён, прогноз пересчитан.`;
         }
       }
     }catch(err){
