@@ -1417,56 +1417,59 @@ function clearResultForecast(){
 
 
 function getBestTrainingHr(){
-  const v=Number($('refAvgHr')?.value||state.bestTraining?.hr||0);
-  return Number.isFinite(v) ? v : 0;
+  const cal=trainingHrCalibration();
+  return cal ? cal.upperWorkingHr : 0;
 }
 
 function buildHrStrategy(){
   const dist=Number(state.dist||0);
-  const avgHr=getBestTrainingHr();
-  if(!(dist>0) || !(avgHr>0)) return [];
+  const cal=trainingHrCalibration();
+  if(!(dist>0) || !cal) return [];
 
-  // Use best-training HR as an anchor.
-  // Early race = controlled, middle = working range, final = race effort.
-  // Clamp to sane running ranges so OCR mistakes don't create absurd targets.
   const clamp=(x,a,b)=>Math.max(a,Math.min(b,Math.round(x)));
+  const sustainable=cal.sustainableHr;
+  const upper=cal.upperWorkingHr;
+  const threshold=cal.thresholdHr;
+  const finish=cal.finishCeiling;
 
-  const earlyLo=clamp(avgHr-10,120,185);
-  const earlyHi=clamp(avgHr-7,earlyLo,190);
+  // Long-race guidance is now bounded by BOTH endurance GPXs and the observed
+  // fast-session distribution.
+  const earlyLo=clamp(sustainable-7,120,195);
+  const earlyHi=clamp(Math.min(upper-8,sustainable+1),earlyLo,198);
 
-  const midLo=clamp(avgHr-7,120,190);
-  const midHi=clamp(avgHr-3,midLo,195);
+  const midLo=clamp(sustainable-3,120,198);
+  const midHi=clamp(Math.min(upper-3,threshold-3),midLo,200);
 
-  const lateLo=clamp(avgHr-3,120,195);
-  const lateHi=clamp(avgHr+1,lateLo,198);
+  const lateLo=clamp(Math.max(sustainable,upper-6),120,200);
+  const lateHi=clamp(Math.min(threshold+1,upper+2),lateLo,202);
 
-  const finishLo=clamp(avgHr,120,198);
-  const finishHi=clamp(avgHr+5,finishLo,202);
+  const finishLo=clamp(Math.max(upper-2,threshold-4),120,202);
+  const finishHi=clamp(finish,finishLo,205);
 
-  const p1=Math.max(1,Math.round(dist*0.52));
-  const p2=Math.max(p1+1,Math.round(dist*0.78));
-  const p3=Math.max(p2+1,Math.round(dist*0.95));
+  const p1=Math.max(1,Math.round(dist*0.35));
+  const p2=Math.max(p1+1,Math.round(dist*0.70));
+  const p3=Math.max(p2+1,Math.round(dist*0.92));
 
   return [
     {
       km:`0–${p1} км`,
       hr:`${earlyLo}–${earlyHi}`,
-      mode:'На подъёмах держать запас. Короткий выход выше диапазона допустим, но не висеть там постоянно.'
+      mode:'Контролируемый старт. На подъёмах допустим короткий выход к верхней границе, но без раннего закисления.'
     },
     {
       km:`${p1}–${p2} км`,
       hr:`${midLo}–${midHi}`,
-      mode:'Рабочий горный пульс. На спусках и лёгких участках дать пульсу опуститься и восстановиться.'
+      mode:'Рабочая зона по данным тренировочных GPX. На спусках пульс специально не удерживать.'
     },
     {
       km:`${p2}–${p3} км`,
       hr:`${lateLo}–${lateHi}`,
-      mode:'Если питание и ноги в порядке — постепенно повышать усилие. Основная атака.'
+      mode:'При нормальном питании и состоянии можно постепенно переходить к верхнему рабочему диапазону.'
     },
     {
       km:`${p3}–${dist.toFixed(1).replace(/\.0$/,'')} км`,
-      hr:`${finishLo}–${finishHi}+`,
-      mode:'Финишный участок. Можно работать без экономии, если нет признаков перегрева или развала.'
+      hr:`${finishLo}–${finishHi}`,
+      mode:'Финишный блок. Верхняя граница основана на реально наблюдавшемся HR скоростной тренировки.'
     }
   ];
 }
@@ -1480,7 +1483,7 @@ function renderHrStrategy(){
   tbody.innerHTML='';
 
   if(!rows.length){
-    summary.textContent='Нужны GPX трассы и средний пульс лучшей тренировки.';
+    summary.textContent='Нужны GPX трассы и тренировочные GPX с HR.';
     return;
   }
 
@@ -1489,8 +1492,11 @@ function renderHrStrategy(){
       `<tr><td>${r.km}</td><td><b>${r.hr}</b></td><td>${r.mode}</td></tr>`);
   });
 
-  const avgHr=getBestTrainingHr();
-  summary.textContent=`Основа: средний пульс лучшей тренировки ${avgHr} уд/мин. На спусках высокий пульс специально не удерживать.`;
+  const cal=trainingHrCalibration();
+  summary.textContent=
+    `HR-модель по распределению тренировок: устойчивый ${Math.round(cal.sustainableHr)}, `
+    + `скоростной рабочий ${Math.round(cal.upperWorkingHr)}, `
+    + `пороговый ориентир ${Math.round(cal.thresholdHr)} уд/мин.`;
 }
 
 function finishPrediction(){
@@ -1864,6 +1870,17 @@ function parseTimedActivityGPX(text){
 
   const pointHrs=pts.map(p=>Number(p.hr)).filter(x=>Number.isFinite(x)&&x>=50&&x<=230);
   const avgHr=pointHrs.length?pointHrs.reduce((a,b)=>a+b,0)/pointHrs.length:NaN;
+  const sortedHrs=pointHrs.slice().sort((a,b)=>a-b);
+  const hrQ25=q(sortedHrs,0.25);
+  const hrQ50=q(sortedHrs,0.50);
+  const hrQ75=q(sortedHrs,0.75);
+  const hrQ90=q(sortedHrs,0.90);
+  const hrQ95=q(sortedHrs,0.95);
+  const hrMax=sortedHrs.length?sortedHrs[sortedHrs.length-1]:NaN;
+  const highHrThreshold=Number.isFinite(hrQ75)?hrQ75:avgHr;
+  const highHrShare=(pointHrs.length && Number.isFinite(highHrThreshold))
+    ? pointHrs.filter(v=>v>=highHrThreshold).length/pointHrs.length
+    : 0;
 
   const hrSamples=samples.filter(s=>Number.isFinite(s.hr)&&s.hr>=50&&s.hr<=230);
   let hrSpeedSlope=30;
@@ -1888,6 +1905,15 @@ function parseTimedActivityGPX(text){
     avgHr:Number.isFinite(avgHr)?avgHr:0,
     hrPointCount:pointHrs.length,
     hrSpeedSlope,
+    hrStats:{
+      q25:Number.isFinite(hrQ25)?hrQ25:0,
+      median:Number.isFinite(hrQ50)?hrQ50:0,
+      q75:Number.isFinite(hrQ75)?hrQ75:0,
+      q90:Number.isFinite(hrQ90)?hrQ90:0,
+      q95:Number.isFinite(hrQ95)?hrQ95:0,
+      max:Number.isFinite(hrMax)?hrMax:0,
+      highShare:highHrShare
+    },
     calibratedFlatSpeed,
     calibrationStats:{
       flatQ50:q50,
@@ -1951,34 +1977,92 @@ function combinedRaceModelInfo(){
   return {flatSpeed,gradeCoeff,fatigueK,fastTrailFactor,strengthW,fastW};
 }
 function trainingHrCalibration(){
-  const refs=Object.values(state.raceReferences||{}).filter(Boolean);
+  const refsObj=state.raceReferences||{};
+  const refs=Object.values(refsObj).filter(Boolean);
   const withHr=refs.filter(r=>Number(r.avgHr)>60 && Number(r.avgHr)<220);
   const manual=Number($('refAvgHr')?.value||state.bestTraining?.hr||0);
-  const lthr=Number($('lthr')?.value||0);
+  const manualLthr=Number($('lthr')?.value||0);
 
   if(withHr.length){
-    let wSum=0, hrSum=0, slopeSum=0, slopeW=0;
+    // Sustainable anchor: longer sessions are more representative of long-race HR.
+    let wSum=0, sustainableSum=0, slopeSum=0, slopeW=0;
     for(const r of withHr){
-      const hours=Math.max(0.5,Number(r.elapsedSec||0)/3600);
-      const w=Math.max(0.7,Math.min(2.0,Math.sqrt(hours)));
-      hrSum+=Number(r.avgHr)*w;
-      wSum+=w;
+      const hours=Math.max(0.4,Number(r.elapsedSec||0)/3600);
+      const durationW=Math.max(0.65,Math.min(2.2,Math.sqrt(hours)));
+      const med=Number(r.hrStats?.median||r.avgHr);
+      const sustainable=(Number(r.avgHr)*0.55 + med*0.45);
+      sustainableSum+=sustainable*durationW;
+      wSum+=durationW;
       if(Number(r.hrSpeedSlope)>0){
-        slopeSum+=Number(r.hrSpeedSlope)*w;
-        slopeW+=w;
+        slopeSum+=Number(r.hrSpeedSlope)*durationW;
+        slopeW+=durationW;
       }
     }
+
+    const sustainableHr=sustainableSum/Math.max(0.001,wSum);
+
+    // The short/flat speed reference is the best upper physiological anchor.
+    // If it has HR, use its real distribution instead of pulling targets down
+    // to the mean of all training files.
+    const speedRef=(refsObj.flatRace && Number(refsObj.flatRace.avgHr)>60)
+      ? refsObj.flatRace
+      : withHr.slice().sort((a,b)=>(a.elapsedSec||0)-(b.elapsedSec||0))[0];
+
+    const speedStats=speedRef?.hrStats||{};
+    const speedAvg=Number(speedRef?.avgHr||0);
+    const speedMedian=Number(speedStats.median||speedAvg);
+    const speedQ75=Number(speedStats.q75||speedAvg);
+    const speedQ90=Number(speedStats.q90||speedQ75||speedAvg);
+    const speedQ95=Number(speedStats.q95||speedQ90||speedAvg);
+    const speedMax=Number(speedStats.max||speedQ95||speedAvg);
+
+    // Upper working HR is intentionally based mostly on the actual speed-race
+    // average/median. q75/q90 are kept as threshold/finish ceilings.
+    const upperWorkingHr=Math.max(
+      sustainableHr,
+      speedAvg*0.60 + speedMedian*0.25 + speedQ75*0.15
+    );
+
+    // Estimate threshold only from observed HR distribution; don't invent it
+    // below the athlete's actual fast-session average.
+    const estimatedLthr=manualLthr>0
+      ? manualLthr
+      : Math.max(upperWorkingHr+2, Math.min(speedQ90||upperWorkingHr+5, speedQ95||upperWorkingHr+8));
+
     return {
-      anchorHr:hrSum/Math.max(0.001,wSum),
+      anchorHr:sustainableHr,
+      sustainableHr,
+      upperWorkingHr,
+      thresholdHr:estimatedLthr,
+      finishCeiling:Math.max(estimatedLthr,Math.min(speedMax||estimatedLthr+6,estimatedLthr+10)),
       speedSlope:slopeW?slopeSum/slopeW:30,
-      source:`GPX: ${withHr.length}/3 с пульсом`,
+      source:`GPX: ${withHr.length}/3 с HR; верхний ориентир ${Math.round(upperWorkingHr)}`,
       count:withHr.length,
-      lthr:lthr>0?lthr:0
+      lthr:estimatedLthr,
+      speedRefAvg:speedAvg,
+      speedRefMedian:speedMedian,
+      speedRefQ75:speedQ75,
+      speedRefQ90:speedQ90,
+      speedRefMax:speedMax
     };
   }
 
-  if(manual>60) return {anchorHr:manual,speedSlope:30,source:'ручной средний пульс',count:0,lthr:lthr>0?lthr:0};
-  if(lthr>0) return {anchorHr:lthr*0.90,speedSlope:30,source:'LTHR',count:0,lthr};
+  if(manual>60){
+    const lthr=manualLthr>0?manualLthr:manual+7;
+    return {
+      anchorHr:manual,sustainableHr:manual,upperWorkingHr:manual+4,
+      thresholdHr:lthr,finishCeiling:lthr+6,speedSlope:30,
+      source:'ручной средний пульс',count:0,lthr
+    };
+  }
+  if(manualLthr>0){
+    return {
+      anchorHr:manualLthr*0.88,sustainableHr:manualLthr*0.88,
+      upperWorkingHr:manualLthr*0.95,thresholdHr:manualLthr,
+      finishCeiling:manualLthr+6,speedSlope:30,
+      source:'LTHR',count:0,lthr:manualLthr
+    };
+  }
   return null;
 }
 
@@ -2725,35 +2809,62 @@ function renderRaceForecast(options={}){
       f.highSec=f.totalSec*1.10;
       f.physiology=racePhysiologyFactors(f.totalSec);
     }
-    // v0.39: HR comes from the uploaded training GPXs and the predicted pace of this segment.
+    // v0.50: HR targets use the real HR DISTRIBUTION of the uploaded GPXs.
+    // Fast/flat GPX sets the upper working/threshold anchor; longer GPXs set
+    // sustainable HR. Race duration decides where between those anchors we sit.
     const hrCal=trainingHrCalibration();
     const forecastHrForGroup=(g)=>{
       if(!hrCal) return '—';
 
+      const totalHours=Math.max(0.5,Number(f.totalSec||0)/3600);
       const raceAvg=Math.max(1,Number(f.avgPaceSec||g.paceSec));
       const localPace=Math.max(1,Number(g.paceSec||raceAvg));
       const speedRatio=raceAvg/localPace;
       const progress=Math.max(0,Math.min(1,((g.from+g.to)/2)/Math.max(0.1,state.dist)));
 
-      let center=hrCal.anchorHr + (speedRatio-1)*hrCal.speedSlope;
-      center += progress<0.20 ? -6 :
-                progress<0.55 ? -3 :
-                progress<0.80 ? 0 :
-                progress<0.95 ? 3 : 6;
+      // Duration blend:
+      // <=1.25h stays close to fast-session HR;
+      // 2-4h gradually moves toward sustainable HR;
+      // >6h is mostly sustainable, but still respects the athlete's observed upper range.
+      const durationBlend=Math.max(0,Math.min(1,(totalHours-1.0)/5.0));
+      let center=
+        hrCal.upperWorkingHr*(1-durationBlend) +
+        hrCal.sustainableHr*durationBlend;
 
+      // Predicted pace modifies HR, but much less than in v0.49 so slow terrain
+      // doesn't incorrectly drag HR 10-15 bpm below the athlete's real physiology.
+      center += (speedRatio-1)*Math.min(24,hrCal.speedSlope*0.60);
+
+      // Race progression: controlled start -> working middle -> stronger finish.
+      center += progress<0.15 ? -5 :
+                progress<0.45 ? -2 :
+                progress<0.75 ? 1 :
+                progress<0.92 ? 4 : 8;
+
+      // Uphill: allow higher HR because pace is naturally slower for the same effort.
+      // Downhill: don't force HR artificially high.
       const grade=Number(g.grade||0);
-      if(grade>0.02) center+=Math.min(5,grade*55);
-      if(grade<-0.02) center-=Math.min(4,Math.abs(grade)*35);
+      if(grade>0.02) center+=Math.min(7,grade*70);
+      if(grade<-0.03) center-=Math.min(3,Math.abs(grade)*20);
 
-      if(hrCal.lthr>0){
-        const maxFrac=progress<0.25?0.94:
-                      progress<0.75?0.97:
-                      progress<0.95?1.00:1.03;
-        center=Math.min(center,hrCal.lthr*maxFrac);
-      }
+      // Physiological ceilings from observed fast-session distribution.
+      const normalCeiling=progress<0.70
+        ? hrCal.thresholdHr-2
+        : progress<0.93
+          ? hrCal.thresholdHr+1
+          : hrCal.finishCeiling;
 
-      center=Math.max(105,Math.min(198,center));
-      const spread=progress<0.25?3:progress<0.90?3:4;
+      center=Math.min(center,normalCeiling);
+
+      // Don't let a mountainous/slow predicted pace collapse HR below the
+      // sustainable training anchor by more than a controlled amount.
+      const floor=
+        hrCal.sustainableHr +
+        (progress<0.20?-8:progress<0.70?-5:progress<0.92?-2:1);
+      center=Math.max(center,floor);
+
+      center=Math.max(105,Math.min(202,center));
+      const spread=progress<0.20?4:progress<0.90?4:5;
       return `${Math.round(center-spread)}–${Math.round(center+spread)}`;
     };
     state.raceForecast=f;
@@ -3046,7 +3157,9 @@ function bindRaceReference(role){
       status.textContent=
         `✓ ${parsed.dist.toFixed(2)} км · +${Math.round(parsed.gain)} м · `
         + `${fmtClockSec(parsed.elapsedSec)} · ${fmtPaceSecPerKm(parsed.elapsedSec/parsed.dist)}`
-        + (parsed.avgHr>0?` · HR ${Math.round(parsed.avgHr)}`:' · HR нет');
+        + (parsed.avgHr>0
+          ? ` · HR ср ${Math.round(parsed.avgHr)} · med ${Math.round(parsed.hrStats?.median||parsed.avgHr)} · q75 ${Math.round(parsed.hrStats?.q75||parsed.avgHr)} · max ${Math.round(parsed.hrStats?.max||parsed.avgHr)}`
+          : ' · HR нет');
       setActionState(btnId,'success');
       updateRaceReferenceState();
 
