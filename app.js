@@ -6,14 +6,12 @@ const state = {
   loss: 0,
   roster: [],
   shots: [],
-  raceModel: {
-    coeff: [0.76144302,-4.95094047,3.48879484,3.46567991,-14.16237821,-0.34881024],
-    source: 'activity_23810601185.gpx',
-    segmentCount: 85,
-    dist: 17.132,
-    gain: 2901,
-    elapsedSec: 22152
+  raceReferences: {
+    strength: null,
+    fastTrail: null,
+    flatRace: null
   },
+  raceModel: null,
   raceForecast: null,
   deferredPrompt: null
 };
@@ -1544,25 +1542,74 @@ function parseTimedActivityGPX(text){
   const coeff=fitRaceModel(samples);
   if(!coeff || coeff.some(x=>!Number.isFinite(x))) throw new Error('Не удалось откалибровать модель');
 
+  const elapsedSec=(pts[pts.length-1].ts-pts[0].ts)/1000;
   return {
     coeff,
     source:'uploaded activity',
     segmentCount:samples.length,
     dist:totalKm,
     gain,
-    elapsedSec:(pts[pts.length-1].ts-pts[0].ts)/1000
+    elapsedSec,
+    avgSpeed:(totalKm*1000)/Math.max(1,elapsedSec)
   };
 }
 
+function allRaceReferencesReady(){
+  return !!(state.raceReferences?.strength && state.raceReferences?.fastTrail && state.raceReferences?.flatRace);
+}
+
+function combinedRaceModelInfo(){
+  const r=state.raceReferences||{};
+  if(!allRaceReferencesReady()) return null;
+
+  // Absolute flat speed comes from the flat race (e.g. a 10 km race).
+  const flatSpeed=r.flatRace.avgSpeed;
+
+  // Grade-response is blended from two trail references:
+  // strength trail dominates steep grades; fast trail stabilizes moderate terrain.
+  const cs=r.strength.coeff, cf=r.fastTrail.coeff;
+  const gradeCoeff=[
+    0,
+    cs[1]*0.65+cf[1]*0.35,
+    cs[2]*0.65+cf[2]*0.35,
+    cs[3]*0.65+cf[3]*0.35,
+    cs[4]*0.65+cf[4]*0.35
+  ];
+
+  // Fatigue is learned from both trail files, with a conservative clamp
+  // because reference sessions are shorter than the target ultra.
+  const fatigueK=Math.max(-0.40,Math.min(0,
+    (Number(cs[5]||0)*0.55)+(Number(cf[5]||0)*0.45)
+  ));
+
+  // Fast-trail session provides a mild intensity/economy correction.
+  // Compare its estimated flat-equivalent intercept with the flat-race speed,
+  // but keep the correction small.
+  const fastFlatEstimate=Math.exp(cf[0]);
+  const intensityRatio=Math.max(0.90,Math.min(1.10,fastFlatEstimate/Math.max(0.1,flatSpeed)));
+  const fastTrailFactor=Math.pow(intensityRatio,0.20);
+
+  return {flatSpeed,gradeCoeff,fatigueK,fastTrailFactor};
+}
+
 function raceModelSpeed(grade,progress,effortPct=100){
-  const c=state.raceModel?.coeff;
-  if(!c || c.length<6) return NaN;
-  // clamp grades beyond reference range to avoid explosive extrapolation
+  const info=combinedRaceModelInfo();
+  if(!info) return NaN;
+
   const g=Math.max(-0.45,Math.min(0.45,grade));
   const up=Math.max(g,0),dn=Math.max(-g,0);
-  const logv=c[0]+c[1]*up+c[2]*up*up+c[3]*dn+c[4]*dn*dn+c[5]*Math.max(0,Math.min(1,progress));
-  const v=Math.exp(logv)*(Math.max(70,Math.min(130,effortPct))/100);
-  return Math.max(0.25,Math.min(6,v));
+  const c=info.gradeCoeff;
+
+  const gradeFactor=Math.exp(
+    c[1]*up+c[2]*up*up+c[3]*dn+c[4]*dn*dn
+  );
+  const fatigueFactor=Math.exp(
+    info.fatigueK*Math.max(0,Math.min(1,progress))
+  );
+  const effortFactor=Math.max(70,Math.min(130,effortPct))/100;
+
+  const v=info.flatSpeed*gradeFactor*info.fastTrailFactor*fatigueFactor*effortFactor;
+  return Math.max(0.25,Math.min(7,v));
 }
 
 function buildRaceMicroSegments(){
@@ -1588,6 +1635,9 @@ function buildRaceMicroSegments(){
 function calculateRaceForecast(){
   if(!(state.dist>0) || !(state.track?.length>1)){
     throw new Error('Сначала загрузите GPX трассы');
+  }
+  if(!allRaceReferencesReady()){
+    throw new Error('Загрузите все 3 эталонные GPX тренировки');
   }
   const effort=Number($('raceEffortPct')?.value||100);
   const groupKm=Math.max(1,Math.min(10,Number($('forecastStepKm')?.value||5)));
@@ -1637,10 +1687,14 @@ function calculateRaceForecast(){
 }
 
 function raceFormulaText(){
-  const c=state.raceModel?.coeff||[];
-  if(c.length<6) return '—';
+  const info=combinedRaceModelInfo();
+  if(!info) return 'Загрузите все 3 эталонные GPX.';
+  const c=info.gradeCoeff;
   const f=n=>(n>=0?'+ ':'− ')+Math.abs(n).toFixed(3);
-  return `ln(v) = ${c[0].toFixed(3)} ${f(c[1])}·G+ ${f(c[2])}·G+² ${f(c[3])}·G− ${f(c[4])}·G−² ${f(c[5])}·progress;  v в м/с`;
+  return `v = Vflat × Fgrade × FfastTrail × Ffatigue × Effort; `
+    + `Vflat=${info.flatSpeed.toFixed(2)} м/с; `
+    + `ln(Fgrade)=${f(c[1])}·G+ ${f(c[2])}·G+² ${f(c[3])}·G− ${f(c[4])}·G−²; `
+    + `FfastTrail=${info.fastTrailFactor.toFixed(3)}; fatigueK=${info.fatigueK.toFixed(3)}`;
 }
 
 function renderRaceForecast(){
@@ -1667,9 +1721,11 @@ function renderRaceForecast(){
     $('raceForecastTime').textContent=fmtClockSec(f.totalSec);
     $('raceForecastPace').textContent=fmtPaceSecPerKm(f.avgPaceSec);
     $('raceForecastRange').textContent=`${fmtClockSec(f.lowSec)}–${fmtClockSec(f.highSec)}`;
-    $('raceModelSource').textContent=state.raceModel?.source||'—';
+    $('raceModelSource').textContent=allRaceReferencesReady()
+      ? `${state.raceReferences.strength.source} + ${state.raceReferences.fastTrail.source} + ${state.raceReferences.flatRace.source}`
+      : 'нужно 3 GPX';
     $('raceModelFormula').textContent=raceFormulaText();
-    $('raceForecastStatus').textContent=`✓ Рассчитано ${state.dist.toFixed(1)} км по ${state.raceModel.segmentCount} калибровочным участкам.`;
+    $('raceForecastStatus').textContent=`✓ Общий прогноз по 3 GPX: ${state.dist.toFixed(1)} км.`;
     setActionState('raceForecastBtn','success');
   }catch(err){
     tbody.innerHTML='';
@@ -1679,53 +1735,92 @@ function renderRaceForecast(){
 }
 
 function updateRaceForecastAvailability(){
+  updateRaceReferenceState();
+}
+
+
+const raceRefSelections={strength:null,fastTrail:null,flatRace:null};
+
+function raceRefUI(role){
+  if(role==='strength') return ['strengthActivityFile','strengthActivityName','strengthActivityLoadBtn','strengthActivityStatus'];
+  if(role==='fastTrail') return ['fastTrailActivityFile','fastTrailActivityName','fastTrailActivityLoadBtn','fastTrailActivityStatus'];
+  return ['flatRaceActivityFile','flatRaceActivityName','flatRaceActivityLoadBtn','flatRaceActivityStatus'];
+}
+function raceRefTitle(role){
+  return role==='strength'?'Силовая трейловая GPX':
+         role==='fastTrail'?'Быстрая трейловая GPX':'Гоночная (плоская) GPX';
+}
+function updateRaceReferenceState(){
+  const count=['strength','fastTrail','flatRace'].filter(k=>state.raceReferences[k]).length;
+  if($('referenceCount')) $('referenceCount').textContent=`${count} / 3`;
+  if($('combinedModelState')) $('combinedModelState').textContent=count===3?'готова':'ожидает 3 GPX';
+  if($('raceModelFormula')) $('raceModelFormula').textContent=raceFormulaText();
+
+  const routeReady=state.dist>0 && state.track?.length>1;
   const btn=$('raceForecastBtn');
-  if(!btn) return;
-  if(state.dist>0 && state.track?.length>1){
-    btn.disabled=false;
-    setActionState('raceForecastBtn','ready');
-    $('raceForecastStatus').textContent='Трасса загружена. Нажмите «Рассчитать прогноз по трассе».';
-  }else{
-    btn.disabled=true;
-    setActionState('raceForecastBtn','idle');
-    $('raceForecastStatus').textContent='Сначала загрузите GPX трассы во вкладке «Трасса».';
+  if(btn){
+    btn.disabled=!(routeReady && count===3);
+    setActionState('raceForecastBtn',routeReady && count===3?'ready':'idle');
+  }
+  if($('raceForecastStatus')){
+    if(!routeReady) $('raceForecastStatus').textContent='Сначала загрузите GPX трассы во вкладке «Трасса».';
+    else if(count<3) $('raceForecastStatus').textContent=`Трасса готова. Загрузите ещё ${3-count} эталонных GPX.`;
+    else $('raceForecastStatus').textContent='Все 3 тренировки и трасса загружены. Можно считать общий прогноз.';
   }
 }
 
-let selectedReferenceActivityFile=null;
-$('referenceActivityFile')?.addEventListener('change',e=>{
-  selectedReferenceActivityFile=e.currentTarget.files?.[0]||null;
-  const btn=$('referenceActivityLoadBtn');
-  if(!selectedReferenceActivityFile){
-    $('referenceActivityName').innerHTML='<span class="file-check">○</span> Используется встроенная калибровка activity_23810601185.gpx';
-    btn.disabled=true;
-    setActionState('referenceActivityLoadBtn','idle');
-    return;
-  }
-  $('referenceActivityName').innerHTML='<span class="file-check selected">✓</span> Выбран: '+selectedReferenceActivityFile.name;
-  btn.disabled=false;
-  setActionState('referenceActivityLoadBtn','ready');
-});
+function bindRaceReference(role){
+  const [fileId,nameId,btnId,statusId]=raceRefUI(role);
+  const fileEl=$(fileId),nameEl=$(nameId),btn=$(btnId),status=$(statusId);
+  if(!fileEl||!nameEl||!btn||!status) return;
 
-$('referenceActivityLoadBtn')?.addEventListener('click',async()=>{
-  if(!selectedReferenceActivityFile) return;
-  try{
-    setActionState('referenceActivityLoadBtn','working');
-    $('referenceActivityStatus').textContent='Калибрую модель по времени и уклонам activity…';
-    const text=await readFileIOS(selectedReferenceActivityFile);
-    state.raceModel=parseTimedActivityGPX(text);
-    state.raceModel.source=selectedReferenceActivityFile.name;
-    $('referenceActivityStatus').textContent=
-      `✓ ${state.raceModel.dist.toFixed(1)} км · +${Math.round(state.raceModel.gain)} м · ${fmtClockSec(state.raceModel.elapsedSec)} · ${state.raceModel.segmentCount} участков`;
-    $('raceModelSource').textContent=state.raceModel.source;
-    $('raceModelFormula').textContent=raceFormulaText();
-    setActionState('referenceActivityLoadBtn','success');
-    if(state.dist>0) renderRaceForecast();
-  }catch(err){
-    $('referenceActivityStatus').textContent='✕ Ошибка калибровки: '+(err.message||String(err));
-    setActionState('referenceActivityLoadBtn','error');
-  }
-});
+  fileEl.addEventListener('change',e=>{
+    const f=e.currentTarget.files?.[0]||null;
+    raceRefSelections[role]=f;
+    state.raceReferences[role]=null;
+    if(!f){
+      nameEl.innerHTML='<span class="file-check">○</span> Файл не выбран';
+      btn.disabled=true;
+      setActionState(btnId,'idle');
+      status.textContent='Не загружена.';
+      updateRaceReferenceState();
+      return;
+    }
+    nameEl.innerHTML='<span class="file-check selected">✓</span> Выбран: '+f.name;
+    btn.disabled=false;
+    setActionState(btnId,'ready');
+    status.textContent='Файл выбран. Нажмите загрузить.';
+    updateRaceReferenceState();
+  });
+
+  btn.addEventListener('click',async()=>{
+    const f=raceRefSelections[role];
+    if(!f) return;
+    try{
+      setActionState(btnId,'working');
+      status.textContent='Анализирую '+raceRefTitle(role)+'…';
+      const text=await readFileIOS(f);
+      const parsed=parseTimedActivityGPX(text);
+      parsed.source=f.name;
+      state.raceReferences[role]=parsed;
+
+      status.textContent=
+        `✓ ${parsed.dist.toFixed(2)} км · +${Math.round(parsed.gain)} м · `
+        + `${fmtClockSec(parsed.elapsedSec)} · ${fmtPaceSecPerKm(parsed.elapsedSec/parsed.dist)}`;
+      setActionState(btnId,'success');
+      updateRaceReferenceState();
+    }catch(err){
+      state.raceReferences[role]=null;
+      status.textContent='✕ '+raceRefTitle(role)+': '+(err.message||String(err));
+      setActionState(btnId,'error');
+      updateRaceReferenceState();
+    }
+  });
+}
+
+bindRaceReference('strength');
+bindRaceReference('fastTrail');
+bindRaceReference('flatRace');
 
 $('raceForecastBtn')?.addEventListener('click',renderRaceForecast);
 $('raceEffortPct')?.addEventListener('change',()=>{if(state.dist>0) renderRaceForecast();});
@@ -1733,7 +1828,7 @@ $('forecastStepKm')?.addEventListener('change',()=>{if(state.dist>0) renderRaceF
 
 window.addEventListener('DOMContentLoaded',()=>{
   if($('raceModelFormula')) $('raceModelFormula').textContent=raceFormulaText();
-  updateRaceForecastAvailability();
+  updateRaceReferenceState();
 });
 
 $('calcBtn').addEventListener('click',()=>{
@@ -1992,7 +2087,7 @@ function parseTrainingMetricsFromText(text){
 
   
   // Garmin paired row: "Расстояние Набор высоты" -> "16.16 км 2755 м"
-  let pair=raw.match(/Расстояние\s+Набор\s+высоты[\s\S]{0,100}?(\d+(?:\.\d+)?)\s*(?:км|km)\s+(\d{1,5})\s*(?:м|m)\b/i);
+  let pair=t.match(/Расстояние\s+Набор\s+высоты[\s\S]{0,100}?(\d+(?:\.\d+)?)\s*(?:км|km)\s+(\d{1,5})\s*(?:м|m)\b/i);
   if(pair){
     out.distance=Number(pair[1]);
     out.gain=Number(pair[2]);

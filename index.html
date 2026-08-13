@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="app-version">v0.88 ONLINE FULL</div>
+<div class="app-version">v0.89 ONLINE FULL</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Trail Race Analyzer</div>
@@ -183,7 +183,7 @@
           </div>
         </div>
 
-        <p class="muted">Добавь один скриншот Garmin/Strava. Приложение хранит их локально; ключевые цифры можно внести вручную или скопировать через iPhone Live Text. Интернет не нужен.</p>
+        <p class="muted">Добавь один скриншот Garmin/Strava. Приложение хранит их локально; ключевые цифры можно внести вручную </p>
         
 
         <div class="grid2">
@@ -259,17 +259,44 @@
       <div class="card">
         <h2>Прогноз на гонку</h2>
         <p class="muted">
-          Модель переносит фактическую скорость по уклонам из эталонной activity на загруженную трассу GPX.
-          Для каждого короткого участка учитываются уклон, набор/сброс, накопленная усталость и выбранное относительное усилие.
+          Прогноз строится общей моделью по трём отдельным тренировкам: Силовой трейловой GPX, Быстрой трейловой GPX и Гоночной (плоской) GPX. Для расчёта нужны все три файла.
         </p>
 
-        <div class="upload">
-          <strong>Эталонная activity GPX</strong>
-          <input id="referenceActivityFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml,*/*">
-          <span id="referenceActivityName"><span class="file-check">○</span> Используется встроенная калибровка activity_23810601185.gpx</span>
-          <button id="referenceActivityLoadBtn" type="button" class="primary action-ready" disabled>Калибровать по activity</button>
-          <span id="referenceActivityStatus">Встроенная калибровка: 17.1 км · +2901 м · 6:09 · 85 участков.</span>
+        
+        <div class="forecast-ref-grid">
+          <div class="upload">
+            <strong>1. Силовая трейловая GPX</strong>
+            <div class="muted">Большой набор и крутые подъёмы. Из неё модель учит, как уклон меняет скорость.</div>
+            <input id="strengthActivityFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml,*/*">
+            <span id="strengthActivityName"><span class="file-check">○</span> Файл не выбран</span>
+            <button id="strengthActivityLoadBtn" type="button" class="primary action-idle" disabled>Загрузить Силовую трейловую GPX</button>
+            <span id="strengthActivityStatus">Не загружена.</span>
+          </div>
+
+          <div class="upload">
+            <strong>2. Быстрая трейловая GPX</strong>
+            <div class="muted">Быстрый трейл с высоким устойчивым усилием. Даёт рабочую скорость и реакцию на умеренный рельеф.</div>
+            <input id="fastTrailActivityFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml,*/*">
+            <span id="fastTrailActivityName"><span class="file-check">○</span> Файл не выбран</span>
+            <button id="fastTrailActivityLoadBtn" type="button" class="primary action-idle" disabled>Загрузить Быструю трейловую GPX</button>
+            <span id="fastTrailActivityStatus">Не загружена.</span>
+          </div>
+
+          <div class="upload">
+            <strong>3. Гоночная (плоская) GPX</strong>
+            <div class="muted">Например, быстрая плоская десятка. Даёт базовый темп и скорость без большого влияния рельефа.</div>
+            <input id="flatRaceActivityFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml,*/*">
+            <span id="flatRaceActivityName"><span class="file-check">○</span> Файл не выбран</span>
+            <button id="flatRaceActivityLoadBtn" type="button" class="primary action-idle" disabled>Загрузить Гоночную (плоскую) GPX</button>
+            <span id="flatRaceActivityStatus">Не загружена.</span>
+          </div>
         </div>
+
+        <div class="metrics big">
+          <div><span>Эталонов загружено</span><b id="referenceCount">0 / 3</b></div>
+          <div><span>Общая модель</span><b id="combinedModelState">ожидает 3 GPX</b></div>
+        </div>
+
 
         <div class="grid2">
           <label class="field">
@@ -296,8 +323,7 @@
           <span>Формула модели</span>
           <div id="raceModelFormula" class="formula-box">—</div>
           <div class="muted">
-            Это не измеренные ватты. «Мощность / усилие, %» — относительная мощность относительно эталонной activity:
-            100% = тот же уровень усилия, 95% = примерно на 5% медленнее, 105% = примерно на 5% быстрее.
+            Это не Garmin Running Power в ваттах. «Мощность / усилие, %» — относительное усилие общей модели трёх тренировок: 100% = базовый расчёт, 95% = экономнее, 105% = агрессивнее.
           </div>
         </div>
 

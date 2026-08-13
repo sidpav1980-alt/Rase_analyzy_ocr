@@ -315,3 +315,6 @@ button.action-error:disabled {
   .tabs{gap:5px}
   .tab{font-size:10px;padding:9px 3px}
 }
+
+.forecast-ref-grid{display:grid;gap:14px;margin:14px 0}
+.forecast-ref-grid .upload{margin:0}
