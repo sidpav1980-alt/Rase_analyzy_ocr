@@ -884,8 +884,8 @@ function analyzeWaterCrossings(samples,elements=[]){
   function finish(endKm){
     const len=Math.max(0,endKm-startKm);
     // Ignore tiny OSM/GPS water fragments: a crossing must be at least 2 metres.
+    // Keep every contiguous water section consistent with the forecast table.
     if(len<0.002) return;
-    if(len>0.30) return;
     const mid=(startKm+endKm)/2;
     if(bridgeNearKm(mid)) bridges.push(mid);
     else fords.push(mid);
@@ -2598,15 +2598,18 @@ function renderRaceForecast(options={}){
         const unknownKm=trailSamples.length
           ? surfaceDistanceInRange(trailSamples,g.from,g.to,'unknown')
           : 0;
+        const waterKm=trailSamples.length
+          ? surfaceDistanceInRange(trailSamples,g.from,g.to,'water')
+          : 0;
 
-        // Unknown OSM coverage is conservative: the unknown part of a segment
-        // must never be modeled faster than 6:30/km.
+        // Unknown and WATER must never be modeled faster than 6:30/km.
         const groupKm=Math.max(0.001,g.distM/1000);
         const knownExtra=fordExtra+trailExtra+dirtExtra;
         const paceAfterKnown=(g.sec+knownExtra)/groupKm;
-        const unknownShare=Math.max(0,Math.min(1,unknownKm/groupKm));
-        const unknownTargetPace=Math.max(paceAfterKnown,390);
-        const unknownExtra=(unknownTargetPace-paceAfterKnown)*unknownShare*groupKm;
+        const slowKm=Math.min(groupKm,unknownKm+waterKm);
+        const slowShare=Math.max(0,Math.min(1,slowKm/groupKm));
+        const slowTargetPace=Math.max(paceAfterKnown,390);
+        const unknownExtra=(slowTargetPace-paceAfterKnown)*slowShare*groupKm;
 
         const extra=knownExtra+unknownExtra;
 

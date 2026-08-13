@@ -552,7 +552,7 @@ def itra_batch():
 def health():
     return jsonify({
         "ok":True,
-        "version":"0.40",
+        "version":"0.41",
         "itra_enabled":bool(OPENROUTER_API_KEY),
         "model":OPENROUTER_MODEL
     })
@@ -584,7 +584,7 @@ def _filter_and_dedupe_fords(fords):
         w=f.get("width_m")
         if w is None:
             w=_parse_width_m(f.get("tags") or {})
-        if w is not None and w < 1.0:
+        if w is not None and w < 2.0:
             continue
         if w is not None:
             f["width_m"]=w
