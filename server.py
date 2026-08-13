@@ -501,7 +501,7 @@ def itra_batch():
 def health():
     return jsonify({
         "ok":True,
-        "version":"0.98",
+        "version":"0.99",
         "itra_enabled":bool(OPENROUTER_API_KEY),
         "model":OPENROUTER_MODEL
     })
@@ -523,29 +523,55 @@ def _parse_width_m(tags):
         return None
 
 def _filter_and_dedupe_fords(fords):
-    if not isinstance(fords, list): return []
+    if not isinstance(fords, list):
+        return []
+
     cleaned=[]
     for f in fords:
-        if not isinstance(f, dict): continue
+        if not isinstance(f, dict):
+            continue
         w=f.get("width_m")
-        if w is None: w=_parse_width_m(f.get("tags") or {})
+        if w is None:
+            w=_parse_width_m(f.get("tags") or {})
         if w is not None and w < 1.0:
             continue
-        if w is not None: f["width_m"]=w
+        if w is not None:
+            f["width_m"]=w
+        try:
+            f["_km_num"]=float(f.get("km"))
+        except Exception:
+            continue
         cleaned.append(f)
-    cleaned.sort(key=lambda x: float(x.get("km", 1e9)))
+
+    cleaned.sort(key=lambda x: x["_km_num"])
+
+    # Cluster from the FIRST crossing of a group, max span 0.5 km.
+    # This avoids transitive merging:
+    # 6.3/6.5/6.7 => one ford, while 7.1/7.2 => another.
     out=[]
+    current=None
     for f in cleaned:
-        km=float(f.get("km", 1e9))
-        fid=f.get("osm_id") or f.get("way_id") or f.get("id")
-        name=(f.get("name") or (f.get("tags") or {}).get("name") or "").strip().lower()
-        dup=False
-        for p in reversed(out):
-            pkm=float(p.get("km", -1e9))
-            if km-pkm > 0.30: break
-            pid=p.get("osm_id") or p.get("way_id") or p.get("id")
-            pname=(p.get("name") or (p.get("tags") or {}).get("name") or "").strip().lower()
-            if (fid and pid and fid==pid) or (name and pname and name==pname) or (not fid and not pid and not name and not pname):
-                dup=True; break
-        if not dup: out.append(f)
+        km=f["_km_num"]
+        if current is None or km-current["km_start"] > 0.50:
+            if current is not None:
+                out.append(current)
+            current=dict(f)
+            current["km_start"]=km
+            current["km_end"]=km
+            current["crossing_count"]=1
+        else:
+            current["km_end"]=km
+            current["crossing_count"]=current.get("crossing_count",1)+1
+
+    if current is not None:
+        out.append(current)
+
+    for f in out:
+        f["km"]=f["km_start"]
+        if f["km_end"]-f["km_start"] >= 0.05:
+            f["km_label"]=f'{f["km_start"]:.1f}–{f["km_end"]:.1f}'
+        else:
+            f["km_label"]=f'{f["km_start"]:.1f}'
+        f.pop("_km_num",None)
+
     return out

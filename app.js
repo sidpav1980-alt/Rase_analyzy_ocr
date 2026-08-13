@@ -842,29 +842,57 @@ function drawSurfaceStrip(samples){
 
 function filterFordCandidatesClient(fords){
   if(!Array.isArray(fords)) return [];
-  const out=[];
-  const arr=fords.filter(f=>{
-    const w=Number(f?.width_m ?? f?.width);
-    return !(Number.isFinite(w) && w<1.0);
-  }).sort((a,b)=>Number(a?.km||0)-Number(b?.km||0));
+
+  // 1) Ignore waterways explicitly narrower than 1 m.
+  const arr=fords
+    .filter(f=>{
+      const w=Number(f?.width_m ?? f?.width);
+      return !(Number.isFinite(w) && w<1.0);
+    })
+    .filter(f=>Number.isFinite(Number(f?.km)))
+    .sort((a,b)=>Number(a.km)-Number(b.km));
+
+  // 2) Merge a GROUP of nearby crossings into one ford.
+  // Important: cluster width is measured from the FIRST crossing,
+  // not transitively from every previous point.
+  // Example: 6.3, 6.5, 6.7 => one ford (6.3–6.7);
+  // 7.1, 7.2 => next ford, because 7.1 is >0.5 km from 6.3.
+  const clusters=[];
+  let current=null;
 
   for(const f of arr){
-    const km=Number(f?.km);
-    const id=f?.osm_id ?? f?.way_id ?? f?.id ?? null;
-    const name=String(f?.name ?? f?.tags?.name ?? '').trim().toLowerCase();
-    let dup=false;
-    for(let i=out.length-1;i>=0;i--){
-      const p=out[i], pkm=Number(p?.km);
-      if(Number.isFinite(km)&&Number.isFinite(pkm)&&km-pkm>0.30) break;
-      const pid=p?.osm_id ?? p?.way_id ?? p?.id ?? null;
-      const pname=String(p?.name ?? p?.tags?.name ?? '').trim().toLowerCase();
-      if((id!=null&&pid!=null&&id===pid) || (name&&pname&&name===pname) || (!id&&!pid&&!name&&!pname)){
-        dup=true; break;
-      }
+    const km=Number(f.km);
+
+    if(!current || km-current.startKm>0.50){
+      if(current) clusters.push(current);
+      current={
+        startKm:km,
+        endKm:km,
+        members:[f],
+        ...f
+      };
+    }else{
+      current.endKm=km;
+      current.members.push(f);
+
+      // Prefer known width/name/id from any member.
+      if(current.width_m==null && f.width_m!=null) current.width_m=f.width_m;
+      if(!current.name && f.name) current.name=f.name;
+      if(current.osm_id==null && f.osm_id!=null) current.osm_id=f.osm_id;
     }
-    if(!dup) out.push(f);
   }
-  return out;
+  if(current) clusters.push(current);
+
+  return clusters.map(c=>({
+    ...c,
+    km:c.startKm,
+    km_start:c.startKm,
+    km_end:c.endKm,
+    km_label:(c.endKm-c.startKm>=0.05)
+      ? `${c.startKm.toFixed(1)}–${c.endKm.toFixed(1)}`
+      : c.startKm.toFixed(1),
+    crossing_count:c.members.length
+  }));
 }
 
 async function analyzeMapOSM(){
@@ -903,7 +931,10 @@ async function analyzeMapOSM(){
     if(Array.isArray(data.fords)){
       data.fords=filterFordCandidatesClient(data.fords);
       data.ford_kms=data.fords.map(f=>Number(f.km)).filter(Number.isFinite);
+      data.ford_labels=data.fords.map(f=>f.km_label || Number(f.km).toFixed(1));
       data.ford_count=data.fords.length;
+      const fordEl=$('fordKms')||$('fordsKm')||$('fordKmList');
+      if(fordEl && data.ford_labels) fordEl.textContent='Броды на км: '+data.ford_labels.join(', ');
     }
   const elements=data.elements||[];
 
