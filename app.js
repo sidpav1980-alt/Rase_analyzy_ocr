@@ -1,4 +1,64 @@
 
+function syncFordCards(data){
+  normalizeFordData(data);
+  const count=String(data?.ford_count ?? 0);
+  const list=(data?.ford_labels||[]).join(', ');
+
+  // Use visible labels to find the actual cards, independent of legacy element ids.
+  const all=[...document.querySelectorAll('div,span,p')];
+  for(const el of all){
+    const t=(el.textContent||'').trim();
+    if(t==='Броды'){
+      const card=el.parentElement;
+      if(card){
+        const vals=[...card.querySelectorAll('div,span,p')].filter(x=>x!==el);
+        const target=vals.find(x=>/^\d+$/.test((x.textContent||'').trim()));
+        if(target) target.textContent=count;
+      }
+    }
+    if(t.startsWith('Броды на км:')){
+      el.textContent='Броды на км: '+(list||'—');
+    }
+  }
+}
+
+
+function normalizeFordData(data){
+  if(!data || typeof data!=='object') return data;
+
+  let raw=[];
+  if(Array.isArray(data._raw_ford_kms)) raw=data._raw_ford_kms;
+  else if(Array.isArray(data.ford_kms)) raw=data.ford_kms;
+  else if(Array.isArray(data.fords)) raw=data.fords.map(f=>Number(f?.km)).filter(Number.isFinite);
+
+  raw=raw.map(Number).filter(Number.isFinite).sort((a,b)=>a-b);
+  const groups=[];
+  let cur=null;
+  for(const km of raw){
+    if(!cur || km-cur.start>0.500001){
+      if(cur) groups.push(cur);
+      cur={start:km,end:km};
+    }else{
+      cur.end=km;
+    }
+  }
+  if(cur) groups.push(cur);
+
+  const starts=groups.map(g=>Number(g.start.toFixed(1)));
+  data._raw_ford_kms=raw;
+  data.ford_kms=starts;
+  data.ford_count=starts.length;
+  data.ford_labels=starts.map(x=>x.toFixed(1));
+
+  // Also overwrite common aliases so no old renderer can display raw crossings.
+  if('fordCount' in data) data.fordCount=starts.length;
+  if('fords_count' in data) data.fords_count=starts.length;
+  if('ford_points' in data) data.ford_points=starts;
+  if('ford_crossings' in data) data.ford_crossings=starts;
+  return data;
+}
+
+
 const state = {
   track: [],
   dist: 0,
@@ -924,6 +984,7 @@ async function analyzeMapOSM(){
   }
 
   const data=await resp.json();
+    normalizeFordData(data);
     {
       let rawFordKm=[];
       if(Array.isArray(data.ford_kms)) rawFordKm=data.ford_kms;
@@ -1482,6 +1543,7 @@ $('itraLookupBtn')?.addEventListener('click', async ()=>{
     }
 
     const data=await resp.json();
+    normalizeFordData(data);
     let found=0;
     (data.results||[]).forEach(x=>{
       const r=state.roster.find(r=>r.athlete.toLowerCase()===String(x.name||'').toLowerCase());

@@ -7,6 +7,35 @@ from PIL import Image
 import io
 
 
+def normalize_ford_payload(payload):
+    if not isinstance(payload, dict):
+        return payload
+    raw=payload.get("ford_kms")
+    if raw is None and isinstance(payload.get("fords"), list):
+        raw=[x.get("km") for x in payload["fords"] if isinstance(x, dict)]
+    try:
+        pts=sorted(float(x) for x in (raw or []))
+    except Exception:
+        pts=[]
+    groups=[]
+    cur=None
+    for km in pts:
+        if cur is None or km-cur["start"] > 0.500001:
+            if cur is not None:
+                groups.append(cur)
+            cur={"start":km,"end":km}
+        else:
+            cur["end"]=km
+    if cur is not None:
+        groups.append(cur)
+    starts=[round(g["start"],1) for g in groups]
+    payload["ford_kms"]=starts
+    payload["ford_count"]=len(starts)
+    payload["ford_labels"]=[f"{x:.1f}" for x in starts]
+    return payload
+
+
+
 def _group_ford_kms(kms, span_km=0.50):
     try:
         pts=sorted(float(x) for x in (kms or []))
@@ -523,7 +552,7 @@ def itra_batch():
 def health():
     return jsonify({
         "ok":True,
-        "version":"0.01",
+        "version":"0.02",
         "itra_enabled":bool(OPENROUTER_API_KEY),
         "model":OPENROUTER_MODEL
     })
