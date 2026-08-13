@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="app-version">v0.86 ONLINE FULL</div>
+<div class="app-version">v0.88 ONLINE FULL</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Trail Race Analyzer</div>
@@ -45,7 +45,8 @@
       <button class="tab active" data-tab="route">1. Трасса</button>
       <button class="tab" data-tab="training">2. Лучшая тренировка</button>
       <button class="tab" data-tab="roster">3. Стартовый</button>
-      <button class="tab" data-tab="result">4. Итог</button>
+      <button class="tab" data-tab="forecast">4. Прогноз</button>
+      <button class="tab" data-tab="result">5. Итог</button>
     </nav>
 
     <section id="route" class="tabpanel active">
@@ -247,6 +248,73 @@
         <div class="table-wrap">
           <table id="rosterTable">
             <thead><tr><th>Спортсмен</th><th>PI</th><th>Техника</th><th>Выносливость</th><th>Форма</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+
+    <section id="forecast" class="tabpanel">
+      <div class="card">
+        <h2>Прогноз на гонку</h2>
+        <p class="muted">
+          Модель переносит фактическую скорость по уклонам из эталонной activity на загруженную трассу GPX.
+          Для каждого короткого участка учитываются уклон, набор/сброс, накопленная усталость и выбранное относительное усилие.
+        </p>
+
+        <div class="upload">
+          <strong>Эталонная activity GPX</strong>
+          <input id="referenceActivityFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml,*/*">
+          <span id="referenceActivityName"><span class="file-check">○</span> Используется встроенная калибровка activity_23810601185.gpx</span>
+          <button id="referenceActivityLoadBtn" type="button" class="primary action-ready" disabled>Калибровать по activity</button>
+          <span id="referenceActivityStatus">Встроенная калибровка: 17.1 км · +2901 м · 6:09 · 85 участков.</span>
+        </div>
+
+        <div class="grid2">
+          <label class="field">
+            <span>Относительная мощность / усилие, %</span>
+            <input id="raceEffortPct" type="number" min="70" max="130" step="1" value="100">
+          </label>
+          <label class="field">
+            <span>Шаг таблицы, км</span>
+            <input id="forecastStepKm" type="number" min="1" max="10" step="1" value="5">
+          </label>
+        </div>
+
+        <button id="raceForecastBtn" class="primary action-ready" type="button">Рассчитать прогноз по трассе</button>
+        <div id="raceForecastStatus" class="muted">Сначала загрузите GPX трассы во вкладке «Трасса».</div>
+
+        <div class="metrics big">
+          <div><span>Прогноз движения</span><b id="raceForecastTime">—</b></div>
+          <div><span>Средний темп</span><b id="raceForecastPace">—</b></div>
+          <div><span>Диапазон ±10%</span><b id="raceForecastRange">—</b></div>
+          <div><span>Калибровка</span><b id="raceModelSource">activity preset</b></div>
+        </div>
+
+        <div class="field">
+          <span>Формула модели</span>
+          <div id="raceModelFormula" class="formula-box">—</div>
+          <div class="muted">
+            Это не измеренные ватты. «Мощность / усилие, %» — относительная мощность относительно эталонной activity:
+            100% = тот же уровень усилия, 95% = примерно на 5% медленнее, 105% = примерно на 5% быстрее.
+          </div>
+        </div>
+
+        <h3>Время прохождения участков</h3>
+        <div class="table-wrap">
+          <table id="raceForecastTable">
+            <thead>
+              <tr>
+                <th>Км</th>
+                <th>+ / −</th>
+                <th>Уклон</th>
+                <th>Темп</th>
+                <th>Участок</th>
+                <th>Сумма</th>
+                <th>Усилие</th>
+              </tr>
+            </thead>
             <tbody></tbody>
           </table>
         </div>
