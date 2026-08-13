@@ -1919,13 +1919,62 @@ function riegelExponentForDistance(targetKm,refKm){
   return 1.12;
 }
 
+
+function vo2SpeedForDistanceKm(vo2,km){
+  const v=Number(vo2);
+  const d=Math.max(5,Math.min(15,Number(km)||10));
+  if(!(v>=20&&v<=90)) return null;
+
+  // Conservative sustainable fraction of VO2max for a 5–15 km speed anchor.
+  // 5 km ~93%, 10 km ~90%, 15 km ~87%.
+  const frac=Math.max(0.87,Math.min(0.93,0.93-(d-5)*0.006));
+  const targetO2=v*frac;
+
+  // Daniels oxygen-cost relation, v in metres/min.
+  const a=0.000104, b=0.182258, c=-4.60-targetO2;
+  const disc=b*b-4*a*c;
+  if(!(disc>0)) return null;
+  const mPerMin=(-b+Math.sqrt(disc))/(2*a);
+  if(!(mPerMin>0)) return null;
+  return mPerMin/60; // m/s
+}
+
+function vo2AdjustedFlatCalibration(ref,vo2){
+  const refKm=Math.max(5,Math.min(Number(ref?.dist||0),15));
+  const fileSpeed=Math.max(0.5,Number(ref?.calibratedFlatSpeed||ref?.avgSpeed||0));
+  const vo2Speed=vo2SpeedForDistanceKm(vo2,refKm);
+
+  if(!(vo2Speed>0)){
+    return {speed:fileSpeed,mode:'file',fileSpeed,vo2Speed:0,vo2Weight:0,refKm};
+  }
+
+  const filePace=1000/fileSpeed;
+  const vo2Pace=1000/vo2Speed;
+
+  // Only intervene when the uploaded "speed" file is clearly slower than
+  // the conservative VO2-derived capability estimate.
+  const slowRatio=filePace/vo2Pace;
+  if(slowRatio<=1.08){
+    return {speed:fileSpeed,mode:'file',fileSpeed,vo2Speed,vo2Weight:0,refKm,slowRatio};
+  }
+
+  // The slower the file, the more VO2 contributes, but never 100%.
+  const vo2Weight=Math.max(0.25,Math.min(0.70,(slowRatio-1.08)*1.8+0.25));
+  const speed=fileSpeed*(1-vo2Weight)+vo2Speed*vo2Weight;
+
+  return {speed,mode:'blend',fileSpeed,vo2Speed,vo2Weight,refKm,slowRatio};
+}
+
 function flatRaceAnchorForTarget(){
   const ref=state.raceReferences?.flatRace;
   if(!ref || !(ref.dist>=5) || !(ref.elapsedSec>0)) return null;
 
   const targetKm=Number(state.dist||0);
   const exponent=riegelExponentForDistance(targetKm,ref.dist);
-  const calibrationSpeed=Math.max(0.5,Number(ref.calibratedFlatSpeed||ref.avgSpeed));
+  const vo2=Number($('vo2max')?.value||0);
+
+  const speedCal=vo2AdjustedFlatCalibration(ref,vo2);
+  const calibrationSpeed=Math.max(0.5,speedCal.speed);
 
   const refKm=Math.max(5,Math.min(ref.dist,15));
   const refSec=(refKm*1000)/calibrationSpeed;
@@ -1939,7 +1988,8 @@ function flatRaceAnchorForTarget(){
     rawFileSec:ref.elapsedSec,
     rawFilePaceSec:ref.elapsedSec/ref.dist,
     refPaceSec:refSec/refKm,
-    exponent,targetKm,targetSec,targetPaceSec,targetSpeed,calibrationSpeed
+    exponent,targetKm,targetSec,targetPaceSec,targetSpeed,calibrationSpeed,
+    speedCalibration:speedCal
   };
 }
 function gradeOnlyFactor(grade){
@@ -2348,17 +2398,23 @@ function raceFormulaText(){
   if(!info || !anchor) return 'Загрузите все 3 эталонные GPX.';
 
   const cap=enduranceCapacityFromReferences();
+  const sc=anchor.speedCalibration;
+  let speedText='';
+  if(sc?.mode==='blend'){
+    speedText=`Скоростная плоская GPX оказалась медленнее оценки по VO₂max, поэтому скоростной якорь смешан: `
+      + `файл ${fmtPaceSecPerKm(1000/sc.fileSpeed)} + VO₂max ${fmtPaceSecPerKm(1000/sc.vo2Speed)}, `
+      + `доля VO₂max ${(sc.vo2Weight*100).toFixed(0)}%. `;
+  }else{
+    speedText=`Скоростная плоская GPX используется напрямую как скоростной якорь. `;
+  }
 
   return `Калибровка считается по фактическим данным трёх загруженных GPX. `
-    + `Плоская GPX задаёт скоростной якорь: ${anchor.rawFileKm.toFixed(1)} км, `
-    + `${fmtPaceSecPerKm(anchor.refPaceSec)}. `
-    + `Быстрая трейловая GPX влияет на рабочую скорость и реакцию на умеренный рельеф. `
-    + `Силовая трейловая GPX влияет на уклон и запас выносливости: `
-    + `длительность + набор на км преобразуются в эквивалентную длительность. `
-    + (cap?`Расчётный запас выносливости по двум трейловым файлам: ${cap.capacityHours.toFixed(1)} ч. `:'')
-    + `Если прогнозируемая гонка длится дольше этого запаса, вводится дополнительное замедление. `
-    + `Далее учитываются Riegel, рельеф, VO₂max, а при анализе трассы — `
-    + `тропа +1:00/км, грунт +0:30/км, неизвестно +1:00/км и броды +40 с.`;
+    + speedText
+    + `Итоговый скоростной якорь: ${fmtPaceSecPerKm(anchor.refPaceSec)} на ${anchor.refKm.toFixed(1)} км. `
+    + `Быстрая трейловая GPX влияет на рабочую скорость и рельеф. `
+    + `Силовая трейловая GPX влияет на уклон и запас выносливости. `
+    + (cap?`Запас выносливости: ${cap.capacityHours.toFixed(1)} ч. `:'')
+    + `Далее применяются Riegel, усталость по длительности, рельеф и анализ покрытия.`;
 }
 
 function surfaceDistanceInRange(samples,fromKm,toKm,cls){
@@ -2501,10 +2557,15 @@ function renderRaceForecast(options={}){
     $('raceForecastTime').textContent=fmtClockSec(f.totalSec);
     $('raceForecastPace').textContent=fmtPaceSecPerKm(f.avgPaceSec);
     if($('raceCalibration') && f.flatAnchor){
+      const sc=f.flatAnchor.speedCalibration;
+      const extra=sc?.mode==='blend'
+        ? ` · VO₂max в скоростном якоре ${(sc.vo2Weight*100).toFixed(0)}%`
+        : '';
       $('raceCalibration').textContent=
         `${state.raceReferences.flatRace.source}: ${f.flatAnchor.refKm.toFixed(1)} км · `
-        + `${fmtClockSec(f.flatAnchor.refSec)} · ${fmtPaceSecPerKm(f.flatAnchor.refPaceSec)} → `
-        + `${f.flatAnchor.targetKm.toFixed(1)} км: ${fmtPaceSecPerKm(f.flatAnchor.targetPaceSec)}`;
+        + `${fmtClockSec(f.flatAnchor.refSec)} · ${fmtPaceSecPerKm(f.flatAnchor.refPaceSec)}`
+        + extra
+        + ` → ${f.flatAnchor.targetKm.toFixed(1)} км: ${fmtPaceSecPerKm(f.flatAnchor.targetPaceSec)}`;
     }
     $('raceForecastRange').textContent=`${fmtClockSec(f.lowSec)}–${fmtClockSec(f.highSec)}`;
     if($('raceDurationFactor')){

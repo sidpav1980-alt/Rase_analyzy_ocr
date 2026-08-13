@@ -1,5 +1,5 @@
 
-const CACHE='trail-analyzer-online-v032';
+const CACHE='trail-analyzer-online-v033';
 const CORE=['./','./index.html','./styles.css','./app.js','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{
