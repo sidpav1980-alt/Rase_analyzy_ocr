@@ -1709,9 +1709,51 @@ function calculateRaceForecast(){
   }
   if(current) groups.push(current);
 
+  // Recommended pacing:
+  // The physiology-adjusted total forecast is the anchor.
+  // Terrain changes pace moderately around the race-average pace instead of
+  // treating early sections as max-effort and forcing a collapse later.
+  const avgRacePaceSec=totalSec/state.dist;
+
   groups.forEach(g=>{
     g.grade=g.distM?g.weightedGrade/g.distM:0;
-    g.paceSec=g.distM?g.sec/(g.distM/1000):0;
+
+    const gradePct=g.grade*100;
+    let terrainFactor=1;
+    if(gradePct>0){
+      terrainFactor += Math.min(0.22, gradePct*0.035);
+    }else{
+      terrainFactor -= Math.min(0.10, Math.abs(gradePct)*0.018);
+    }
+
+    // Conservative race distribution:
+    // first third slightly easier, middle around average,
+    // last third only marginally faster if terrain permits.
+    const mid=((g.from+g.to)/2)/state.dist;
+    let pacingFactor=1;
+    if(mid<0.33) pacingFactor=1.035;
+    else if(mid<0.66) pacingFactor=1.000;
+    else pacingFactor=0.985;
+
+    g.recommendedPaceSec=avgRacePaceSec*terrainFactor*pacingFactor;
+    g.recommendedSec=g.recommendedPaceSec*(g.distM/1000);
+  });
+
+  // Normalize all section times so they sum exactly to the total moving-time forecast.
+  const recommendedRaw=groups.reduce((sum,g)=>sum+g.recommendedSec,0);
+  const norm=recommendedRaw>0?totalSec/recommendedRaw:1;
+  let recommendedCum=0;
+
+  groups.forEach(g=>{
+    g.recommendedSec*=norm;
+    g.recommendedPaceSec*=norm;
+    recommendedCum+=g.recommendedSec;
+    g.recommendedCumSec=recommendedCum;
+
+    // Keep existing renderer fields, now containing recommended values.
+    g.paceSec=g.recommendedPaceSec;
+    g.sec=g.recommendedSec;
+    g.cumSec=g.recommendedCumSec;
   });
 
   return {
@@ -1770,7 +1812,7 @@ function renderRaceForecast(){
       ? `${state.raceReferences.strength.source} + ${state.raceReferences.fastTrail.source} + ${state.raceReferences.flatRace.source}`
       : 'нужно 3 GPX';
     $('raceModelFormula').textContent=raceFormulaText();
-    $('raceForecastStatus').textContent=`✓ Общий прогноз по 3 GPX: ${state.dist.toFixed(1)} км.`;
+    $('raceForecastStatus').textContent=`✓ Общий прогноз по 3 GPX: ${state.dist.toFixed(1)} км. Темпы участков нормированы к среднему прогнозному темпу.`;
     setActionState('raceForecastBtn','success');
   }catch(err){
     tbody.innerHTML='';
