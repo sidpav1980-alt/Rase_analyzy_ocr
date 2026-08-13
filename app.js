@@ -1619,7 +1619,14 @@ function racePhysiologyFactors(elapsedSec){
     const over=Math.max(0,hours-acidHours);
     hrFactor=Math.max(0.72,Math.exp(-0.055*intensity*over));
   }
-  return {durationFactor,hrFactor,hrRatio,acidHours,exponent};
+  // Optional VO2max: a deliberately small correction. If blank/invalid, it is neutral (1.00).
+  // VO2max is an aerobic ceiling, not a direct ultra-race pace predictor.
+  const vo2=Number($('vo2max')?.value||0);
+  let vo2Factor=1;
+  if(vo2>=20 && vo2<=90){
+    vo2Factor=Math.max(0.94,Math.min(1.06,1+(vo2-50)*0.002));
+  }
+  return {durationFactor,hrFactor,hrRatio,acidHours,exponent,vo2Factor,vo2};
 }
 
 function raceModelSpeed(grade,progress,effortPct=100,elapsedSec=0){
@@ -1639,7 +1646,7 @@ function raceModelSpeed(grade,progress,effortPct=100,elapsedSec=0){
   const effortFactor=Math.max(70,Math.min(130,effortPct))/100;
   const phys=racePhysiologyFactors(elapsedSec);
 
-  const v=info.flatSpeed*gradeFactor*info.fastTrailFactor*fatigueFactor*phys.durationFactor*phys.hrFactor*effortFactor;
+  const v=info.flatSpeed*gradeFactor*info.fastTrailFactor*fatigueFactor*phys.durationFactor*phys.hrFactor*phys.vo2Factor*effortFactor;
   return Math.max(0.25,Math.min(7,v));
 }
 
@@ -1727,7 +1734,7 @@ function raceFormulaText(){
     + `Vflat=${info.flatSpeed.toFixed(2)} м/с; `
     + `ln(Fgrade)=${f(c[1])}·G+ ${f(c[2])}·G+² ${f(c[3])}·G− ${f(c[4])}·G−²; `
     + `FfastTrail=${info.fastTrailFactor.toFixed(3)}; fatigueK=${info.fatigueK.toFixed(3)}; `
-    + `Fduration=(T/T10)^−k; FHR=ограничение по пульсу/времени закисления`;
+    + `Fduration=(T/T10)^−k; FHR=ограничение по пульсу/времени закисления; FVO2=небольшая необязательная поправка VO₂max`;
 }
 
 function renderRaceForecast(){
@@ -1757,6 +1764,7 @@ function renderRaceForecast(){
     if($('raceDurationFactor')) $('raceDurationFactor').textContent=(f.physiology.durationFactor*100).toFixed(0)+'%';
     if($('raceHrFactor')) $('raceHrFactor').textContent=(f.physiology.hrFactor*100).toFixed(0)+'%';
     if($('raceAcidTime')) $('raceAcidTime').textContent=Number.isFinite(f.physiology.acidHours)?f.physiology.acidHours.toFixed(1)+' ч':'нет данных HR';
+    if($('raceVo2Factor')) $('raceVo2Factor').textContent=f.physiology.vo2 ? `${f.physiology.vo2.toFixed(1)} → ${(f.physiology.vo2Factor*100).toFixed(1)}%` : 'не используется';
     $('raceModelSource').textContent=allRaceReferencesReady()
       ? `${state.raceReferences.strength.source} + ${state.raceReferences.fastTrail.source} + ${state.raceReferences.flatRace.source}`
       : 'нужно 3 GPX';
