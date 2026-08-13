@@ -1730,6 +1730,34 @@ function parseTimedActivityGPX(text){
   if(!coeff || coeff.some(x=>!Number.isFinite(x))) throw new Error('Не удалось откалибровать модель');
 
   const elapsedSec=(pts[pts.length-1].ts-pts[0].ts)/1000;
+  const avgSpeed=(totalKm*1000)/Math.max(1,elapsedSec);
+
+  const flatSpeeds=samples
+    .filter(s=>Math.abs(Number(s.grade)||0)<=0.015)
+    .map(s=>Number(s.speed))
+    .filter(v=>Number.isFinite(v)&&v>0.5&&v<8)
+    .sort((a,b)=>a-b);
+
+  function q(arr,p){
+    if(!arr.length) return NaN;
+    const x=(arr.length-1)*p, lo=Math.floor(x), hi=Math.ceil(x);
+    if(lo===hi) return arr[lo];
+    return arr[lo]+(arr[hi]-arr[lo])*(x-lo);
+  }
+
+  const q50=q(flatSpeeds,0.50);
+  const q75=q(flatSpeeds,0.75);
+  const q85=q(flatSpeeds,0.85);
+  const variability=(Number.isFinite(q85)&&Number.isFinite(q50)&&q50>0)?q85/q50:1;
+  const fastWeight=Math.max(0.20,Math.min(0.65,(variability-1)*2.2+0.25));
+  const calibratedFlatSpeed=Number.isFinite(q75)
+    ? Math.max(avgSpeed*0.95,Math.min(avgSpeed*1.45,
+        q75*(1-fastWeight)+(Number.isFinite(q85)?q85:q75)*fastWeight))
+    : avgSpeed;
+
+  const climbDensity=totalKm>0?gain/totalKm:0;
+  const durationHours=elapsedSec/3600;
+
   return {
     coeff,
     source:'uploaded activity',
@@ -1737,7 +1765,16 @@ function parseTimedActivityGPX(text){
     dist:totalKm,
     gain,
     elapsedSec,
-    avgSpeed:(totalKm*1000)/Math.max(1,elapsedSec)
+    avgSpeed,
+    calibratedFlatSpeed,
+    calibrationStats:{
+      flatQ50:q50,
+      flatQ75:q75,
+      flatQ85:q85,
+      variability,
+      climbDensity,
+      durationHours
+    }
   };
 }
 
@@ -1749,70 +1786,81 @@ function combinedRaceModelInfo(){
   const r=state.raceReferences||{};
   if(!allRaceReferencesReady()) return null;
 
-  // Absolute flat speed comes from the flat race (e.g. a 10 km race).
-  const flatSpeed=r.flatRace.avgSpeed;
+  const strength=r.strength;
+  const fast=r.fastTrail;
+  const flat=r.flatRace;
 
-  // Grade-response is blended from two trail references:
-  // strength trail dominates steep grades; fast trail stabilizes moderate terrain.
-  const cs=r.strength.coeff, cf=r.fastTrail.coeff;
+  const ss=strength.calibrationStats||{};
+  const fs=fast.calibrationStats||{};
+
+  const strengthLoad=
+    Math.max(0,Number(ss.climbDensity||0))/35 * 0.55 +
+    Math.max(0,Number(ss.durationHours||0))/4 * 0.45;
+
+  const fastLoad=
+    Math.max(0,Number(fs.climbDensity||0))/35 * 0.35 +
+    Math.max(0,Number(fs.durationHours||0))/4 * 0.20 +
+    Math.max(0,Number(fast.calibratedFlatSpeed||fast.avgSpeed||0))/4 * 0.45;
+
+  const sum=Math.max(0.001,strengthLoad+fastLoad);
+  const strengthW=Math.max(0.30,Math.min(0.75,strengthLoad/sum));
+  const fastW=1-strengthW;
+
+  const cs=strength.coeff, cf=fast.coeff;
   const gradeCoeff=[
     0,
-    cs[1]*0.65+cf[1]*0.35,
-    cs[2]*0.65+cf[2]*0.35,
-    cs[3]*0.65+cf[3]*0.35,
-    cs[4]*0.65+cf[4]*0.35
+    cs[1]*strengthW+cf[1]*fastW,
+    cs[2]*strengthW+cf[2]*fastW,
+    cs[3]*strengthW+cf[3]*fastW,
+    cs[4]*strengthW+cf[4]*fastW
   ];
 
-  // Fatigue is learned from both trail files, with a conservative clamp
-  // because reference sessions are shorter than the target ultra.
-  const fatigueK=Math.max(-0.40,Math.min(0,
-    (Number(cs[5]||0)*0.55)+(Number(cf[5]||0)*0.45)
+  const fatigueK=Math.max(-0.30,Math.min(0,
+    Number(cs[5]||0)*strengthW+Number(cf[5]||0)*fastW
   ));
 
-  // Fast-trail session provides a mild intensity/economy correction.
-  // Compare its estimated flat-equivalent intercept with the flat-race speed,
-  // but keep the correction small.
-  const fastFlatEstimate=Math.exp(cf[0]);
-  const intensityRatio=Math.max(0.90,Math.min(1.10,fastFlatEstimate/Math.max(0.1,flatSpeed)));
-  const fastTrailFactor=Math.pow(intensityRatio,0.20);
+  const flatSpeed=Number(flat.calibratedFlatSpeed||flat.avgSpeed);
+  const fastFlat=Number(fast.calibratedFlatSpeed||fast.avgSpeed);
+  const fastTrailFactor=Math.pow(
+    Math.max(0.94,Math.min(1.06,fastFlat/Math.max(0.1,flatSpeed))),
+    0.12
+  );
 
-  return {flatSpeed,gradeCoeff,fatigueK,fastTrailFactor};
+  return {flatSpeed,gradeCoeff,fatigueK,fastTrailFactor,strengthW,fastW};
 }
-
 function racePhysiologyFactors(predictedSec){
   const refs=Object.values(state.raceReferences||{}).filter(Boolean);
   const T=Math.max(0.5,predictedSec/3600);
-  const longRef=state.raceReferences?.strength || refs.slice().sort((a,b)=>(b.elapsedSec||0)-(a.elapsedSec||0))[0];
-  const T10=Math.max(0.5,(longRef?.elapsedSec||3600)/3600);
-  const k=Math.max(0.10,Math.min(0.32,0.16 + Math.max(0,3-T10)*0.025 - Math.max(0,T10-4)*0.012));
-  const durationFactor=Math.max(0.68,Math.min(1.03,Math.pow(Math.max(1,T/T10),-k)));
+  const longRef=refs.slice().sort((a,b)=>(b.elapsedSec||0)-(a.elapsedSec||0))[0];
+  const Tref=Math.max(0.5,(longRef?.elapsedSec||3600)/3600);
+
+  const k=Math.max(0.08,Math.min(0.18,0.11+Math.max(0,3-Tref)*0.012));
+  const durationFactor=Math.max(0.90,Math.min(1.02,
+    Math.pow(Math.max(1,T/Tref),-k)
+  ));
 
   const vo2=Number($('vo2max')?.value||0);
   if(!(vo2>=20 && vo2<=90)) throw new Error('Введите VO₂max от 20 до 90 мл/кг/мин');
-  const vo2Factor=Math.max(0.94,Math.min(1.06,1+(vo2-50)*0.002));
+  const vo2Factor=Math.max(0.97,Math.min(1.03,1+(vo2-50)*0.002));
 
   const hrVals=refs.map(r=>Number(r.avgHr||0)).filter(x=>x>60);
   const avgHr=hrVals.length?hrVals.reduce((a,b)=>a+b,0)/hrVals.length:0;
   const lthr=Number($('lthr')?.value||0);
-  let hrFactor=1,hrRatio=0,acidHours=0,acidSource='';
 
+  let hrFactor=1,hrRatio=0,acidHours=0,acidSource='';
   if(avgHr>0 && lthr>0){
     hrRatio=avgHr/lthr;
     acidHours=hrRatio>=1.02?0.75:hrRatio>=0.98?1.5:hrRatio>=0.94?2.5:hrRatio>=0.90?4:hrRatio>=0.86?6:10;
     acidSource='HR/LTHR';
-    if(T>acidHours) hrFactor=Math.max(0.72,Math.pow(acidHours/T,0.10));
+    if(T>acidHours) hrFactor=Math.max(0.90,Math.pow(acidHours/T,0.035));
   }else{
-    // VO2max fallback: sustainable aerobic fraction falls with duration.
-    const sustainableFrac=Math.max(0.62,Math.min(0.90,0.90-0.09*Math.log2(Math.max(1,T))));
-    const reserve=Math.max(0.92,Math.min(1.08,1+(vo2-50)*0.004));
-    hrFactor=Math.max(0.70,Math.min(1.0,sustainableFrac*reserve/0.90));
-    // Near-threshold endurance estimate, not a lactate measurement.
-    acidHours=Math.max(1.0,Math.min(3.0,2.0+(vo2-50)*0.025));
+    acidHours=Math.max(1.0,Math.min(3.5,2.0+(vo2-50)*0.025));
     acidSource='VO₂max';
+    hrFactor=1;
   }
+
   return {durationFactor,hrFactor,hrRatio,acidHours,exponent:k,vo2Factor,vo2,acidSource};
 }
-
 function raceModelSpeed(grade,progress,effortPct=100,elapsedSec=0){
   const info=combinedRaceModelInfo();
   if(!info) return NaN;
@@ -1872,22 +1920,23 @@ function flatRaceAnchorForTarget(){
 
   const targetKm=Number(state.dist||0);
   const exponent=riegelExponentForDistance(targetKm,ref.dist);
-  const targetSec=ref.elapsedSec*Math.pow(targetKm/ref.dist,exponent);
+  const calibrationSpeed=Math.max(0.5,Number(ref.calibratedFlatSpeed||ref.avgSpeed));
+
+  const refKm=Math.max(10,Math.min(ref.dist,15));
+  const refSec=(refKm*1000)/calibrationSpeed;
+  const targetSec=refSec*Math.pow(targetKm/refKm,exponent);
   const targetPaceSec=targetSec/Math.max(0.001,targetKm);
   const targetSpeed=(targetKm*1000)/Math.max(1,targetSec);
 
   return {
-    refKm:ref.dist,
-    refSec:ref.elapsedSec,
-    refPaceSec:ref.elapsedSec/ref.dist,
-    exponent,
-    targetKm,
-    targetSec,
-    targetPaceSec,
-    targetSpeed
+    refKm,refSec,
+    rawFileKm:ref.dist,
+    rawFileSec:ref.elapsedSec,
+    rawFilePaceSec:ref.elapsedSec/ref.dist,
+    refPaceSec:refSec/refKm,
+    exponent,targetKm,targetSec,targetPaceSec,targetSpeed,calibrationSpeed
   };
 }
-
 function gradeOnlyFactor(grade){
   const info=combinedRaceModelInfo();
   if(!info) return 1;
@@ -2215,17 +2264,16 @@ function raceFormulaText(){
   const info=combinedRaceModelInfo();
   const anchor=flatRaceAnchorForTarget();
   if(!info || !anchor) return 'Загрузите все 3 эталонные GPX.';
-  const c=info.gradeCoeff;
-  const f=n=>(n>=0?'+ ':'− ')+Math.abs(n).toFixed(3);
-  return `База = реальный результат плоской GPX × Riegel(D₂/D₁)^${anchor.exponent.toFixed(3)}; `
-    + `эталон ${anchor.refKm.toFixed(1)} км за ${fmtClockSec(anchor.refSec)} `
-    + `(${fmtPaceSecPerKm(anchor.refPaceSec)}) → базовый прогноз ${anchor.targetKm.toFixed(1)} км `
-    + `за ${fmtClockSec(anchor.targetSec)} (${fmtPaceSecPerKm(anchor.targetPaceSec)}). `
-    + `Затем: Fgrade по двум трейловым GPX; VO₂max = небольшая поправка; `
-    + `на длинных гонках добавляется Fendurance; при анализе GPX отдельно добавляются тропа, грунт и броды.`;
+
+  return `Калибровка считается по данным загруженных GPX, а не по названию файла. `
+    + `Плоский эталон: файл ${anchor.rawFileKm.toFixed(1)} км; `
+    + `калибровочный темп ${fmtPaceSecPerKm(anchor.refPaceSec)} → `
+    + `${anchor.targetKm.toFixed(1)} км: ${fmtPaceSecPerKm(anchor.targetPaceSec)} по Riegel. `
+    + `Рельеф: веса силовой/быстрой трейловой GPX ${(info.strengthW*100).toFixed(0)}%/`
+    + `${(info.fastW*100).toFixed(0)}%, вычислены из набора на км, длительности и скорости файлов. `
+    + `Далее формула учитывает уклон, длительность, VO₂max; при анализе трассы отдельно добавляются `
+    + `тропа, грунт и броды.`;
 }
-
-
 
 function surfaceDistanceInRange(samples,fromKm,toKm,cls){
   if(!Array.isArray(samples) || samples.length<2) return 0;
