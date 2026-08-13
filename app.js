@@ -2318,12 +2318,15 @@ function renderRaceForecast(options={}){
     const trailSamples=Array.isArray(options.trailSamples)?options.trailSamples:[];
     const trailPenaltyPerKmSec=Number(options.trailPenaltyPerKmSec)||0;
     const dirtPenaltyPerKmSec=Number(options.dirtPenaltyPerKmSec)||0;
+    const unknownPenaltyPerKmSec=Number(options.unknownPenaltyPerKmSec)||0;
     let extraTotal=0;
     let fordExtraTotal=0;
     let trailExtraTotal=0;
     let dirtExtraTotal=0;
+    let unknownExtraTotal=0;
     let totalTrailKm=0;
     let totalDirtKm=0;
+    let totalUnknownKm=0;
 
     // Analysis-mode local penalties:
     // ford: +40 sec each;
@@ -2332,7 +2335,8 @@ function renderRaceForecast(options={}){
     if(
       (fordPenaltyPer>0 && fordKms.length) ||
       (trailPenaltyPerKmSec>0 && trailSamples.length) ||
-      (dirtPenaltyPerKmSec>0 && trailSamples.length)
+      (dirtPenaltyPerKmSec>0 && trailSamples.length) ||
+      (unknownPenaltyPerKmSec>0 && trailSamples.length)
     ){
       let cumExtra=0;
       f.groups.forEach(g=>{
@@ -2349,10 +2353,16 @@ function renderRaceForecast(options={}){
           : 0;
         const dirtExtra=dirtKm*dirtPenaltyPerKmSec;
 
-        const extra=fordExtra+trailExtra+dirtExtra;
+        const unknownKm=unknownPenaltyPerKmSec>0
+          ? surfaceDistanceInRange(trailSamples,g.from,g.to,'unknown')
+          : 0;
+        const unknownExtra=unknownKm*unknownPenaltyPerKmSec;
+
+        const extra=fordExtra+trailExtra+dirtExtra+unknownExtra;
 
         g.trailKm=trailKm;
         g.dirtKm=dirtKm;
+        g.unknownKm=unknownKm;
         g.fordCount=fordCount;
 
         g.sec+=extra;
@@ -2365,11 +2375,13 @@ function renderRaceForecast(options={}){
         fordExtraTotal+=fordExtra;
         trailExtraTotal+=trailExtra;
         dirtExtraTotal+=dirtExtra;
+        unknownExtraTotal+=unknownExtra;
         totalTrailKm+=trailKm;
         totalDirtKm+=dirtKm;
+        totalUnknownKm+=unknownKm;
       });
 
-      extraTotal=fordExtraTotal+trailExtraTotal+dirtExtraTotal;
+      extraTotal=fordExtraTotal+trailExtraTotal+dirtExtraTotal+unknownExtraTotal;
 
       f.fordCount=fordKms.length;
       f.fordPenaltySec=fordExtraTotal;
@@ -2379,6 +2391,9 @@ function renderRaceForecast(options={}){
 
       f.dirtKm=totalDirtKm;
       f.dirtPenaltySec=dirtExtraTotal;
+
+      f.unknownKm=totalUnknownKm;
+      f.unknownPenaltySec=unknownExtraTotal;
 
       f.analysisPenaltySec=extraTotal;
 
@@ -2554,12 +2569,15 @@ if($('raceForecastStatus')){
   }
 }
 
+let lastForecastModeBeforeReferenceChange=null;
+
 function bindRaceReference(role){
   const [fileId,nameId,btnId,statusId]=raceRefUI(role);
   const fileEl=$(fileId),nameEl=$(nameId),btn=$(btnId),status=$(statusId);
   if(!fileEl||!nameEl||!btn||!status) return;
 
   fileEl.addEventListener('change',e=>{
+    lastForecastModeBeforeReferenceChange=state.forecastMode || lastForecastModeBeforeReferenceChange;
     invalidateRaceForecast();
     const f=e.currentTarget.files?.[0]||null;
     raceRefSelections[role]=f;
@@ -2602,6 +2620,30 @@ function bindRaceReference(role){
         + `${fmtClockSec(parsed.elapsedSec)} · ${fmtPaceSecPerKm(parsed.elapsedSec/parsed.dist)}`;
       setActionState(btnId,'success');
       updateRaceReferenceState();
+
+      // Recalculate immediately after replacing an etalon GPX so the displayed
+      // race forecast can never remain from the previous file.
+      if(forecastInputsReady()){
+        const mode=lastForecastModeBeforeReferenceChange;
+        if(mode==='analysis' && state.mapAnalysis && state.mapAnalysisReadyForCurrentGpx===true){
+          const fordKms=state.mapAnalysis?.fordKms||[];
+          const trailSamples=state.mapAnalysis?.samples||state.mapAnalysis?.result?.samples||[];
+          renderRaceForecast({
+            fordKms,
+            fordPenaltyPerSec:40,
+            trailSamples,
+            trailPenaltyPerKmSec:60,
+            dirtPenaltyPerKmSec:30,
+            unknownPenaltyPerKmSec:60,
+            analysisMode:true
+          });
+        }else if(mode==='normal'){
+          renderRaceForecast({analysisMode:false});
+        }else{
+          // No prior mode: keep values cleared and require explicit first calculation.
+          updateFinalCalcAvailability();
+        }
+      }
     }catch(err){
       state.raceReferences[role]=null;
       status.textContent='✕ '+raceRefTitle(role)+': '+(err.message||String(err));
@@ -2648,6 +2690,7 @@ $('raceForecastGpxBtn')?.addEventListener('click',async()=>{
       trailSamples,
       trailPenaltyPerKmSec:60,
       dirtPenaltyPerKmSec:30,
+      unknownPenaltyPerKmSec:60,
       analysisMode:true
     });
     state.forecastMode='analysis';
@@ -2684,6 +2727,7 @@ function recalculateForecastWithCurrentMode(){
       trailSamples,
       trailPenaltyPerKmSec:60,
       dirtPenaltyPerKmSec:30,
+      unknownPenaltyPerKmSec:60,
       analysisMode:true
     });
   }else{

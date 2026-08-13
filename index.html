@@ -36,7 +36,7 @@
 </style>
 </head>
 <body>
-<div class="app-version">v0.26 ONLINE FULL</div>
+<div class="app-version">v0.27 ONLINE FULL</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Trail Race Analyzer</div>
@@ -253,7 +253,7 @@
 
         <button id="raceForecastBtn" class="primary action-ready" type="button">Рассчитать прогноз по трассе</button>
         <button id="raceForecastGpxBtn" class="primary action-idle" type="button" disabled>Рассчитать прогноз по трассе с анализом GPX</button>
-        <div id="raceForecastGpxNote" class="muted">Калибровка v0.25 зависит только от данных выбранных GPX: дистанции, времени, темпа, набора, уклонов и структуры скорости. Название файла на расчёт не влияет. После калибровки остальной прогноз считается по общей формуле.<br><br>При прогнозе с анализом GPX учитывается покрытие: каждый обнаруженный брод добавляет +40 секунд; каждый километр OSM-тропы — +1:00 мин/км; каждый километр грунта — +0:30 мин/км к расчётному времени.</div>
+        <div id="raceForecastGpxNote" class="muted">Калибровка v0.25 зависит только от данных выбранных GPX: дистанции, времени, темпа, набора, уклонов и структуры скорости. Название файла на расчёт не влияет. После калибровки остальной прогноз считается по общей формуле.<br><br>При прогнозе с анализом GPX учитывается покрытие: каждый обнаруженный брод добавляет +40 секунд; каждый километр OSM-тропы — +1:00 мин/км; каждый километр грунта — +0:30 мин/км; каждый километр «неизвестно» — +1:00 мин/км к расчётному времени.</div>
         <div id="raceForecastStatus" class="muted">Сначала загрузите GPX трассы во вкладке «Трасса».</div>
 
         <div class="metrics big">
