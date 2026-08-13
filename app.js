@@ -2543,6 +2543,27 @@ function renderRaceForecast(options={}){
       f.highSec=f.totalSec*1.10;
       f.physiology=racePhysiologyFactors(f.totalSec);
     }
+    // HR forecast from uploaded training HR + predicted local pace.
+    // Faster-than-average sections raise HR, slower sections lower it; race progression
+    // adds a controlled drift so the start is conservative and the finish can be harder.
+    const trainingHr=Number($('refAvgHr')?.value||state.bestTraining?.hr||0);
+    const lthrForecast=estimateLTHR();
+    const forecastHrForGroup=(g)=>{
+      if(!(trainingHr>0) && !(lthrForecast>0)) return '—';
+      const anchor=trainingHr>0 ? trainingHr : lthrForecast*0.90;
+      const raceAvg=Math.max(1,f.avgPaceSec||g.paceSec);
+      const paceRatio=raceAvg/Math.max(1,g.paceSec); // >1 = faster local section
+      const progress=Math.max(0,Math.min(1,((g.from+g.to)/2)/Math.max(0.1,state.dist)));
+      let center=anchor + (paceRatio-1)*32 + (progress-0.35)*8;
+      if(lthrForecast>0){
+        const ceiling=lthrForecast*(progress<0.75?0.96:progress<0.95?0.99:1.03);
+        center=Math.min(center,ceiling);
+      }
+      center=Math.max(105,Math.min(195,center));
+      const spread=progress<0.25?3:progress<0.85?3:4;
+      return `${Math.round(center-spread)}–${Math.round(center+spread)}`;
+    };
+
     state.raceForecast=f;
     tbody.innerHTML='';
     f.groups.forEach(g=>{
@@ -2557,6 +2578,7 @@ function renderRaceForecast(options={}){
           <td>+${Math.round(g.gain)} / −${Math.round(g.loss)} м</td>
           <td>${(g.grade*100).toFixed(1)}%</td>
           <td>${fmtPaceSecPerKm(g.paceSec)}</td>
+          <td><b>${forecastHrForGroup(g)}</b></td>
           <td>${fmtClockSec(g.sec)}</td>
           <td>${fmtClockSec(g.cumSec)}</td>
           <td>${Math.round(f.effort)}%</td>
