@@ -1,4 +1,23 @@
 
+let mapAnalysisStartedAt=0;
+let mapAnalysisTimer=null;
+function startMapAnalysisTimer(){
+  mapAnalysisStartedAt=performance.now();
+  if(mapAnalysisTimer) clearInterval(mapAnalysisTimer);
+  mapAnalysisTimer=setInterval(()=>{
+    const sec=(performance.now()-mapAnalysisStartedAt)/1000;
+    const el=$('mapTimingNote');
+    if(el) el.textContent=`Среднее время анализа карты — 15 секунд. Прошло: ${sec.toFixed(1)} с`;
+  },200);
+}
+function stopMapAnalysisTimer(){
+  if(mapAnalysisTimer){clearInterval(mapAnalysisTimer);mapAnalysisTimer=null;}
+  const sec=mapAnalysisStartedAt?((performance.now()-mapAnalysisStartedAt)/1000):0;
+  const el=$('mapTimingNote');
+  if(el) el.textContent=`Среднее время анализа карты — 15 секунд. Последний анализ: ${sec.toFixed(1)} с`;
+}
+
+
 function syncFordCards(data){
   normalizeFordData(data);
   const count=String(data?.ford_count ?? 0);
@@ -952,6 +971,7 @@ function filterFordCandidatesClient(fords){
 }
 
 async function analyzeMapOSM(){
+  startMapAnalysisTimer();
   if(!state.track || !state.track.length) throw new Error('Сначала обработайте GPX');
   const pts=sampleTrackPoints(220);
   const query=buildOverpassQuery(pts);
@@ -1020,7 +1040,9 @@ async function analyzeMapOSM(){
 function renderMapAnalysis(result){
   const {samples,summary,elements=[]}=result;
   const crossings=analyzeWaterCrossings(samples,elements);
-  const fordKms=crossings.fords;
+  // One physical water section = one ford. Display only the first (entry) km.
+  const fordGroups=groupFordKmPoints(crossings.fords);
+  const fordKms=fordGroups.map(g=>g.start);
   const bridgeKms=crossings.bridges;
 
   $('mapAnalysisResults').style.display='block';
@@ -1437,6 +1459,7 @@ $('mapAnalyzeBtn')?.addEventListener('click',async ()=>{
     renderMapAnalysis(result);
     p.value=100;
     $('mapAnalyzeStatus').textContent='✓ Анализ карты готов и сохранён локально.';
+    stopMapAnalysisTimer();
     setActionState('mapAnalyzeBtn','success');
     setTimeout(()=>p.style.display='none',1200);
   }catch(err){
