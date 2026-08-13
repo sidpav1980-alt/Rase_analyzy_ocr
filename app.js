@@ -2628,6 +2628,24 @@ function calculateRaceForecast(){
           s.cumSec=totalSec;
         });
       }
+
+      // v0.53: the same-course result is not only a lower bound.
+      // If the generic mountain model becomes much slower than a real completed
+      // effort on this exact route, cap the pessimism as well.
+      const maxSlowdown =
+        routeVD>=140 ? 0.08 :
+        routeVD>=110 ? 0.10 :
+        routeVD>=80  ? 0.12 : 0.15;
+      const sameCourseCeilingSec=actualMovingSec*(1+maxSlowdown);
+      if(totalSec>sameCourseCeilingSec){
+        const scale=sameCourseCeilingSec/Math.max(1,totalSec);
+        totalSec=0;
+        detailed.forEach(s=>{
+          s.sec*=scale;
+          totalSec+=s.sec;
+          s.cumSec=totalSec;
+        });
+      }
     }
   }
 
@@ -2887,52 +2905,54 @@ function renderRaceForecast(options={}){
       const totalHours=Math.max(0.5,Number(f.totalSec||0)/3600);
       const raceAvg=Math.max(1,Number(f.avgPaceSec||g.paceSec));
       const localPace=Math.max(1,Number(g.paceSec||raceAvg));
-      const speedRatio=raceAvg/localPace;
+      const speedRatio=Math.max(0.65,Math.min(1.35,raceAvg/localPace));
       const progress=Math.max(0,Math.min(1,((g.from+g.to)/2)/Math.max(0.1,state.dist)));
 
-      // Duration blend:
-      // <=1.25h stays close to fast-session HR;
-      // 2-4h gradually moves toward sustainable HR;
-      // >6h is mostly sustainable, but still respects the athlete's observed upper range.
-      const durationBlend=Math.max(0,Math.min(1,(totalHours-1.0)/5.0));
-      let center=
-        hrCal.upperWorkingHr*(1-durationBlend) +
-        hrCal.sustainableHr*durationBlend;
+      // v0.53: for multi-hour races HR is based on a sustainable fraction of
+      // the athlete's observed threshold, not on short-race HR.
+      const lthr=Math.max(120,Number(hrCal.thresholdHr||hrCal.lthr||hrCal.upperWorkingHr));
+      let frac;
+      if(totalHours<=1.5) frac=0.92;
+      else if(totalHours<=3) frac=0.89;
+      else if(totalHours<=5) frac=0.86;
+      else if(totalHours<=7) frac=0.83;
+      else frac=0.80;
 
-      // Predicted pace modifies HR, but much less than in v0.49 so slow terrain
-      // doesn't incorrectly drag HR 10-15 bpm below the athlete's real physiology.
-      center += (speedRatio-1)*Math.min(24,hrCal.speedSlope*0.60);
+      let center=lthr*frac;
 
-      // Race progression: controlled start -> working middle -> stronger finish.
-      center += progress<0.15 ? -5 :
-                progress<0.45 ? -2 :
-                progress<0.75 ? 1 :
-                progress<0.92 ? 4 : 8;
+      // Small personalization from the longer uploaded training files.
+      const sustainable=Number(hrCal.sustainableHr||center);
+      center=center*0.70+sustainable*0.30;
 
-      // Uphill: allow higher HR because pace is naturally slower for the same effort.
-      // Downhill: don't force HR artificially high.
+      // Terrain pace is a weak HR signal: 30–40 min/km on a climb must not
+      // imply either walking HR or threshold HR by itself.
+      center+=(speedRatio-1)*8;
+
+      // Conservative progression. Only the final part may approach threshold.
+      center+=progress<0.15?-4:
+              progress<0.50?-1:
+              progress<0.80?1:
+              progress<0.95?3:6;
+
       const grade=Number(g.grade||0);
-      if(grade>0.02) center+=Math.min(7,grade*70);
-      if(grade<-0.03) center-=Math.min(3,Math.abs(grade)*20);
+      if(grade>0.04) center+=Math.min(4,grade*25);
+      if(grade<-0.05) center-=Math.min(3,Math.abs(grade)*15);
 
-      // Physiological ceilings from observed fast-session distribution.
-      const normalCeiling=progress<0.70
-        ? hrCal.thresholdHr-2
-        : progress<0.93
-          ? hrCal.thresholdHr+1
-          : hrCal.finishCeiling;
+      // Long-duration ceiling: sustained 170+ bpm for 4–7 hours should not be
+      // proposed merely because a 10 km reference reached that HR.
+      const durationCeiling =
+        totalHours>=7 ? lthr*0.88 :
+        totalHours>=5 ? lthr*0.90 :
+        totalHours>=3 ? lthr*0.93 :
+        lthr*0.97;
+      const finishCeiling=progress>=0.95
+        ? Math.min(Number(hrCal.finishCeiling||lthr), lthr*0.97)
+        : durationCeiling;
 
-      center=Math.min(center,normalCeiling);
+      center=Math.min(center,finishCeiling);
+      center=Math.max(105,center);
 
-      // Don't let a mountainous/slow predicted pace collapse HR below the
-      // sustainable training anchor by more than a controlled amount.
-      const floor=
-        hrCal.sustainableHr +
-        (progress<0.20?-8:progress<0.70?-5:progress<0.92?-2:1);
-      center=Math.max(center,floor);
-
-      center=Math.max(105,Math.min(202,center));
-      const spread=progress<0.20?4:progress<0.90?4:5;
+      const spread=totalHours>=4?3:4;
       return `${Math.round(center-spread)}–${Math.round(center+spread)}`;
     };
     state.raceForecast=f;
