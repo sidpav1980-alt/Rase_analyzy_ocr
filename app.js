@@ -521,13 +521,37 @@ function updateTraversalTimes(){
   if(elapsedPace) elapsedPace.textContent=formatTrackPace(times.elapsedSec,distanceKm);
 }
 
+
+function adjustedTrailEndurancePoints(kmEffort){
+  let pts=itraEndurancePoints(kmEffort);
+  const d=computeTrailDifficulty();
+  const vertPerKm=(state.gain||0)/Math.max(0.1,state.dist||0);
+
+  const nearNextBoundary =
+    (pts===1 && kmEffort>=42) ||
+    (pts===2 && kmEffort>=72) ||
+    (pts===3 && kmEffort>=112) ||
+    (pts===4 && kmEffort>=152) ||
+    (pts===5 && kmEffort>=205);
+
+  const extremeVertical =
+    vertPerKm>=120 ||
+    d.steep15Pct>=40 ||
+    d.score>=7.5;
+
+  if(pts<6 && nearNextBoundary && extremeVertical) pts+=1;
+  return pts;
+}
+
 function updateItraDifficulty(){
   const kmEffort=(state.dist||0)+((state.gain||0)/100);
   const points=itraEndurancePoints(kmEffort);
-  const k=$('itraKmEffort'), p=$('itraPoints');
+  const k=$('itraKmEffort'), p=$('itraPoints'), ap=$('itraAdjustedPoints');
+  const adjustedPoints=adjustedTrailEndurancePoints(kmEffort);
   if(k) k.textContent=kmEffort ? kmEffort.toFixed(1) : '—';
   if(p) p.textContent=(state.dist||state.gain) ? String(points) : '—';
-  return {kmEffort, points};
+  if(ap) ap.textContent=(state.dist||state.gain) ? String(adjustedPoints) : '—';
+  return {kmEffort, points, adjustedPoints};
 }
 
 
