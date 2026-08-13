@@ -36,7 +36,7 @@
 </style>
 </head>
 <body>
-<div class="app-version">v0.12 ONLINE FULL</div>
+<div class="app-version">v0.13 ONLINE FULL</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Trail Race Analyzer</div>
@@ -280,6 +280,7 @@
           </div>
         </div>
 
+        <div id="calcAvailabilityStatus" class="muted">Сначала рассчитайте прогноз во вкладке «Прогноз».</div>
         <div class="metrics big">
           <div><span>Эталонов загружено</span><b id="referenceCount">0 / 3</b></div>
           <div><span>Общая модель</span><b id="combinedModelState">ожидает 3 GPX</b></div>
@@ -356,7 +357,7 @@
       <div class="card">
         <div class="row between">
           <h2>Итог</h2>
-          <button id="calcBtn" class="primary">Рассчитать</button>
+          <button id="calcBtn" class="primary action-idle" disabled>Рассчитать</button>
         </div>
         <div class="metrics big">
           <div><span>Прогноз финиша</span><b id="finishMetric">—</b></div>

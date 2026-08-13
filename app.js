@@ -92,6 +92,7 @@ const state = {
   },
   raceModel: null,
   raceForecast: null,
+  forecastMode: null,
   mapAnalysis: null,
   deferredPrompt: null
 };
@@ -347,6 +348,7 @@ $('basePace').addEventListener('change',()=>{ if(state.track&&state.track.length
 window.addEventListener('resize',()=>{ if(state.track&&state.track.length) drawTrackProfiles(); });
 
 $('gpxFile').addEventListener('change', e=>{
+  invalidateRaceForecast();
   state.hasElevation=false;
   state.raceForecast=null;
   if($('raceForecastTable')) $('raceForecastTable').querySelector('tbody').innerHTML='';
@@ -2082,17 +2084,17 @@ function renderRaceForecast(options={}){
       : 'нужно 3 GPX';
     $('raceModelFormula').textContent=raceFormulaText();
     $('raceForecastStatus').textContent=f.fordPenaltySec ? `✓ Прогноз с анализом GPX: ${state.dist.toFixed(1)} км · бродов ${f.fordCount} · +${f.fordPenaltySec} с (${f.fordCount} × 40 с).` : `✓ Общий прогноз по 3 GPX: ${state.dist.toFixed(1)} км. Темпы участков нормированы к среднему прогнозному темпу.`;
-    if(options.analysisMode){
-      setActionState('raceForecastBtn','ready');
-      setActionState('raceForecastGpxBtn','success');
-    }else{
-      setActionState('raceForecastBtn','success');
-      setActionState('raceForecastGpxBtn','ready');
-    }
+    state.forecastMode=options.analysisMode?'analysis':'normal';
+    applyForecastModeColors();
+    updateFinalCalcAvailability();
   }catch(err){
     tbody.innerHTML='';
     $('raceForecastStatus').textContent='✕ '+(err.message||String(err));
-    setActionState('raceForecastBtn','error');
+    if(options.analysisMode) setActionState('raceForecastGpxBtn','error');
+    else setActionState('raceForecastBtn','error');
+    state.raceForecast=null;
+    state.forecastMode=null;
+    updateFinalCalcAvailability();
   }
 }
 
@@ -2112,6 +2114,74 @@ function raceRefTitle(role){
   return role==='strength'?'Силовая трейловая GPX':
          role==='fastTrail'?'Быстрая трейловая GPX':'Гоночная (плоская) GPX';
 }
+
+function forecastInputsReady(){
+  const count=['strength','fastTrail','flatRace'].filter(k=>state.raceReferences?.[k]).length;
+  const routeReady=Number(state.dist||0)>0 && state.track?.length>1;
+  const vo2=Number($('vo2max')?.value||0);
+  return routeReady && count===3 && vo2>=20 && vo2<=90;
+}
+
+function applyForecastModeColors(){
+  const normal=$('raceForecastBtn');
+  const analysis=$('raceForecastGpxBtn');
+  const ready=forecastInputsReady();
+
+  if(!normal || !analysis) return;
+
+  normal.disabled=!ready;
+  analysis.disabled=!ready;
+
+  if(!ready){
+    setActionState('raceForecastBtn','idle');
+    setActionState('raceForecastGpxBtn','idle');
+    return;
+  }
+
+  if(state.forecastMode==='normal'){
+    setActionState('raceForecastBtn','success');
+    setActionState('raceForecastGpxBtn','ready');
+  }else if(state.forecastMode==='analysis'){
+    setActionState('raceForecastBtn','ready');
+    setActionState('raceForecastGpxBtn','success');
+  }else{
+    setActionState('raceForecastBtn','ready');
+    setActionState('raceForecastGpxBtn','ready');
+  }
+}
+
+function hasFinalCalculationData(){
+  return !!(state.raceForecast && Number(state.raceForecast.totalSec)>0);
+}
+
+function updateFinalCalcAvailability(){
+  const btn=$('calcBtn');
+  const status=$('calcAvailabilityStatus');
+  if(!btn) return;
+
+  const ready=hasFinalCalculationData();
+  btn.disabled=!ready;
+
+  if(!ready){
+    setActionState('calcBtn','idle');
+    if(status) status.textContent='Сначала рассчитайте прогноз во вкладке «Прогноз».';
+  }else{
+    setActionState('calcBtn','ready');
+    if(status){
+      status.textContent=state.forecastMode==='analysis'
+        ? 'Готово: используется прогноз с анализом GPX.'
+        : 'Готово: используется обычный прогноз по трассе.';
+    }
+  }
+}
+
+function invalidateRaceForecast(){
+  state.raceForecast=null;
+  state.forecastMode=null;
+  applyForecastModeColors();
+  updateFinalCalcAvailability();
+}
+
 function updateRaceReferenceState(){
   const count=['strength','fastTrail','flatRace'].filter(k=>state.raceReferences[k]).length;
   if($('referenceCount')) $('referenceCount').textContent=`${count} / 3`;
@@ -2122,17 +2192,8 @@ function updateRaceReferenceState(){
   const vo2=Number($('vo2max')?.value||0);
   const vo2Ready=vo2>=20 && vo2<=90;
   const ready=routeReady && count===3 && vo2Ready;
-  const btn=$('raceForecastBtn');
-  const gpxBtn=$('raceForecastGpxBtn');
-  if(btn){
-    btn.disabled=!ready;
-    setActionState('raceForecastBtn',ready?'ready':'idle');
-  }
-  if(gpxBtn){
-    gpxBtn.disabled=!ready;
-    setActionState('raceForecastGpxBtn',ready?'ready':'idle');
-  }
-  if($('raceForecastStatus')){
+  applyForecastModeColors();
+if($('raceForecastStatus')){
     if(!routeReady) $('raceForecastStatus').textContent='Сначала загрузите GPX трассы во вкладке «Трасса».';
     else if(count<3) $('raceForecastStatus').textContent=`Трасса готова. Загрузите ещё ${3-count} эталонных GPX.`;
     else if(!vo2Ready) $('raceForecastStatus').textContent='Введите обязательный VO₂max (20–90 мл/кг/мин).';
@@ -2146,6 +2207,7 @@ function bindRaceReference(role){
   if(!fileEl||!nameEl||!btn||!status) return;
 
   fileEl.addEventListener('change',e=>{
+    invalidateRaceForecast();
     const f=e.currentTarget.files?.[0]||null;
     raceRefSelections[role]=f;
     state.raceReferences[role]=null;
@@ -2231,35 +2293,42 @@ $('raceForecastGpxBtn')?.addEventListener('click',async()=>{
       dirtPenaltyPerKmSec:30,
       analysisMode:true
     });
-    setActionState('raceForecastGpxBtn','success');
+    state.forecastMode='analysis';
+    applyForecastModeColors();
+    updateFinalCalcAvailability();
   }catch(err){
     if($('raceForecastStatus')) $('raceForecastStatus').textContent='✕ '+(err.message||String(err));
     setActionState('raceForecastGpxBtn','error');
   }finally{
-    const count=['strength','fastTrail','flatRace'].filter(k=>state.raceReferences[k]).length;
-    const vo2=Number($('vo2max')?.value||0);
-    const ready=state.dist>0 && state.track?.length>1 && count===3 && vo2>=20 && vo2<=90;
-    btn.disabled=!ready;
+    applyForecastModeColors();
+    updateFinalCalcAvailability();
   }
 });
 
-$('vo2max')?.addEventListener('input',updateRaceReferenceState);
-$('raceForecastBtn')?.addEventListener('click',renderRaceForecast);
-$('raceEffortPct')?.addEventListener('change',()=>{if(state.dist>0) renderRaceForecast();});
-$('forecastStepKm')?.addEventListener('change',()=>{if(state.dist>0) renderRaceForecast();});
+$('vo2max')?.addEventListener('input',()=>{
+  if(state.raceForecast) invalidateRaceForecast();
+  updateRaceReferenceState();
+});
+$('raceForecastBtn')?.addEventListener('click',()=>{
+  renderRaceForecast({analysisMode:false});
+});
+$('raceEffortPct')?.addEventListener('change',()=>{invalidateRaceForecast(); updateRaceReferenceState();});
+$('forecastStepKm')?.addEventListener('change',()=>{invalidateRaceForecast(); updateRaceReferenceState();});
 
 window.addEventListener('DOMContentLoaded',()=>{
   if($('raceModelFormula')) $('raceModelFormula').textContent=raceFormulaText();
   updateRaceReferenceState();
+  applyForecastModeColors();
+  updateFinalCalcAvailability();
 });
 
 $('calcBtn').addEventListener('click',()=>{
-  if(!hasAnalysisData()){
+  if(!hasFinalCalculationData()){
     clearResultForecast();
-    renderHrStrategy();
-  document.querySelector('[data-tab="result"]').click();
+    updateFinalCalcAvailability();
     return;
   }
+  setActionState('calcBtn','working');
 
   const finish = state.raceForecast?.totalSec || finishPrediction();
   $('finishMetric').textContent=finish?hms(finish):'—';
@@ -2301,6 +2370,7 @@ $('calcBtn').addEventListener('click',()=>{
         `<tr><td>${i+1}</td><td>${r.athlete}</td><td>${r.pi||0}</td><td>${s.toFixed(1)}</td><td>${threat(d)}</td></tr>`);
     });
 
+  setActionState('calcBtn','success');
   document.querySelector('[data-tab="result"]').click();
 });
 
