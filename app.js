@@ -2174,7 +2174,11 @@ function renderRaceForecast(options={}){
     if($('raceDurationFactor')) $('raceDurationFactor').textContent=(f.physiology.durationFactor*100).toFixed(0)+'%';
     if($('raceHrFactor')) $('raceHrFactor').textContent=(f.physiology.hrFactor*100).toFixed(0)+'%';
     if($('raceAcidTime')) $('raceAcidTime').textContent=Number.isFinite(f.physiology.acidHours)?f.physiology.acidHours.toFixed(1)+' ч':'—';
-    if($('raceVo2Factor')) $('raceVo2Factor').textContent=`${f.physiology.vo2.toFixed(1)} → ${(f.physiology.vo2Factor*100).toFixed(1)}%`;
+    if($('raceVo2Factor')) {
+      const vo2Delta=(f.physiology.vo2Factor-1)*100;
+      $('raceVo2Factor').textContent=`${vo2Delta>=0?'+':''}${vo2Delta.toFixed(1)}%`;
+    }
+    if($('raceVo2Value')) $('raceVo2Value').textContent=`VO₂max: ${f.physiology.vo2.toFixed(0)} мл/кг/мин`;
     $('raceModelSource').textContent=allRaceReferencesReady()
       ? `${state.raceReferences.strength.source} + ${state.raceReferences.fastTrail.source} + ${state.raceReferences.flatRace.source}`
       : 'нужно 3 GPX';
