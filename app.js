@@ -2627,9 +2627,34 @@ function updateFinalCalcAvailability(){
   }
 }
 
+
+function clearRaceForecastUI(){
+  const ids=[
+    'raceForecastTime',
+    'raceForecastPace',
+    'raceForecastRange',
+    'raceCalibration',
+    'raceDurationFactor',
+    'raceHrFactor',
+    'raceAcidHours',
+    'raceVo2Factor'
+  ];
+  ids.forEach(id=>{
+    const el=$(id);
+    if(el) el.textContent='—';
+  });
+
+  const tbody=$('raceForecastTable')?.querySelector('tbody');
+  if(tbody) tbody.innerHTML='';
+
+  if($('raceModelFormula')) $('raceModelFormula').textContent=raceFormulaText();
+  clearResultForecast();
+}
+
 function invalidateRaceForecast(){
   state.raceForecast=null;
   state.forecastMode=null;
+  clearRaceForecastUI();
   applyForecastModeColors();
   updateFinalCalcAvailability();
 }
@@ -2663,6 +2688,9 @@ function bindRaceReference(role){
   fileEl.addEventListener('change',e=>{
     lastForecastModeBeforeReferenceChange=state.forecastMode || lastForecastModeBeforeReferenceChange;
     invalidateRaceForecast();
+    if($('raceForecastStatus')){
+      $('raceForecastStatus').textContent='Эталонный GPX изменён. Старый прогноз очищен. Загрузите выбранный файл.';
+    }
     const f=e.currentTarget.files?.[0]||null;
     raceRefSelections[role]=f;
     state.raceReferences[role]=null;
@@ -2685,6 +2713,8 @@ function bindRaceReference(role){
     const f=raceRefSelections[role];
     if(!f) return;
     try{
+      clearRaceForecastUI();
+      state.raceForecast=null;
       setActionState(btnId,'working');
       status.textContent='Анализирую '+raceRefTitle(role)+'…';
       const text=await readFileIOS(f);
