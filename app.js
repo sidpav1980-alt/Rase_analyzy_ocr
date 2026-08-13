@@ -1764,10 +1764,10 @@ function combinedRaceModelInfo(){
 }
 
 function racePhysiologyFactors(predictedSec){
-  const refs=Object.values(state.raceRefs||{}).filter(Boolean);
+  const refs=Object.values(state.raceReferences||{}).filter(Boolean);
   const T=Math.max(0.5,predictedSec/3600);
-  const longRef=state.raceRefs?.strength || refs.slice().sort((a,b)=>(b.durationSec||0)-(a.durationSec||0))[0];
-  const T10=Math.max(0.5,(longRef?.durationSec||3600)/3600);
+  const longRef=state.raceReferences?.strength || refs.slice().sort((a,b)=>(b.elapsedSec||0)-(a.elapsedSec||0))[0];
+  const T10=Math.max(0.5,(longRef?.elapsedSec||3600)/3600);
   const k=Math.max(0.10,Math.min(0.32,0.16 + Math.max(0,3-T10)*0.025 - Math.max(0,T10-4)*0.012));
   const durationFactor=Math.max(0.68,Math.min(1.03,Math.pow(Math.max(1,T/T10),-k)));
 
@@ -1838,6 +1838,61 @@ function buildRaceMicroSegments(){
   return micro;
 }
 
+
+function riegelExponentForDistance(targetKm,refKm){
+  const ratio=Math.max(1,targetKm/Math.max(0.1,refKm));
+  // 10 km -> HM: classic Riegel ~1.06.
+  // Longer targets get progressively more conservative.
+  if(targetKm<=25) return 1.06;
+  if(targetKm<=42.5) return 1.07;
+  if(targetKm<=60) return 1.085;
+  if(targetKm<=100) return 1.10;
+  return 1.12;
+}
+
+function flatRaceAnchorForTarget(){
+  const ref=state.raceReferences?.flatRace;
+  if(!ref || !(ref.dist>=10) || !(ref.elapsedSec>0)) return null;
+
+  const targetKm=Number(state.dist||0);
+  const exponent=riegelExponentForDistance(targetKm,ref.dist);
+  const targetSec=ref.elapsedSec*Math.pow(targetKm/ref.dist,exponent);
+  const targetPaceSec=targetSec/Math.max(0.001,targetKm);
+  const targetSpeed=(targetKm*1000)/Math.max(1,targetSec);
+
+  return {
+    refKm:ref.dist,
+    refSec:ref.elapsedSec,
+    refPaceSec:ref.elapsedSec/ref.dist,
+    exponent,
+    targetKm,
+    targetSec,
+    targetPaceSec,
+    targetSpeed
+  };
+}
+
+function gradeOnlyFactor(grade){
+  const info=combinedRaceModelInfo();
+  if(!info) return 1;
+  const g=Math.max(-0.45,Math.min(0.45,grade));
+  const up=Math.max(g,0),dn=Math.max(-g,0);
+  const c=info.gradeCoeff;
+  return Math.max(0.20,Math.min(2.5,Math.exp(
+    c[1]*up+c[2]*up*up+c[3]*dn+c[4]*dn*dn
+  )));
+}
+
+function longDistanceEnduranceFactor(baseSec,vo2){
+  const hours=Math.max(0,baseSec/3600);
+  if(hours<=2) return 1;
+  // Riegel already accounts for distance-related slowdown.
+  // This is only an extra ultra-duration correction.
+  const vo2Adj=Math.max(0.85,Math.min(1.20,50/Math.max(20,vo2)));
+  const extra=Math.min(0.28,(hours-2)*0.012*vo2Adj);
+  return 1+extra;
+}
+
 function calculateRaceForecast(){
   if(!(state.dist>0) || !(state.track?.length>1)){
     throw new Error('Сначала загрузите GPX трассы');
@@ -1845,22 +1900,65 @@ function calculateRaceForecast(){
   if(!allRaceReferencesReady()){
     throw new Error('Загрузите все 3 эталонные GPX тренировки');
   }
-  const vo2Required=Number($('vo2max')?.value||0);
-  if(!(vo2Required>=20 && vo2Required<=90)){
+
+  const vo2=Number($('vo2max')?.value||0);
+  if(!(vo2>=20 && vo2<=90)){
     throw new Error('Введите обязательный VO₂max от 20 до 90 мл/кг/мин');
   }
+
+  const flatAnchor=flatRaceAnchorForTarget();
+  if(!flatAnchor){
+    throw new Error('Гоночная (плоская) GPX должна быть не менее 10 км и содержать корректное время');
+  }
+
   const effort=Number($('raceEffortPct')?.value||100);
   const groupKm=Math.max(1,Math.min(10,Number($('forecastStepKm')?.value||5)));
   const micro=buildRaceMicroSegments();
   if(!micro.length) throw new Error('Не удалось разбить трассу на участки');
 
+  // Main anchor = actual flat-race performance scaled to target distance.
+  // At 100% effort, a flat asphalt route stays close to the Riegel-scaled anchor.
+  const effortFactor=Math.max(0.75,Math.min(1.20,100/Math.max(70,Math.min(130,effort))));
+  const vo2Factor=Math.max(0.97,Math.min(1.03,1-(vo2-50)*0.0015));
+
   let totalSec=0;
   const detailed=[];
+
   for(const s of micro){
-    const v=raceModelSpeed(s.grade,s.progress,effort,totalSec);
-    const sec=s.dm/v;
+    const gradeFactor=gradeOnlyFactor(s.grade);
+    const flatSec=s.dm/Math.max(0.25,flatAnchor.targetSpeed);
+    // gradeFactor >1 means faster in the legacy speed model, so convert to time.
+    const terrainTimeFactor=1/Math.max(0.25,gradeFactor);
+    const sec=flatSec*terrainTimeFactor*effortFactor*vo2Factor;
     totalSec+=sec;
-    detailed.push({...s,v,sec,cumSec:totalSec});
+    detailed.push({...s,sec,cumSec:totalSec});
+  }
+
+  // Normalize completely flat routes to the real flat-race anchor.
+  // For hilly routes, keep the relative terrain cost learned from trail references.
+  const routeGain=Number(state.gain||0);
+  const flatEnough=(routeGain/state.dist)<=8; // <=8 m gain/km: effectively flat/rolling
+  if(flatEnough && totalSec>0){
+    const desired=flatAnchor.targetSec*effortFactor*vo2Factor;
+    const scale=desired/totalSec;
+    totalSec=0;
+    detailed.forEach(s=>{
+      s.sec*=scale;
+      totalSec+=s.sec;
+      s.cumSec=totalSec;
+    });
+  }
+
+  // Additional correction is only for long events; Riegel already includes normal
+  // distance-related slowdown from 10 km to half/marathon distances.
+  const ultraFactor=longDistanceEnduranceFactor(totalSec,vo2);
+  if(ultraFactor!==1){
+    totalSec=0;
+    detailed.forEach(s=>{
+      s.sec*=ultraFactor;
+      totalSec+=s.sec;
+      s.cumSec=totalSec;
+    });
   }
 
   const groups=[];
@@ -1880,37 +1978,25 @@ function calculateRaceForecast(){
   }
   if(current) groups.push(current);
 
-  // Recommended pacing:
-  // The physiology-adjusted total forecast is the anchor.
-  // Terrain changes pace moderately around the race-average pace instead of
-  // treating early sections as max-effort and forcing a collapse later.
   const avgRacePaceSec=totalSec/state.dist;
 
   groups.forEach(g=>{
     g.grade=g.distM?g.weightedGrade/g.distM:0;
 
-    const gradePct=g.grade*100;
-    let terrainFactor=1;
-    if(gradePct>0){
-      terrainFactor += Math.min(0.22, gradePct*0.035);
-    }else{
-      terrainFactor -= Math.min(0.10, Math.abs(gradePct)*0.018);
-    }
-
-    // Conservative race distribution:
-    // first third slightly easier, middle around average,
-    // last third only marginally faster if terrain permits.
+    // Recommended distribution around the target average:
+    // no artificial "very slow first 5 km" on a flat road race.
     const mid=((g.from+g.to)/2)/state.dist;
     let pacingFactor=1;
-    if(mid<0.33) pacingFactor=1.035;
-    else if(mid<0.66) pacingFactor=1.000;
-    else pacingFactor=0.985;
+    if(mid<0.25) pacingFactor=1.010;       // only ~1% conservative early
+    else if(mid<0.75) pacingFactor=1.000;
+    else pacingFactor=0.995;
 
-    g.recommendedPaceSec=avgRacePaceSec*terrainFactor*pacingFactor;
+    const terrainRatio=(g.sec/Math.max(1,g.distM/1000))/avgRacePaceSec;
+    g.recommendedPaceSec=avgRacePaceSec*terrainRatio*pacingFactor;
     g.recommendedSec=g.recommendedPaceSec*(g.distM/1000);
   });
 
-  // Normalize all section times so they sum exactly to the total moving-time forecast.
+  // Normalize section recommendations to total forecast time.
   const recommendedRaw=groups.reduce((sum,g)=>sum+g.recommendedSec,0);
   const norm=recommendedRaw>0?totalSec/recommendedRaw:1;
   let recommendedCum=0;
@@ -1920,35 +2006,39 @@ function calculateRaceForecast(){
     g.recommendedPaceSec*=norm;
     recommendedCum+=g.recommendedSec;
     g.recommendedCumSec=recommendedCum;
-
-    // Keep existing renderer fields, now containing recommended values.
     g.paceSec=g.recommendedPaceSec;
     g.sec=g.recommendedSec;
     g.cumSec=g.recommendedCumSec;
   });
 
+  const physiology=racePhysiologyFactors(totalSec);
+
   return {
     totalSec,
     avgPaceSec:totalSec/state.dist,
-    lowSec:totalSec*0.90,
-    highSec:totalSec*1.10,
+    lowSec:totalSec*0.95,
+    highSec:totalSec*1.05,
     effort,
     groupKm,
     groups,
-    physiology: racePhysiologyFactors(totalSec)
+    physiology,
+    flatAnchor,
+    ultraFactor
   };
 }
 
 function raceFormulaText(){
   const info=combinedRaceModelInfo();
-  if(!info) return 'Загрузите все 3 эталонные GPX.';
+  const anchor=flatRaceAnchorForTarget();
+  if(!info || !anchor) return 'Загрузите все 3 эталонные GPX.';
   const c=info.gradeCoeff;
   const f=n=>(n>=0?'+ ':'− ')+Math.abs(n).toFixed(3);
-  return `v = Vflat × Fgrade × FfastTrail × Ffatigue × Effort; `
-    + `Vflat=${info.flatSpeed.toFixed(2)} м/с; `
-    + `ln(Fgrade)=${f(c[1])}·G+ ${f(c[2])}·G+² ${f(c[3])}·G− ${f(c[4])}·G−²; `
-    + `FfastTrail=${info.fastTrailFactor.toFixed(3)}; fatigueK=${info.fatigueK.toFixed(3)}; `
-    + `Fduration=(T/T10)^−k; FHR=ограничение по пульсу/времени закисления; FVO2=обязательная аэробная поправка VO₂max`;
+  return `База = реальный результат плоской GPX × Riegel(D₂/D₁)^${anchor.exponent.toFixed(3)}; `
+    + `эталон ${anchor.refKm.toFixed(1)} км за ${fmtClockSec(anchor.refSec)} `
+    + `(${fmtPaceSecPerKm(anchor.refPaceSec)}) → базовый прогноз ${anchor.targetKm.toFixed(1)} км `
+    + `за ${fmtClockSec(anchor.targetSec)} (${fmtPaceSecPerKm(anchor.targetPaceSec)}). `
+    + `Затем: Fgrade по двум трейловым GPX; VO₂max = небольшая поправка; `
+    + `на длинных гонках добавляется Fendurance; при анализе GPX отдельно добавляются тропа, грунт и броды.`;
 }
 
 
@@ -2074,6 +2164,12 @@ function renderRaceForecast(options={}){
     });
     $('raceForecastTime').textContent=fmtClockSec(f.totalSec);
     $('raceForecastPace').textContent=fmtPaceSecPerKm(f.avgPaceSec);
+    if($('raceCalibration') && f.flatAnchor){
+      $('raceCalibration').textContent=
+        `${state.raceReferences.flatRace.source}: ${f.flatAnchor.refKm.toFixed(1)} км · `
+        + `${fmtClockSec(f.flatAnchor.refSec)} · ${fmtPaceSecPerKm(f.flatAnchor.refPaceSec)} → `
+        + `${f.flatAnchor.targetKm.toFixed(1)} км: ${fmtPaceSecPerKm(f.flatAnchor.targetPaceSec)}`;
+    }
     $('raceForecastRange').textContent=`${fmtClockSec(f.lowSec)}–${fmtClockSec(f.highSec)}`;
     if($('raceDurationFactor')) $('raceDurationFactor').textContent=(f.physiology.durationFactor*100).toFixed(0)+'%';
     if($('raceHrFactor')) $('raceHrFactor').textContent=(f.physiology.hrFactor*100).toFixed(0)+'%';
