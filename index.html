@@ -36,7 +36,7 @@
 </style>
 </head>
 <body>
-<div class="app-version">v0.41 ONLINE FULL</div>
+<div class="app-version">v0.42 ONLINE FULL</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Trail Race Analyzer</div>
@@ -101,7 +101,7 @@
         <div class="field">
           <span>Анализ карты</span>
           <button id="mapAnalyzeBtn" type="button" class="primary action-idle" disabled>Анализ карты</button>
-        <div id="mapTimingNote" class="muted">Среднее время анализа карты — 15 секунд. Если анализ длится больше 15 секунд — повторите снова.</div>
+        <div id="mapTimingNote" class="muted">Среднее время анализа карты — 15 секунд. Максимум — 25 секунд. Максимум — 25 секунд. Если анализ длится больше 15 секунд — повторите снова.</div>
           <div id="mapAnalyzeStatus" class="muted">Сначала загрузите и обработайте GPX.</div>
           <progress id="mapAnalyzeProgress" value="0" max="100" style="width:100%;display:none"></progress>
         </div>
@@ -247,7 +247,7 @@
           </label>
           <label class="field">
             <span>VO₂max, мл/кг/мин — обязательно</span>
-            <input id="vo2max" type="number" min="20" max="90" step="0.1" placeholder="например 55" required>
+            <input id="vo2max" value="52" type="number" min="20" max="90" step="0.1" placeholder="например 55" required>
           </label>
         </div>
 

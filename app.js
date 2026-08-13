@@ -1024,7 +1024,11 @@ async function analyzeMapOSM(){
 
   $('mapAnalyzeStatus').textContent='⏳ Отправляю запрос через Render proxy…';
 
-  const timer=setTimeout(()=>controller.abort(),45000);
+  let analysisTimedOut=false;
+  const timer=setTimeout(()=>{
+    analysisTimedOut=true;
+    controller.abort();
+  },25000);
 
   let resp;
   try{
@@ -1040,8 +1044,10 @@ async function analyzeMapOSM(){
   }
 
   if(runId!==mapAnalysisRunId || controller.signal.aborted){
-    const err=new Error('Анализ карты остановлен');
-    err.name='AbortError';
+    const err=new Error(analysisTimedOut
+      ? 'Анализ карты остановлен: превышено 25 секунд'
+      : 'Анализ карты остановлен');
+    err.name=analysisTimedOut?'TimeoutError':'AbortError';
     throw err;
   }
 
@@ -1056,8 +1062,10 @@ async function analyzeMapOSM(){
 
   const data=await resp.json();
   if(runId!==mapAnalysisRunId || controller.signal.aborted){
-    const err=new Error('Анализ карты остановлен');
-    err.name='AbortError';
+    const err=new Error(analysisTimedOut
+      ? 'Анализ карты остановлен: превышено 25 секунд'
+      : 'Анализ карты остановлен');
+    err.name=analysisTimedOut?'TimeoutError':'AbortError';
     throw err;
   }
   mapAnalysisAbortController=null;
@@ -1546,6 +1554,9 @@ $('mapAnalyzeBtn')?.addEventListener('click',async ()=>{
     if(err?.name==='AbortError'){
       $('mapAnalyzeStatus').textContent='Анализ карты остановлен.';
       setActionState('mapAnalyzeBtn','idle');
+    }else if(err?.name==='TimeoutError'){
+      $('mapAnalyzeStatus').textContent='Анализ карты остановлен: превышено 25 секунд.';
+      setActionState('mapAnalyzeBtn','idle');
     }else{
       $('mapAnalyzeStatus').textContent='✕ Ошибка анализа карты: '+(err.message||String(err));
       setActionState('mapAnalyzeBtn','error');
@@ -1954,7 +1965,7 @@ function racePhysiologyFactors(predictedSec){
   const k=baseK+extraK;
   const durationFactor=Math.max(0.78,Math.min(1.0,Math.pow(ratio,-k)));
 
-  const vo2=Number($('vo2max')?.value||0);
+  const vo2=Number($('vo2max')?.value||52);
   if(!(vo2>=20 && vo2<=90)) throw new Error('Введите VO₂max от 20 до 90 мл/кг/мин');
   const vo2Factor=Math.max(0.97,Math.min(1.03,1+(vo2-50)*0.002));
 
@@ -2081,7 +2092,7 @@ function flatRaceAnchorForTarget(){
 
   const targetKm=Number(state.dist||0);
   const exponent=riegelExponentForDistance(targetKm,ref.dist);
-  const vo2=Number($('vo2max')?.value||0);
+  const vo2=Number($('vo2max')?.value||52);
 
   const speedCal=vo2AdjustedFlatCalibration(ref,vo2);
   const calibrationSpeed=Math.max(0.5,speedCal.speed);
@@ -2353,7 +2364,7 @@ function calculateRaceForecast(){
     throw new Error('Загрузите все 3 эталонные GPX тренировки');
   }
 
-  const vo2=Number($('vo2max')?.value||0);
+  const vo2=Number($('vo2max')?.value||52);
   if(!(vo2>=20 && vo2<=90)){
     throw new Error('Введите обязательный VO₂max от 20 до 90 мл/кг/мин');
   }
@@ -2782,7 +2793,7 @@ function raceRefTitle(role){
 function forecastInputsReady(){
   const count=['strength','fastTrail','flatRace'].filter(k=>state.raceReferences?.[k]).length;
   const routeReady=Number(state.dist||0)>0 && state.track?.length>1;
-  const vo2=Number($('vo2max')?.value||0);
+  const vo2=Number($('vo2max')?.value||52);
   return routeReady && count===3 && vo2>=20 && vo2<=90;
 }
 
@@ -2897,7 +2908,7 @@ function updateRaceReferenceState(){
   if($('raceModelFormula')) $('raceModelFormula').textContent=raceFormulaText();
 
   const routeReady=state.dist>0 && state.track?.length>1;
-  const vo2=Number($('vo2max')?.value||0);
+  const vo2=Number($('vo2max')?.value||52);
   const vo2Ready=vo2>=20 && vo2<=90;
   const ready=routeReady && count===3 && vo2Ready;
   applyForecastModeColors();
