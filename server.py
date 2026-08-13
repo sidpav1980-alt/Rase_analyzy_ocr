@@ -552,7 +552,7 @@ def itra_batch():
 def health():
     return jsonify({
         "ok":True,
-        "version":"0.25",
+        "version":"0.26",
         "itra_enabled":bool(OPENROUTER_API_KEY),
         "model":OPENROUTER_MODEL
     })

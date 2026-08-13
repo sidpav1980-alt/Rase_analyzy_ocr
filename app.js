@@ -1831,20 +1831,25 @@ function combinedRaceModelInfo(){
 function racePhysiologyFactors(predictedSec){
   const refs=Object.values(state.raceReferences||{}).filter(Boolean);
   const T=Math.max(0.5,predictedSec/3600);
-  const longRef=refs.slice().sort((a,b)=>(b.elapsedSec||0)-(a.elapsedSec||0))[0];
+
+  // Reference duration: prefer the longest uploaded effort because it best describes endurance.
+  const longRef=refs.slice().sort((x,y)=>(y.elapsedSec||0)-(x.elapsedSec||0))[0];
   const Tref=Math.max(0.5,(longRef?.elapsedSec||3600)/3600);
 
-  const k=Math.max(0.08,Math.min(0.18,0.11+Math.max(0,3-Tref)*0.012));
-  const durationFactor=Math.max(0.90,Math.min(1.02,
-    Math.pow(Math.max(1,T/Tref),-k)
-  ));
+  // Fatigue grows when target duration exceeds the athlete's longest uploaded reference.
+  // k is intentionally meaningful for ultra/trail distances: pace must not stay at short-race level.
+  const ratio=Math.max(1,T/Tref);
+  const baseK=0.10;
+  const extraK=Math.min(0.10,Math.max(0,ratio-1)*0.035);
+  const k=baseK+extraK;
+  const durationFactor=Math.max(0.78,Math.min(1.0,Math.pow(ratio,-k)));
 
   const vo2=Number($('vo2max')?.value||0);
   if(!(vo2>=20 && vo2<=90)) throw new Error('Введите VO₂max от 20 до 90 мл/кг/мин');
   const vo2Factor=Math.max(0.97,Math.min(1.03,1+(vo2-50)*0.002));
 
   const hrVals=refs.map(r=>Number(r.avgHr||0)).filter(x=>x>60);
-  const avgHr=hrVals.length?hrVals.reduce((a,b)=>a+b,0)/hrVals.length:0;
+  const avgHr=hrVals.length?hrVals.reduce((x,y)=>x+y,0)/hrVals.length:0;
   const lthr=Number($('lthr')?.value||0);
 
   let hrFactor=1,hrRatio=0,acidHours=0,acidSource='';
@@ -1852,14 +1857,14 @@ function racePhysiologyFactors(predictedSec){
     hrRatio=avgHr/lthr;
     acidHours=hrRatio>=1.02?0.75:hrRatio>=0.98?1.5:hrRatio>=0.94?2.5:hrRatio>=0.90?4:hrRatio>=0.86?6:10;
     acidSource='HR/LTHR';
-    if(T>acidHours) hrFactor=Math.max(0.90,Math.pow(acidHours/T,0.035));
+    if(T>acidHours) hrFactor=Math.max(0.88,Math.pow(acidHours/T,0.045));
   }else{
     acidHours=Math.max(1.0,Math.min(3.5,2.0+(vo2-50)*0.025));
     acidSource='VO₂max';
-    hrFactor=1;
   }
 
-  return {durationFactor,hrFactor,hrRatio,acidHours,exponent:k,vo2Factor,vo2,acidSource};
+  return {durationFactor,hrFactor,hrRatio,acidHours,exponent:k,vo2Factor,vo2,acidSource,
+          targetHours:T,referenceHours:Tref,fatigueRatio:ratio};
 }
 function raceModelSpeed(grade,progress,effortPct=100,elapsedSec=0){
   const info=combinedRaceModelInfo();
@@ -2265,14 +2270,19 @@ function raceFormulaText(){
   const anchor=flatRaceAnchorForTarget();
   if(!info || !anchor) return 'Загрузите все 3 эталонные GPX.';
 
+  const refs=Object.values(state.raceReferences||{}).filter(Boolean);
+  const longest=refs.slice().sort((a,b)=>(b.elapsedSec||0)-(a.elapsedSec||0))[0];
+  const longestH=(longest?.elapsedSec||0)/3600;
+
   return `Калибровка считается по данным загруженных GPX, а не по названию файла. `
-    + `Плоский эталон: файл ${anchor.rawFileKm.toFixed(1)} км; `
-    + `калибровочный темп ${fmtPaceSecPerKm(anchor.refPaceSec)} → `
-    + `${anchor.targetKm.toFixed(1)} км: ${fmtPaceSecPerKm(anchor.targetPaceSec)} по Riegel. `
-    + `Рельеф: веса силовой/быстрой трейловой GPX ${(info.strengthW*100).toFixed(0)}%/`
-    + `${(info.fastW*100).toFixed(0)}%, вычислены из набора на км, длительности и скорости файлов. `
-    + `Далее формула учитывает уклон, длительность, VO₂max; при анализе трассы отдельно добавляются `
-    + `тропа, грунт и броды.`;
+    + `Плоский эталон: ${anchor.rawFileKm.toFixed(1)} км; калибровочный темп `
+    + `${fmtPaceSecPerKm(anchor.refPaceSec)}. `
+    + `После масштабирования дистанции применяется отдельная усталость по длительности: `
+    + `чем дольше прогноз относительно самого длительного загруженного эталона`
+    + `${longestH?` (${longestH.toFixed(1)} ч)`:''}, тем сильнее падает расчётная скорость. `
+    + `Рельеф: динамические веса силовой/быстрой трейловой GPX `
+    + `${(info.strengthW*100).toFixed(0)}%/${(info.fastW*100).toFixed(0)}%. `
+    + `Затем учитываются VO₂max, уклон, а при анализе трассы — тропа, грунт и броды.`;
 }
 
 function surfaceDistanceInRange(samples,fromKm,toKm,cls){
