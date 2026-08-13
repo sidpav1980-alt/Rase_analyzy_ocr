@@ -1991,8 +1991,18 @@ function calculateRaceForecast(){
     else if(mid<0.75) pacingFactor=1.000;
     else pacingFactor=0.995;
 
-    const terrainRatio=(g.sec/Math.max(1,g.distM/1000))/avgRacePaceSec;
+    const terrainRatio=(g.sec/Math.max(0.001,g.distM/1000))/avgRacePaceSec;
     g.recommendedPaceSec=avgRacePaceSec*terrainRatio*pacingFactor;
+
+    // A short final remainder (for example 20.1–20.7 km) must not absorb
+    // normalization error and turn into an impossible sprint. On an effectively
+    // flat route keep every recommended split close to the race-average pace.
+    // Hills still retain their terrain-derived variation.
+    if(flatEnough){
+      const lo=avgRacePaceSec*0.96;
+      const hi=avgRacePaceSec*1.04;
+      g.recommendedPaceSec=Math.max(lo,Math.min(hi,g.recommendedPaceSec));
+    }
     g.recommendedSec=g.recommendedPaceSec*(g.distM/1000);
   });
 
@@ -2004,6 +2014,16 @@ function calculateRaceForecast(){
   groups.forEach(g=>{
     g.recommendedSec*=norm;
     g.recommendedPaceSec*=norm;
+
+    // Final safety clamp for flat/road races. The last partial split is a
+    // recommendation, not a requirement to sprint unrealistically fast.
+    if(flatEnough){
+      const lo=avgRacePaceSec*0.95;
+      const hi=avgRacePaceSec*1.05;
+      g.recommendedPaceSec=Math.max(lo,Math.min(hi,g.recommendedPaceSec));
+      g.recommendedSec=g.recommendedPaceSec*(g.distM/1000);
+    }
+
     recommendedCum+=g.recommendedSec;
     g.recommendedCumSec=recommendedCum;
     g.paceSec=g.recommendedPaceSec;
