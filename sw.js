@@ -2,8 +2,8 @@ const CACHE='trail-analyzer-web-v098';
 const CORE=[
   './',
   './index.html',
-  './styles.css?v=227',
-  './app.js?v=227',
+  './styles.css?v=230',
+  './app.js?v=230',
   './manifest.webmanifest?v=075',
   './icon-192.png',
   './icon-512.png'
