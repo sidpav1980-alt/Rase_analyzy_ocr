@@ -287,7 +287,7 @@ $('installBtn').addEventListener('click', async () => {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=071', {updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('./sw.js?v=075', {updateViaCache:'none'});
       await reg.update();
       let refreshing=false;
       navigator.serviceWorker.addEventListener('controllerchange',()=>{
@@ -1320,7 +1320,7 @@ function renderFordMap(fordKms=[],confirmedFordKms=[],likelyFordKms=[],bridgeKms
     fordLeafletMap=null;
   }
 
-  fordLeafletMap=L.map(el,{zoomControl:true,attributionControl:true});
+  fordLeafletMap=L.map(el,{zoomControl:false,attributionControl:true,dragging:false,scrollWheelZoom:false,doubleClickZoom:false,boxZoom:false,keyboard:false,touchZoom:false,tap:false});
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
     maxZoom:19,
     attribution:'&copy; OpenStreetMap'
@@ -1329,7 +1329,7 @@ function renderFordMap(fordKms=[],confirmedFordKms=[],likelyFordKms=[],bridgeKms
   fordLeafletLayerGroup=L.layerGroup().addTo(fordLeafletMap);
 
   const latlngs=pts.map(p=>[p.lat,p.lon]);
-  const route=L.polyline(latlngs,{color:'#ff2b2b',weight:5,opacity:.95}).addTo(fordLeafletLayerGroup);
+  const route=L.polyline(latlngs,{color:'#ff2020',weight:6,opacity:1,lineCap:'round',lineJoin:'round'}).addTo(fordLeafletLayerGroup);
   fordLeafletMap.fitBounds(route.getBounds(),{padding:[16,16]});
 
   function addMarker(km,kind){
@@ -1431,6 +1431,7 @@ function renderMapAnalysis(result){
 
   $('mapAnalysisNote').textContent=`OSM-классификация маршрута. Неизвестно: ${(100-summary.coverage).toFixed(0)}%. Данные зависят от полноты разметки OpenStreetMap.`;
   drawSurfaceStrip(samples);
+  requestAnimationFrame(()=>drawFordScheme());
 }
 
 function terrainMultiplier(){
@@ -4215,9 +4216,9 @@ function renderSimFordMap(){
 
   if(typeof L==='undefined'||pts.length<2){el.innerHTML='<div class="muted" style="padding:16px">Карта появится после анализа карты и при наличии интернета.</div>';return}
   if(simFordLeafletMap){try{simFordLeafletMap.remove()}catch(e){}}
-  simFordLeafletMap=L.map(el,{zoomControl:true,attributionControl:false});
+  simFordLeafletMap=L.map(el,{zoomControl:false,attributionControl:false,dragging:false,scrollWheelZoom:false,doubleClickZoom:false,boxZoom:false,keyboard:false,touchZoom:false,tap:false});
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18}).addTo(simFordLeafletMap);
-  const route=L.polyline(pts.map(p=>[p.lat,p.lon]),{color:'#ef4444',weight:4}).addTo(simFordLeafletMap);
+  const route=L.polyline(pts.map(p=>[p.lat,p.lon]),{color:'#ff2020',weight:6,opacity:1,lineCap:'round',lineJoin:'round'}).addTo(simFordLeafletMap);
   simFordLeafletMap.fitBounds(route.getBounds(),{padding:[10,10]});
 
   const nearest=km=>{
@@ -4353,12 +4354,20 @@ function addParticles(icon){
 function fire(idx){
   const {at,e}=schedule[idx];fired.add(idx);penalty+=e[3];addParticles(e[0]);
   E('simEventTitle').textContent=e[0]+' '+e[1];E('simEventText').textContent=e[2];E('simEventDelta').textContent=delta(e[3]);
+    const chip=E('simEventChip');
+    if(chip){
+      E('simEventChipIcon').textContent=e[0];
+      E('simEventChipTitle').textContent=e[1];
+      E('simEventChipDelta').textContent=delta(e[3]);
+      chip.classList.add('show');
+      setTimeout(()=>chip.classList.remove('show'),5000);
+    }
   E('simEventDelta').className=e[3]<0?'positive':'negative';E('simEventCard').classList.add('show');E('simPauseBadge').classList.add('show');
   let left=3;E('simPauseCountdown').textContent=left;
   const km=(at*dist()).toFixed(1);const row=document.createElement('div');row.className='current';row.innerHTML=`<span>${km} км</span><span>${e[0]} ${e[1]}</span><b class="${e[3]<0?'minus':'plus'}">${delta(e[3])}</b>`;E('simLog').prepend(row);
   E('simEventsCount').textContent=`${fired.size} / ${schedule.length}`;E('simPenalty').textContent=delta(penalty);updateResults();
   clearInterval(timer);timer=null;clearInterval(countTimer);countTimer=setInterval(()=>{left--;E('simPauseCountdown').textContent=Math.max(0,left);if(left<=0)clearInterval(countTimer)},1000);
-  pauseTimer=setTimeout(()=>{E('simEventCard').classList.remove('show');E('simPauseBadge').classList.remove('show');E('simStatus').textContent='Гонка продолжается';run()},3000);
+  pauseTimer=setTimeout(()=>{E('simEventCard')?.classList.remove('show'); E('simEventChip')?.classList.remove('show');E('simPauseBadge').classList.remove('show');E('simStatus').textContent='Гонка продолжается';run()},3000);
 }
 function draw(){
   const c=E('simCourseCanvas');if(!c)return;
@@ -4541,13 +4550,13 @@ function tick(){
   const idx=schedule.findIndex((x,i)=>!fired.has(i)&&progress>=x.at);if(idx>=0){fire(idx);return}
   if(progress>=1){clearInterval(timer);timer=null;E('simStart').textContent='▶ Запустить снова';E('simStatus').textContent=`🏁 Финиш: ${fmt(baseSec()+penalty)} (${delta(penalty)} к прогнозу)`;updateResults();draw();renderSimFordMap()}
 }
-function run(){clearInterval(timer);timer=setInterval(tick,120);E('simStart').textContent='⏸ Пауза';E('simStatus').textContent='Симуляция идёт по профилю загруженного трека.'}
-function stop(msg){clearInterval(timer);clearTimeout(pauseTimer);clearInterval(countTimer);timer=null;if(msg)E('simStatus').textContent=msg;E('simStart').textContent='▶ Симуляция гонки'}
-function reset(){stop();progress=0;penalty=0;fired.clear();particles=[];simStartDate=firstTrackDate();makeSchedule();E('simProgress').style.width='0';E('simDistance').textContent=dist()?`0.0 / ${dist().toFixed(1)} км`:'—';E('simGain').textContent=gain()?`${Math.round(gain())} м`:'—';E('simEventsCount').textContent=`0 / ${schedule.length}`;E('simPenalty').textContent='+0:00';E('simLog').innerHTML='<div><span>—</span><span>События появятся случайно по ходу гонки</span><b>31 событие в пуле</b></div>';E('simEventCard').classList.remove('show');E('simPauseBadge').classList.remove('show');E('simStart').textContent='▶ Симуляция гонки';E('simStart').disabled=!(baseSec()&&dist());updateResults();E('simStatus').textContent=baseSec()&&dist()?'Готово: профиль и время взяты из текущего прогноза.':'Сначала рассчитайте «Прогноз гонки» в разделе 2.';draw()}
+function run(){clearInterval(timer);timer=setInterval(tick,120);E('simStart').textContent='⏸';E('simStatus').textContent='Симуляция идёт по профилю загруженного трека.'}
+function stop(msg){clearInterval(timer);clearTimeout(pauseTimer);clearInterval(countTimer);timer=null;if(msg)E('simStatus').textContent=msg;E('simStart').textContent='▶'}
+function reset(){stop();progress=0;penalty=0;fired.clear();particles=[];simStartDate=firstTrackDate();makeSchedule();E('simProgress').style.width='0';E('simDistance').textContent=dist()?`0.0 / ${dist().toFixed(1)} км`:'—';E('simGain').textContent=gain()?`${Math.round(gain())} м`:'—';E('simEventsCount').textContent=`0 / ${schedule.length}`;E('simPenalty').textContent='+0:00';E('simLog').innerHTML='<div><span>—</span><span>События появятся случайно по ходу гонки</span><b>31 событие в пуле</b></div>';E('simEventCard')?.classList.remove('show'); E('simEventChip')?.classList.remove('show');E('simPauseBadge').classList.remove('show');E('simStart').textContent='▶';E('simStart').disabled=!(baseSec()&&dist());updateResults();E('simStatus').textContent=baseSec()&&dist()?'Готово: профиль и время взяты из текущего прогноза.':'Сначала рассчитайте «Прогноз гонки» в разделе 2.';draw()}
 
 setInterval(()=>{const b=E('simStart');if(b&&!timer)b.disabled=!(baseSec()&&dist());},500);
 setInterval(()=>{if(document.querySelector('[data-tab="simulation"]')?.classList.contains('active')) draw();},120);
-E('simStart').addEventListener('click',()=>{if(progress>=1)reset();if(!baseSec()||!dist()){reset();return}if(timer){clearInterval(timer);timer=null;E('simStart').textContent='▶ Продолжить';E('simStatus').textContent='Пауза';}else run()});E('simReset').addEventListener('click',reset);E('simSpeed').addEventListener('change',draw);window.addEventListener('resize',draw);
+E('simStart').addEventListener('click',()=>{if(progress>=1)reset();if(!baseSec()||!dist()){reset();return}if(timer){clearInterval(timer);timer=null;E('simStart').textContent='▶';E('simStatus').textContent='Пауза';}else run()});E('simReset').addEventListener('click',reset);E('simSpeed').addEventListener('change',draw);window.addEventListener('resize',draw);
 // Keep simulation synced when user switches to tab 5 or recalculates forecast.
 document.querySelector('[data-tab="simulation"]')?.addEventListener('click',()=>setTimeout(reset,0));
 reset();
@@ -4571,58 +4580,123 @@ function mapAnalysisTimeoutMessage(){
 function drawFordScheme(){
   const c=document.getElementById('fordSchemeCanvas');
   if(!c) return;
-  const dpr=Math.min(2,window.devicePixelRatio||1), W=Math.max(280,c.clientWidth||320), H=360;
-  c.width=W*dpr;c.height=H*dpr;
-  const x=c.getContext('2d');x.scale(dpr,dpr);
-  x.clearRect(0,0,W,H);
-  x.fillStyle='#081321';x.fillRect(0,0,W,H);
 
-  const pts=(state?.trackPoints||state?.points||state?.gpxPoints||[]).filter(p=>Number.isFinite(Number(p.lat))&&Number.isFinite(Number(p.lon)));
+  const cssW=Math.max(220,c.clientWidth||320);
+  const cssH=Math.max(260,c.clientHeight||350);
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  c.width=Math.round(cssW*dpr);
+  c.height=Math.round(cssH*dpr);
+
+  const x=c.getContext('2d');
+  x.setTransform(dpr,0,0,dpr,0,0);
+  x.clearRect(0,0,cssW,cssH);
+  x.fillStyle='#081321';
+  x.fillRect(0,0,cssW,cssH);
+
+  // Actual parsed GPX lives in state.track.
+  const pts=(state?.track||[]).filter(p=>
+    Number.isFinite(Number(p.lat)) &&
+    Number.isFinite(Number(p.lon)) &&
+    Number.isFinite(Number(p.km))
+  );
+
   const ma=state?.mapAnalysis||{};
   const confirmed=(ma.confirmedFordKms||[]).map(Number).filter(Number.isFinite);
-  const likely=(ma.likelyFordKms||ma.fordKms||[]).map(Number).filter(Number.isFinite);
-  const bridges=(ma.bridgeKms||ma.waterBridgeKms||[]).map(Number).filter(Number.isFinite);
-  const total=Number(state?.distanceKm||state?.distance||0)||Math.max(1,...confirmed,...likely,...bridges);
+  const likely=(ma.likelyFordKms||[]).map(Number).filter(Number.isFinite);
+  const combined=(ma.fordKms||[]).map(Number).filter(Number.isFinite);
+  const bridges=(ma.bridgeKms||[]).map(Number).filter(Number.isFinite);
+  const total=Math.max(.001,Number(state?.dist||0),...(pts.map(p=>Number(p.km)||0)));
 
-  // If geographic points are available, draw actual GPX geometry. Otherwise draw a clean schematic.
-  let route=[];
-  if(pts.length>2){
-    const minLat=Math.min(...pts.map(p=>+p.lat)),maxLat=Math.max(...pts.map(p=>+p.lat));
-    const minLon=Math.min(...pts.map(p=>+p.lon)),maxLon=Math.max(...pts.map(p=>+p.lon));
-    const pad=28, dx=Math.max(.000001,maxLon-minLon),dy=Math.max(.000001,maxLat-minLat);
-    route=pts.map(p=>({
-      x:pad+((+p.lon-minLon)/dx)*(W-pad*2),
-      y:H-pad-((+p.lat-minLat)/dy)*(H-pad*2)
-    }));
-  }else{
-    const pad=34;
-    for(let i=0;i<120;i++){
-      const t=i/119;
-      route.push({x:pad+t*(W-pad*2)+Math.sin(t*15)*18,y:H-pad-t*(H-pad*2)});
-    }
+  if(pts.length<2){
+    x.fillStyle='#94a3b8';
+    x.font='14px system-ui';
+    x.textAlign='center';
+    x.fillText('Нет координат GPX для схемы',cssW/2,cssH/2);
+    return;
   }
-  x.strokeStyle='#ef4444';x.lineWidth=4;x.lineJoin='round';x.lineCap='round';
+
+  const minLat=Math.min(...pts.map(p=>+p.lat));
+  const maxLat=Math.max(...pts.map(p=>+p.lat));
+  const minLon=Math.min(...pts.map(p=>+p.lon));
+  const maxLon=Math.max(...pts.map(p=>+p.lon));
+
+  const pad=30;
+  const dx=Math.max(1e-7,maxLon-minLon);
+  const dy=Math.max(1e-7,maxLat-minLat);
+  const scale=Math.min((cssW-pad*2)/dx,(cssH-pad*2)/dy);
+  const usedW=dx*scale, usedH=dy*scale;
+  const offX=(cssW-usedW)/2, offY=(cssH-usedH)/2;
+
+  const route=pts.map(p=>({
+    x:offX+(+p.lon-minLon)*scale,
+    y:cssH-(offY+(+p.lat-minLat)*scale),
+    km:+p.km
+  }));
+
+  // route shadow + bright red route line
+  x.lineJoin='round';x.lineCap='round';
+  x.strokeStyle='rgba(0,0,0,.55)';x.lineWidth=7;
+  x.beginPath();route.forEach((p,i)=>i?x.lineTo(p.x,p.y):x.moveTo(p.x,p.y));x.stroke();
+  x.strokeStyle='#ef4444';x.lineWidth=4;
   x.beginPath();route.forEach((p,i)=>i?x.lineTo(p.x,p.y):x.moveTo(p.x,p.y));x.stroke();
 
-  const pointAt=(km)=>{
-    const t=Math.max(0,Math.min(1,km/Math.max(.001,total)));
-    const idx=Math.min(route.length-1,Math.round(t*(route.length-1)));
-    return route[idx];
-  };
-  const mark=(km,label,fill)=>{
-    const p=pointAt(km);x.fillStyle=fill;x.beginPath();x.arc(p.x,p.y,8,0,Math.PI*2);x.fill();
-    x.strokeStyle='#fff';x.lineWidth=2;x.stroke();
-    x.font='bold 11px system-ui';x.textAlign=p.x>W*.67?'right':'left';x.fillStyle='#e5f4ff';
-    x.fillText(label+' '+km.toFixed(1)+' км',p.x+(p.x>W*.67?-12:12),p.y+4);
-  };
-  likely.forEach(k=>mark(k,'🌊','#0ea5e9'));
-  confirmed.forEach(k=>mark(k,'✓','#22c55e'));
-  bridges.forEach(k=>mark(k,'🌉','#8b5cf6'));
+  function pointAtKm(km){
+    let best=route[0],bestD=Infinity;
+    for(const p of route){
+      const d=Math.abs(p.km-km);
+      if(d<bestD){best=p;bestD=d}
+    }
+    return best;
+  }
 
+  // Kilometer dots every 10 km for orientation.
+  x.font='10px system-ui';x.textAlign='center';
+  for(let km=10;km<total;km+=10){
+    const p=pointAtKm(km);
+    x.fillStyle='#e2e8f0';
+    x.beginPath();x.arc(p.x,p.y,3,0,Math.PI*2);x.fill();
+    x.fillStyle='#94a3b8';
+    x.fillText(km+' км',p.x,p.y-8);
+  }
+
+  function marker(km,kind){
+    const p=pointAtKm(km);
+    const confirmedKind=kind==='confirmed';
+    const bridgeKind=kind==='bridge';
+    const fill=confirmedKind?'#22c55e':bridgeKind?'#a78bfa':'#38bdf8';
+    const label=confirmedKind?'✓':bridgeKind?'🌉':'🌊';
+
+    x.fillStyle=fill;
+    x.beginPath();x.arc(p.x,p.y,9,0,Math.PI*2);x.fill();
+    x.strokeStyle='#fff';x.lineWidth=2;x.stroke();
+
+    x.font=bridgeKind?'13px system-ui':'bold 11px system-ui';
+    x.textAlign='center';x.textBaseline='middle';x.fillStyle=confirmedKind?'#052e16':'#082f49';
+    x.fillText(label,p.x,p.y+.5);
+
+    // km label next to the marker
+    x.textBaseline='alphabetic';
+    x.font='bold 10px system-ui';
+    x.textAlign=p.x>cssW*.64?'right':'left';
+    x.fillStyle='#f8fafc';
+    x.fillText(Number(km).toFixed(1),p.x+(p.x>cssW*.64?-12:12),p.y+3);
+  }
+
+  // Avoid drawing a likely marker on top of a confirmed one.
+  const likelyClean=likely.filter(k=>!confirmed.some(c=>Math.abs(c-k)<=.18));
+  const sourceLikely=likelyClean.length?likelyClean:
+    combined.filter(k=>!confirmed.some(c=>Math.abs(c-k)<=.18));
+
+  sourceLikely.forEach(k=>marker(k,'likely'));
+  confirmed.forEach(k=>marker(k,'confirmed'));
+  bridges.forEach(k=>marker(k,'bridge'));
+
+  // Start / finish
   const a=route[0],b=route[route.length-1];
-  x.fillStyle='#22c55e';x.beginPath();x.arc(a.x,a.y,9,0,Math.PI*2);x.fill();
-  x.fillStyle='#fff';x.font='bold 12px system-ui';x.textAlign='left';x.fillText('Старт',a.x+12,a.y+4);
-  x.fillStyle='#f8fafc';x.fillText('🏁 Финиш',Math.max(8,b.x-72),Math.max(18,b.y-10));
+  x.fillStyle='#22c55e';x.beginPath();x.arc(a.x,a.y,7,0,Math.PI*2);x.fill();
+  x.fillStyle='#fff';x.font='bold 11px system-ui';x.textAlign='left';
+  x.fillText('Старт',Math.min(cssW-42,a.x+10),Math.max(14,a.y-7));
+  x.font='15px system-ui';x.textAlign='center';x.fillText('🏁',b.x,b.y-10);
 }
 window.addEventListener('resize',()=>setTimeout(drawFordScheme,100));
 
@@ -4641,3 +4715,54 @@ window.addEventListener('unhandledrejection',ev=>{
 setInterval(()=>{if(document.querySelector('[data-tab="simulation"]')?.classList.contains('active')){}},250);
 
 document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.tab==='simulation')setTimeout(()=>{renderSimFordMap();},150)}));
+
+
+// v0.77 — Миша с топором: 3-second start send-off.
+(function(){
+  let shownForRun=false;
+  function showMishaStart(){
+    if(shownForRun) return;
+    shownForRun=true;
+    const el=document.getElementById("mishaStartSendoff");
+    if(!el) return;
+    el.classList.add("show");
+    setTimeout(()=>el.classList.remove("show"),3000);
+  }
+  document.addEventListener("click",function(e){
+    const t=e.target.closest("button");
+    if(!t) return;
+    const id=(t.id||"").toLowerCase(), tx=(t.textContent||"").trim().toLowerCase();
+    if(id.includes("sim")&&(id.includes("start")||id.includes("play")) ||
+       tx==="▶" || tx.includes("старт симуляции") || tx.includes("запустить симуляцию")){
+      showMishaStart();
+    }
+    if(id.includes("reset") || tx.includes("сбросить")) shownForRun=false;
+  },true);
+})();
+
+
+// v0.77 — Миша с топором also welcomes runner at finish for 3 seconds.
+(function(){
+  let finishShown=false;
+  function showMishaFinish(){
+    if(finishShown) return;
+    finishShown=true;
+    const el=document.getElementById("mishaFinishWelcome");
+    if(!el) return;
+    el.classList.add("show");
+    setTimeout(()=>el.classList.remove("show"),3000);
+  }
+  function checkFinish(){
+    const body=(document.body.innerText||"").toLowerCase();
+    const progress=document.querySelector('progress');
+    const finishedText=body.includes("симуляция завершена") || body.includes("финиш!");
+    const finishedProgress=progress && Number(progress.max)>0 && Number(progress.value)>=Number(progress.max);
+    if(finishedText || finishedProgress) showMishaFinish();
+  }
+  setInterval(checkFinish,500);
+  document.addEventListener("click",function(e){
+    const t=e.target.closest("button"); if(!t)return;
+    const id=(t.id||"").toLowerCase(), tx=(t.textContent||"").toLowerCase();
+    if(id.includes("reset")||tx.includes("сбросить")) finishShown=false;
+  },true);
+})();
