@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Trail Analyzer">
   <title>Прогноз и анализ трейловых гонок</title>
-  <link rel="manifest" href="manifest.webmanifest?v=060">
+  <link rel="manifest" href="manifest.webmanifest?v=062">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=060">
+  <link rel="stylesheet" href="styles.css?v=062">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
 <style>
@@ -43,9 +43,21 @@
 .app-offline-state.online{color:#22c55e}
 .app-offline-state.offline{color:#f59e0b}
 </style>
+<style>
+.map-info-note{
+  margin-top:12px;
+  padding:12px 14px;
+  border:1px solid #334155;
+  border-radius:12px;
+  background:rgba(14,165,233,.08);
+  color:#cbd5e1;
+  line-height:1.45;
+}
+.map-info-note b{color:#e2e8f0}
+</style>
 </head>
 <body>
-<div class="app-version">v0.60</div>
+<div class="app-version">v0.62</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Прогноз и анализ трейловых гонок</div>
@@ -98,7 +110,11 @@
         <div class="field">
           <span>Анализ карты</span>
           <button id="mapAnalyzeBtn" type="button" class="primary action-idle" disabled>Анализ карты</button>
-        <div id="mapTimingNote" class="muted"><b>Анализ карты нужен для улучшенного прогноза по треку.</b> Он определяет покрытие и особенности маршрута — тропы, грунт, асфальт, воду и броды — чтобы точнее скорректировать темп и итоговое время. Если анализ не завершится за 20 секунд, он будет автоматически остановлен; обычный прогноз по GPX останется доступен.</div>
+        <div id="mapTimingNote" class="map-info-note">
+  <b>Зачем нужен анализ карты?</b><br>
+  Он улучшает прогноз по треку: определяет <b>тропы, грунт, асфальт, воду и броды</b> и использует эти данные для более точной коррекции темпа и итогового времени.
+  <br><span class="muted">Если анализ не завершится за 20 секунд, он автоматически остановится. Обычный прогноз по GPX останется доступен.</span>
+</div>
           <div id="mapAnalyzeStatus" class="muted">Сначала загрузите и обработайте GPX.</div>
           <progress id="mapAnalyzeProgress" value="0" max="100" style="width:100%;display:none"></progress>
         </div>
@@ -410,18 +426,50 @@
     <section id="simulation" class="tabpanel">
       <div class="card sim-card">
         <h2>Симуляция гонки</h2>
-        <p class="muted">Виртуальное прохождение загруженной трассы со случайными событиями. Событие останавливает анимацию на 3 секунды и добавляет потерянное или выигранное время.</p>
+        <p class="muted">Виртуальное прохождение загруженной трассы по реальному профилю GPX. Базовое время берётся из «Прогноза гонки», а случайные события могут как добавить, так и отнять время.</p>
         <p class="sim-requirement"><b>⚠️ Для запуска симуляции сначала рассчитайте «Прогноз гонки» в разделе 2.</b></p>
-        <div class="sim-metrics"><div><span>Дистанция</span><b id="simDistance">0.0 км</b></div><div><span>Время</span><b id="simTime">0:00:00</b></div><div><span>События</span><b id="simEventsCount">0</b></div><div><span>Поправка</span><b id="simPenalty">+0:00</b></div></div>
-        <div class="sim-profile"><div id="simMarker"></div><div class="mountain m1"></div><div class="mountain m2"></div><div class="trail-line"></div></div>
-        <div class="sim-scene" id="simScene">
-          <div class="runner" id="simRunner"><div class="surprise" id="simSurprise">😲</div><div class="head">🧢</div><div class="pack">🎒</div><div class="body">🏃</div><div class="poles">╱ ╲</div></div>
-          <div class="event-card" id="simEventCard"><b id="simEventTitle"></b><span id="simEventText"></span><strong id="simEventDelta"></strong></div>
-          <div id="emojiBurst" class="emoji-burst"></div>
+
+        <div class="sim-metrics">
+          <div><span>Дистанция</span><b id="simDistance">0.0 км</b></div>
+          <div><span>Набор высоты</span><b id="simGain">—</b></div>
+          <div><span>Время</span><b id="simTime">—</b><small id="simBaseTime" class="muted"></small></div>
+          <div><span>События</span><b id="simEventsCount">0 / 30</b></div>
+          <div><span>Поправка</span><b id="simPenalty">+0:00</b></div>
         </div>
-        <div class="sim-controls"><button id="simStart" class="primary">▶ Симуляция гонки</button><button id="simReset" class="secondary">↻ Сбросить</button><select id="simSpeed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></div>
-        <div class="sim-progress"><i id="simProgress"></i></div><p id="simStatus" class="muted">Готово к старту.</p>
-        <h3>События гонки</h3><div id="simLog" class="sim-log"></div>
+
+        <div class="sim-course-wrap">
+          <canvas id="simCourseCanvas"></canvas>
+          <div class="sim-pause-badge" id="simPauseBadge">😲 Событие! Пауза <b id="simPauseCountdown">3</b> сек.</div>
+          <div class="event-card" id="simEventCard">
+            <b id="simEventTitle"></b>
+            <span id="simEventText"></span>
+            <strong id="simEventDelta"></strong>
+          </div>
+        </div>
+
+        <div class="sim-controls">
+          <button id="simStart" class="primary">▶ Симуляция гонки</button>
+          <button id="simReset" class="secondary">↻ Сбросить</button>
+          <label class="sim-speed-label">Скорость
+            <select id="simSpeed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select>
+          </label>
+        </div>
+        <div class="sim-progress"><i id="simProgress"></i></div>
+        <p id="simStatus" class="muted">Сначала рассчитайте «Прогноз гонки» в разделе 2.</p>
+
+        <div class="sim-summary-grid">
+          <div>
+            <h3>Случайные события</h3>
+            <div id="simLog" class="sim-log"></div>
+          </div>
+          <div class="sim-result-box">
+            <h3>Итоги симуляции</h3>
+            <div><span>Базовый прогноз</span><b id="simResultBase">—</b></div>
+            <div><span>Поправка событий</span><b id="simResultDelta">+0:00</b></div>
+            <div><span>Пройдено</span><b id="simResultProgress">0%</b></div>
+            <div class="sim-result-total"><span>Виртуальное время</span><b id="simResultFinish">—</b></div>
+          </div>
+        </div>
       </div>
     </section>
   </main>
@@ -430,7 +478,7 @@
     Модель является оценочной. Броды, погода, питание, состояние покрытия, самочувствие и другие факторы могут существенно повлиять на фактический результат. Расчёты носят исключительно информационно-ознакомительный характер, не являются гарантией результата или рекомендацией к действию. Автор не несёт ответственности за решения, принятые на основании расчётов приложения.
   </footer>
 
-  <script src="app.js?v=060"></script>
+  <script src="app.js?v=062"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 </body>
 </html>

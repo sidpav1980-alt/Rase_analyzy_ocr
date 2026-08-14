@@ -238,6 +238,13 @@ function syncMapAnalyzeButton(){
   }
 }
 
+function restoreMapInfoNote(){
+  const n=$('mapTimingNote');
+  if(n){
+    n.style.display='block';
+  }
+}
+
 function updateOfflineUi(){
   const el=$('offlineState');
   const online=navigator.onLine!==false;
@@ -245,7 +252,7 @@ function updateOfflineUi(){
     el.textContent=online?'ONLINE / OFFLINE READY':'OFFLINE';
     el.className='app-offline-state '+(online?'online':'offline');
   }
-  syncMapAnalyzeButton();
+  syncMapAnalyzeButton(); restoreMapInfoNote();
 }
 
 window.addEventListener('online',updateOfflineUi);
@@ -280,7 +287,7 @@ $('installBtn').addEventListener('click', async () => {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=060', {updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('./sw.js?v=062', {updateViaCache:'none'});
       await reg.update();
       let refreshing=false;
       navigator.serviceWorker.addEventListener('controllerchange',()=>{
@@ -367,7 +374,7 @@ function parseGPX(text){
     p.time=tn ? tn.textContent.trim() : null;
   });
 state.dist=total/1000;state.gain=gain;state.loss=loss;
-  syncMapAnalyzeButton();
+  syncMapAnalyzeButton(); restoreMapInfoNote();
   $('distMetric').textContent=state.dist.toFixed(1)+' км';
   $('gainMetric').textContent=state.hasElevation ? Math.round(gain)+' м' : 'нет данных';
   $('lossMetric').textContent=state.hasElevation ? Math.round(loss)+' м' : 'нет данных';
@@ -459,7 +466,7 @@ $('gpxLoadBtn').addEventListener('click',async ()=>{
     $('gpxStatus').textContent=state.hasElevation
       ? '✓ GPX обработан: '+state.dist.toFixed(1)+' км · +'+Math.round(state.gain)+' м · −'+Math.round(state.loss)+' м'
       : '⚠ GPX обработан: '+state.dist.toFixed(1)+' км. В файле нет данных высоты — профиль высоты, набор и сброс не рассчитываются.';
-    syncMapAnalyzeButton(); setActionState('gpxLoadBtn','success');
+    syncMapAnalyzeButton(); restoreMapInfoNote(); setActionState('gpxLoadBtn','success');
     setTimeout(()=>{prog.style.display='none';},1200);
   }catch(err){
     prog.style.display='none';
@@ -1607,6 +1614,26 @@ function threat(delta){
 }
 
 $('mapAnalyzeBtn')?.addEventListener('click',async ()=>{
+  const hardTimeoutMs=20000;
+  let mapHardTimedOut=false;
+  const mapHardTimeoutId=setTimeout(()=>{
+    mapHardTimedOut=true;
+    try{
+      mapAnalysisRunId++;
+      if(mapAnalysisAbortController){
+        mapAnalysisAbortController.abort();
+        mapAnalysisAbortController=null;
+      }
+    }catch(e){}
+    stopMapAnalysisTimer();
+    const p=$('mapAnalyzeProgress');
+    if(p){p.style.display='none';p.value=0;}
+    const b=$('mapAnalyzeBtn');
+    if(b){b.disabled=false;setActionState('mapAnalyzeBtn','ready');}
+    const s=$('mapAnalyzeStatus');
+    if(s) s.textContent='⚠️ Анализ остановлен: превышено 20 секунд. Можно повторить анализ или рассчитать прогноз без анализа карты.';
+  },hardTimeoutMs);
+
   if(navigator.onLine===false){
     $('mapAnalyzeStatus').textContent='Офлайн: анализ карты требует интернет. Используйте обычный прогноз или ранее сохранённый анализ.';
     return;
@@ -1647,8 +1674,10 @@ $('mapAnalyzeBtn')?.addEventListener('click',async ()=>{
     }
   }finally{
     mapAnalysisAbortController=null;
-    syncMapAnalyzeButton();
+    syncMapAnalyzeButton(); restoreMapInfoNote();
   }
+
+  clearTimeout(mapHardTimeoutId);
 });
 
 
