@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Trail Analyzer">
   <title>Прогноз и анализ трейловых гонок</title>
-  <link rel="manifest" href="manifest.webmanifest?v=062">
+  <link rel="manifest" href="manifest.webmanifest?v=063">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=062">
+  <link rel="stylesheet" href="styles.css?v=063">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
 <style>
@@ -55,9 +55,13 @@
 }
 .map-info-note b{color:#e2e8f0}
 </style>
+<style>
+#simCourseCanvas{height:460px!important;min-height:460px}
+@media(max-width:640px){#simCourseCanvas{height:500px!important;min-height:500px}}
+</style>
 </head>
 <body>
-<div class="app-version">v0.62</div>
+<div class="app-version">v0.63</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Прогноз и анализ трейловых гонок</div>
@@ -478,7 +482,7 @@
     Модель является оценочной. Броды, погода, питание, состояние покрытия, самочувствие и другие факторы могут существенно повлиять на фактический результат. Расчёты носят исключительно информационно-ознакомительный характер, не являются гарантией результата или рекомендацией к действию. Автор не несёт ответственности за решения, принятые на основании расчётов приложения.
   </footer>
 
-  <script src="app.js?v=062"></script>
+  <script src="app.js?v=063"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 </body>
 </html>

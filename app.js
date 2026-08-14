@@ -287,7 +287,7 @@ $('installBtn').addEventListener('click', async () => {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=062', {updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('./sw.js?v=063', {updateViaCache:'none'});
       await reg.update();
       let refreshing=false;
       navigator.serviceWorker.addEventListener('controllerchange',()=>{
@@ -925,18 +925,37 @@ out tags geom;`;
 
 
 function analyzeWaterCrossings(samples,elements=[]){
-  if(!samples || samples.length<2) return {fords:[],bridges:[]};
+  if(!samples || samples.length<2) return {fords:[],bridges:[],confirmed:[],likely:[]};
+
+  const track=(state.track||[]).filter(p=>
+    Number.isFinite(p.km)&&Number.isFinite(p.lat)&&Number.isFinite(p.lon)
+  );
+  if(track.length<2) return {fords:[],bridges:[],confirmed:[],likely:[]};
 
   const bridgeWays=(elements||[]).filter(el=>{
     const t=el.tags||{};
     return el.type==='way' && Array.isArray(el.geometry) && el.geometry.length>=2 &&
-      (t.bridge==='yes' || t.bridge==='true' || t.bridge==='viaduct' || t.man_made==='bridge');
+      (t.bridge==='yes'||t.bridge==='true'||t.bridge==='viaduct'||t.man_made==='bridge');
+  });
+
+  const waterWays=(elements||[]).filter(el=>{
+    const t=el.tags||{};
+    return el.type==='way' && Array.isArray(el.geometry) && el.geometry.length>=2 &&
+      (
+        ['river','stream','canal','ditch','drain'].includes(String(t.waterway||'').toLowerCase()) ||
+        t.natural==='water' || t.water==='river' || t.water==='stream'
+      );
+  });
+
+  const explicitFordNodes=(elements||[]).filter(el=>{
+    const t=el.tags||{};
+    return el.type==='node' && Number.isFinite(el.lat)&&Number.isFinite(el.lon) &&
+      (t.ford==='yes'||t.ford==='stepping_stones'||t.highway==='ford');
   });
 
   function trackPointAtKm(km){
     let best=null,bestDiff=Infinity;
-    for(const p of (state.track||[])){
-      if(!Number.isFinite(p.km)||!Number.isFinite(p.lat)||!Number.isFinite(p.lon)) continue;
+    for(const p of track){
       const d=Math.abs(p.km-km);
       if(d<bestDiff){best=p;bestDiff=d;}
     }
@@ -949,43 +968,122 @@ function analyzeWaterCrossings(samples,elements=[]){
     for(const way of bridgeWays){
       const g=way.geometry||[];
       for(let i=1;i<g.length;i++){
-        const a={lat:g[i-1].lat,lon:g[i-1].lon};
-        const b={lat:g[i].lat,lon:g[i].lon};
-        const d=distancePointToSegmentKm({lat:p.lat,lon:p.lon},a,b);
-        if(Number.isFinite(d) && d<=0.035) return true;
+        const d=distancePointToSegmentKm(
+          {lat:p.lat,lon:p.lon},
+          {lat:g[i-1].lat,lon:g[i-1].lon},
+          {lat:g[i].lat,lon:g[i].lon}
+        );
+        if(Number.isFinite(d)&&d<=0.040) return true;
       }
     }
     return false;
   }
 
-  const fords=[],bridges=[];
-  let inWater=false,startKm=0;
-
-  function finish(endKm){
-    const len=Math.max(0,endKm-startKm);
-    // Ignore tiny OSM/GPS water fragments: a crossing must be at least 2 metres.
-    // Keep every contiguous water section consistent with the forecast table.
-    if(len<0.002) return;
-    const mid=(startKm+endKm)/2;
-    if(bridgeNearKm(mid)) bridges.push(mid);
-    else fords.push(mid);
+  // Fast 2D segment intersection; adequate at the scale of one race route.
+  function orient(a,b,c){
+    return (b.lon-a.lon)*(c.lat-a.lat)-(b.lat-a.lat)*(c.lon-a.lon);
+  }
+  function segmentIntersects(a,b,c,d){
+    const o1=orient(a,b,c),o2=orient(a,b,d),o3=orient(c,d,a),o4=orient(c,d,b);
+    const eps=1e-12;
+    return ((o1>eps&&o2<-eps)||(o1<-eps&&o2>eps)) &&
+           ((o3>eps&&o4<-eps)||(o3<-eps&&o4>eps));
   }
 
-  for(let i=0;i<samples.length;i++){
-    const water=String(samples[i].cls||'').toLowerCase()==='water';
-    if(water && !inWater){
-      inWater=true;
-      startKm=Number(samples[i].km||0);
-    }else if(!water && inWater){
-      finish(Number(samples[Math.max(0,i-1)].km||startKm));
-      inWater=false;
+  function nearestTrackKmToPoint(lat,lon,maxKm=0.035){
+    let bestKm=NaN,bestD=Infinity;
+    for(let i=1;i<track.length;i++){
+      const a=track[i-1],b=track[i];
+      const d=distancePointToSegmentKm({lat,lon},a,b);
+      if(d<bestD){
+        bestD=d;
+        const da=haversineKm(a.lat,a.lon,lat,lon);
+        const db=haversineKm(b.lat,b.lon,lat,lon);
+        const t=(da+db)>0?da/(da+db):0.5;
+        bestKm=a.km+(b.km-a.km)*Math.max(0,Math.min(1,t));
+      }
+    }
+    return bestD<=maxKm?bestKm:NaN;
+  }
+
+  const confirmed=[];
+  for(const n of explicitFordNodes){
+    const km=nearestTrackKmToPoint(n.lat,n.lon,0.050);
+    if(Number.isFinite(km)&&!bridgeNearKm(km)) confirmed.push(km);
+  }
+
+  // Detect actual geometric crossings of the GPX line with OSM river/stream ways.
+  // This catches crossings even when OSM has no ford=yes tag.
+  const likely=[];
+  for(const ww of waterWays){
+    const g=ww.geometry||[];
+    for(let wi=1;wi<g.length;wi++){
+      const c={lat:g[wi-1].lat,lon:g[wi-1].lon};
+      const d={lat:g[wi].lat,lon:g[wi].lon};
+      const minLat=Math.min(c.lat,d.lat)-0.00015,maxLat=Math.max(c.lat,d.lat)+0.00015;
+      const minLon=Math.min(c.lon,d.lon)-0.00020,maxLon=Math.max(c.lon,d.lon)+0.00020;
+      for(let ti=1;ti<track.length;ti++){
+        const a=track[ti-1],b=track[ti];
+        if(Math.max(a.lat,b.lat)<minLat||Math.min(a.lat,b.lat)>maxLat||
+           Math.max(a.lon,b.lon)<minLon||Math.min(a.lon,b.lon)>maxLon) continue;
+
+        let hit=segmentIntersects(a,b,c,d);
+        // OSM and GPX can be offset by several metres. Treat <=8 m as crossing candidate.
+        if(!hit){
+          const d1=distancePointToSegmentKm(a,c,d);
+          const d2=distancePointToSegmentKm(b,c,d);
+          hit=Math.min(d1,d2)<=0.008;
+        }
+        if(hit){
+          const km=(a.km+b.km)/2;
+          if(!bridgeNearKm(km)) likely.push(km);
+          break;
+        }
+      }
     }
   }
 
-  if(inWater) finish(Number(samples[samples.length-1].km||startKm));
-  return {fords,bridges};
-}
+  // Keep legacy polygon/sample water detection as an additional signal.
+  let inWater=false,startKm=0;
+  function finishSample(endKm){
+    const len=Math.max(0,endKm-startKm);
+    if(len<0.002) return;
+    const mid=(startKm+endKm)/2;
+    if(!bridgeNearKm(mid)) likely.push(mid);
+  }
+  for(let i=0;i<samples.length;i++){
+    const water=String(samples[i].cls||'').toLowerCase()==='water';
+    if(water&&!inWater){inWater=true;startKm=Number(samples[i].km||0);}
+    else if(!water&&inWater){
+      finishSample(Number(samples[Math.max(0,i-1)].km||startKm));
+      inWater=false;
+    }
+  }
+  if(inWater) finishSample(Number(samples[samples.length-1].km||startKm));
 
+  // Deduplicate braided channels / several nearby OSM lines into one physical crossing.
+  const confirmedGroups=groupFordKmPoints(confirmed);
+  const confirmedKm=confirmedGroups.map(g=>g.start);
+  const likelyNoConfirmed=likely.filter(k=>!confirmedKm.some(c=>Math.abs(c-k)<=0.25));
+  const likelyGroups=groupFordKmPoints(likelyNoConfirmed);
+  const likelyKm=likelyGroups.map(g=>g.start);
+
+  const all=groupFordKmPoints([...confirmedKm,...likelyKm]).map(g=>g.start);
+  const bridges=[];
+  // Retain bridge crossings from sampled water sections for display.
+  for(const s of samples){
+    if(String(s.cls||'').toLowerCase()==='water'&&bridgeNearKm(Number(s.km||0))){
+      bridges.push(Number(s.km||0));
+    }
+  }
+
+  return {
+    fords:all,
+    bridges:groupFordKmPoints(bridges).map(g=>g.start),
+    confirmed:confirmedKm,
+    likely:likelyKm
+  };
+}
 function findLikelyFords(samples,elements=[]){
   return analyzeWaterCrossings(samples,elements).fords;
 }
@@ -1185,17 +1283,21 @@ async function analyzeMapOSM(){
 function renderMapAnalysis(result){
   const {samples,summary,elements=[]}=result;
   const crossings=analyzeWaterCrossings(samples,elements);
-  // One physical water section = one ford. Display only the first (entry) km.
+  // One braided/nearby water system is grouped as one physical crossing.
   const fordGroups=groupFordKmPoints(crossings.fords);
   const fordKms=fordGroups.map(g=>g.start);
   const bridgeKms=crossings.bridges;
+  const confirmedFordKms=crossings.confirmed||[];
+  const likelyFordKms=crossings.likely||[];
   state.mapAnalysis={
     result,
     samples:[...samples],
     summary:{...summary},
     fordKms:[...fordKms],
     fordCount:fordKms.length,
-    bridgeKms:[...bridgeKms]
+    bridgeKms:[...bridgeKms],
+    confirmedFordKms:[...confirmedFordKms],
+    likelyFordKms:[...likelyFordKms]
   };
   state.mapAnalysisReadyForCurrentGpx=true;
 
@@ -1222,9 +1324,16 @@ function renderMapAnalysis(result){
   if(fordCount) fordCount.textContent=String(fordKms.length);
 
   const fordList=$('fordKmList');
-  if(fordList) fordList.textContent=fordKms.length
-    ? 'Броды на км: '+fordKms.map(x=>x.toFixed(1)).join(', ')
-    : 'Броды: не обнаружены';
+  if(fordList){
+    if(fordKms.length){
+      const parts=[];
+      if(confirmedFordKms.length) parts.push('подтверждённые OSM: '+confirmedFordKms.map(x=>x.toFixed(1)).join(', '));
+      if(likelyFordKms.length) parts.push('вероятные по пересечению воды: '+likelyFordKms.map(x=>x.toFixed(1)).join(', '));
+      fordList.textContent='Броды ('+fordKms.length+'): '+parts.join(' · ');
+    }else{
+      fordList.textContent='Броды: не обнаружены';
+    }
+  }
 
   const bridgeList=$('bridgeFordKmList');
   if(bridgeList) bridgeList.textContent=bridgeKms.length
@@ -4015,39 +4124,138 @@ function fire(idx){
   const {at,e}=schedule[idx];fired.add(idx);penalty+=e[3];addParticles(e[0]);
   E('simEventTitle').textContent=e[0]+' '+e[1];E('simEventText').textContent=e[2];E('simEventDelta').textContent=delta(e[3]);
   E('simEventDelta').className=e[3]<0?'positive':'negative';E('simEventCard').classList.add('show');E('simPauseBadge').classList.add('show');
-  let left=5;E('simPauseCountdown').textContent=left;
+  let left=3;E('simPauseCountdown').textContent=left;
   const km=(at*dist()).toFixed(1);const row=document.createElement('div');row.className='current';row.innerHTML=`<span>${km} км</span><span>${e[0]} ${e[1]}</span><b class="${e[3]<0?'minus':'plus'}">${delta(e[3])}</b>`;E('simLog').prepend(row);
   E('simEventsCount').textContent=`${fired.size} / 30`;E('simPenalty').textContent=delta(penalty);updateResults();
   clearInterval(timer);timer=null;clearInterval(countTimer);countTimer=setInterval(()=>{left--;E('simPauseCountdown').textContent=Math.max(0,left);if(left<=0)clearInterval(countTimer)},1000);
   pauseTimer=setTimeout(()=>{E('simEventCard').classList.remove('show');E('simPauseBadge').classList.remove('show');E('simStatus').textContent='Гонка продолжается';run()},3000);
 }
 function draw(){
-  const c=E('simCourseCanvas');if(!c)return;const r=c.getBoundingClientRect(),dpr=window.devicePixelRatio||1,W=Math.max(320,r.width),H=r.height||360;
+  const c=E('simCourseCanvas');if(!c)return;
+  const r=c.getBoundingClientRect(),dpr=window.devicePixelRatio||1,W=Math.max(320,r.width),H=Math.max(420,r.height||460);
   if(c.width!==Math.round(W*dpr)||c.height!==Math.round(H*dpr)){c.width=Math.round(W*dpr);c.height=Math.round(H*dpr)}
   const ctx=c.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
+
   const sky=skyInfo();
-  let top='#07111f',bottom='#102a43';if(sky.day){top='#123c62';bottom='#f59e0b'}else if(sky.twilight){top='#14213d';bottom='#9a3412'}
-  const grad=ctx.createLinearGradient(0,0,0,H);grad.addColorStop(0,top);grad.addColorStop(.62,bottom);grad.addColorStop(1,'#07111f');ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
-  // stars at night
-  if(!sky.day){ctx.fillStyle='rgba(255,255,255,.72)';for(let i=0;i<30;i++){const x=(i*83%997)/997*W,y=18+((i*137)%211)/211*H*.42;ctx.fillRect(x,y,1.3,1.3)}}
-  // sun/moon arc
-  const sunX=sky.day?30+sky.sunT*(W-60):W-45;const sunY=sky.day?(104-Math.sin(Math.PI*sky.sunT)*76):52;
-  ctx.font='30px system-ui, Apple Color Emoji';ctx.textAlign='center';ctx.fillText(sky.day?'☀️':'🌙',sunX,sunY);
-  ctx.strokeStyle='rgba(255,255,255,.28)';ctx.setLineDash([3,5]);ctx.beginPath();for(let x=30;x<W-30;x+=8){const t=(x-30)/(W-60),y=104-Math.sin(Math.PI*t)*76;if(x===30)ctx.moveTo(x,y);else ctx.lineTo(x,y)}ctx.stroke();ctx.setLineDash([]);
-  const pts=(state?.track||[]).filter(p=>Number.isFinite(p.km)&&Number.isFinite(p.ele));const L=42,R=16,T=125,B=42,baseY=H-B;
-  let minE=0,maxE=1;if(pts.length){minE=Math.min(...pts.map(p=>p.ele));maxE=Math.max(...pts.map(p=>p.ele));if(maxE-minE<1)maxE=minE+1}
-  const xOf=km=>L+(km/Math.max(.1,dist()))*(W-L-R);const yOf=ele=>baseY-((ele-minE)/(maxE-minE))*(baseY-T);
-  // profile fill + green profile line
-  if(pts.length){ctx.beginPath();pts.forEach((p,i)=>{const x=xOf(p.km),y=yOf(p.ele);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.lineTo(xOf(dist()),baseY);ctx.lineTo(L,baseY);ctx.closePath();ctx.fillStyle='rgba(22,163,74,.28)';ctx.fill();
-    ctx.beginPath();pts.forEach((p,i)=>{const x=xOf(p.km),y=yOf(p.ele);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.strokeStyle='#22c55e';ctx.lineWidth=3;ctx.stroke();}
-  // axes
-  ctx.fillStyle='rgba(226,232,240,.8)';ctx.font='11px system-ui';ctx.textAlign='left';ctx.fillText(`${Math.round(maxE)} м`,6,T+4);ctx.fillText(`${Math.round(minE)} м`,6,baseY);ctx.textAlign='center';for(let i=0;i<=4;i++){const km=dist()*i/4;ctx.fillText(`${km.toFixed(km<10?1:0)} км`,xOf(km),H-15)}
-  // progress: white vertical time line follows current point on profile
-  const km=dist()*progress,x=xOf(km),ele=interpElevation(km),y=yOf(ele);ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,T-8);ctx.lineTo(x,baseY+2);ctx.stroke();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();
-  // runner: stick-ish, backpack and poles, facing right, no floating cap/arrow
-  const rx=Math.min(W-38,Math.max(38,x)),ry=y-12;ctx.save();ctx.translate(rx,ry);ctx.strokeStyle='#f8fafc';ctx.lineWidth=3;ctx.lineCap='round';ctx.fillStyle='#f1c27d';ctx.beginPath();ctx.arc(0,-24,7,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#f59e0b';ctx.beginPath();ctx.moveTo(0,-16);ctx.lineTo(5,3);ctx.moveTo(3,-9);ctx.lineTo(15,-1);ctx.moveTo(4,2);ctx.lineTo(16,17);ctx.moveTo(4,2);ctx.lineTo(-7,18);ctx.stroke();ctx.fillStyle='#ef4444';ctx.fillRect(-10,-15,8,15);ctx.strokeStyle='#cbd5e1';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(14,-1);ctx.lineTo(24,24);ctx.moveTo(-3,-4);ctx.lineTo(-16,23);ctx.stroke();ctx.font='18px system-ui, Apple Color Emoji';ctx.fillText('🎒',-11,-5);if(E('simPauseBadge').classList.contains('show')){ctx.font='28px system-ui, Apple Color Emoji';ctx.fillText('😲',0,-48)}ctx.restore();
-  // event particles from current runner/profile point
-  ctx.textAlign='center';particles.forEach(p=>{if(p.x===0&&p.y===0){p.x=rx;p.y=ry-25}p.x+=p.vx;p.y+=p.vy;p.vy+=.035;p.life-=.012;ctx.globalAlpha=Math.max(0,p.life);ctx.font=`${p.size}px system-ui, Apple Color Emoji`;ctx.fillText(p.icon,p.x,p.y)});ctx.globalAlpha=1;particles=particles.filter(p=>p.life>0);
+  let top='#07111f',bottom='#102a43';
+  if(sky.day){top='#123c62';bottom='#d97706'}
+  else if(sky.twilight){top='#14213d';bottom='#9a3412'}
+  const grad=ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,top);grad.addColorStop(.55,bottom);grad.addColorStop(1,'#07111f');
+  ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+
+  if(!sky.day){
+    ctx.fillStyle='rgba(255,255,255,.72)';
+    for(let i=0;i<34;i++){
+      const sx=(i*83%997)/997*W,sy=15+((i*137)%211)/211*H*.34;
+      ctx.fillRect(sx,sy,1.3,1.3);
+    }
+  }
+
+  // Sun / moon travels through the race according to virtual race time.
+  const sunX=sky.day?30+sky.sunT*(W-60):W-45;
+  const sunY=sky.day?(88-Math.sin(Math.PI*sky.sunT)*60):42;
+  ctx.font='29px system-ui, Apple Color Emoji';ctx.textAlign='center';
+  ctx.fillText(sky.day?'☀️':'🌙',sunX,sunY);
+  ctx.strokeStyle='rgba(255,255,255,.24)';ctx.setLineDash([3,5]);ctx.beginPath();
+  for(let sx=30;sx<W-30;sx+=8){
+    const t=(sx-30)/(W-60),sy=88-Math.sin(Math.PI*t)*60;
+    if(sx===30)ctx.moveTo(sx,sy);else ctx.lineTo(sx,sy);
+  }
+  ctx.stroke();ctx.setLineDash([]);
+
+  const pts=(state?.track||[]).filter(p=>Number.isFinite(p.km)&&Number.isFinite(p.ele));
+  const L=42,R=16,T=104;
+  const profileBottom=Math.round(H*.58);
+  let minE=0,maxE=1;
+  if(pts.length){
+    minE=Math.min(...pts.map(p=>p.ele));maxE=Math.max(...pts.map(p=>p.ele));
+    if(maxE-minE<1)maxE=minE+1;
+  }
+  const xOf=km=>L+(km/Math.max(.1,dist()))*(W-L-R);
+  const yOf=ele=>profileBottom-((ele-minE)/(maxE-minE))*(profileBottom-T);
+
+  // Upper chart: real GPX elevation profile.
+  if(pts.length){
+    ctx.beginPath();
+    pts.forEach((p,i)=>{const px=xOf(p.km),py=yOf(p.ele);i?ctx.lineTo(px,py):ctx.moveTo(px,py)});
+    ctx.lineTo(xOf(dist()),profileBottom);ctx.lineTo(L,profileBottom);ctx.closePath();
+    ctx.fillStyle='rgba(22,163,74,.30)';ctx.fill();
+
+    ctx.beginPath();
+    pts.forEach((p,i)=>{const px=xOf(p.km),py=yOf(p.ele);i?ctx.lineTo(px,py):ctx.moveTo(px,py)});
+    ctx.strokeStyle='#22c55e';ctx.lineWidth=3;ctx.stroke();
+  }
+
+  ctx.fillStyle='rgba(226,232,240,.82)';ctx.font='11px system-ui';ctx.textAlign='left';
+  ctx.fillText(`${Math.round(maxE)} м`,6,T+4);ctx.fillText(`${Math.round(minE)} м`,6,profileBottom);
+  ctx.textAlign='center';
+  for(let i=0;i<=4;i++){
+    const k=dist()*i/4;ctx.fillText(`${k.toFixed(k<10?1:0)} км`,xOf(k),profileBottom+20);
+  }
+
+  // White marker shows where the runner currently is on the profile.
+  const km=dist()*progress,x=xOf(km),ele=interpElevation(km),y=yOf(ele);
+  ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,T-5);ctx.lineTo(x,profileBottom+2);ctx.stroke();
+  ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();
+
+  // Lower scene: runner stays on the trail, separate from the graph.
+  const sceneTop=profileBottom+28;
+  const groundY=H-46;
+  const hillGrad=ctx.createLinearGradient(0,sceneTop,0,groundY);
+  hillGrad.addColorStop(0,'rgba(15,40,35,.18)');hillGrad.addColorStop(1,'rgba(30,55,35,.75)');
+  ctx.fillStyle=hillGrad;ctx.fillRect(0,sceneTop,W,groundY-sceneTop);
+
+  // distant mountain silhouettes
+  ctx.fillStyle='rgba(9,25,38,.75)';ctx.beginPath();ctx.moveTo(0,groundY-48);
+  const peaks=[0,.13,.25,.39,.52,.68,.82,1];
+  const heights=[20,58,35,75,42,66,32,54];
+  peaks.forEach((p,i)=>ctx.lineTo(p*W,groundY-heights[i]));ctx.lineTo(W,groundY);ctx.lineTo(0,groundY);ctx.fill();
+
+  // rocky trail
+  ctx.fillStyle='#55483b';ctx.fillRect(0,groundY-18,W,64);
+  ctx.fillStyle='rgba(148,163,184,.35)';
+  for(let i=0;i<18;i++){const px=(i*71)%W,py=groundY-10+((i*29)%34);ctx.beginPath();ctx.ellipse(px,py,4+(i%4),2+(i%3),0,0,Math.PI*2);ctx.fill()}
+
+  // Runner moves subtly across the lower scene, always facing right.
+  const rx=55+progress*Math.max(40,W-135);
+  const bob=Math.sin(progress*180)*2.5;
+  const ry=groundY-24+bob;
+  ctx.save();ctx.translate(rx,ry);
+  ctx.lineCap='round';
+  // legs
+  const phase=Math.sin(progress*220);
+  ctx.strokeStyle='#e5e7eb';ctx.lineWidth=4;ctx.beginPath();
+  ctx.moveTo(0,-5);ctx.lineTo(12+phase*5,18);ctx.moveTo(0,-5);ctx.lineTo(-10-phase*5,18);ctx.stroke();
+  // torso leaning forward
+  ctx.strokeStyle='#f59e0b';ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(-2,-31);ctx.lineTo(4,-6);ctx.stroke();
+  // head
+  ctx.fillStyle='#f1c27d';ctx.beginPath();ctx.arc(2,-40,8,0,Math.PI*2);ctx.fill();
+  // cap pointing right
+  ctx.fillStyle='#3b82f6';ctx.beginPath();ctx.arc(0,-45,7,Math.PI,0);ctx.fill();ctx.fillRect(3,-45,10,3);
+  // arms + poles
+  ctx.strokeStyle='#f1c27d';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(0,-27);ctx.lineTo(15,-17);ctx.moveTo(0,-25);ctx.lineTo(-12,-14);ctx.stroke();
+  ctx.strokeStyle='#cbd5e1';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(15,-17);ctx.lineTo(28,23);ctx.moveTo(-12,-14);ctx.lineTo(-22,24);ctx.stroke();
+  // backpack / vest
+  ctx.fillStyle='#ef4444';ctx.beginPath();ctx.roundRect(-13,-34,11,22,4);ctx.fill();
+  ctx.font='18px system-ui, Apple Color Emoji';ctx.textAlign='center';ctx.fillText('🎒',-10,-18);
+
+  if(E('simPauseBadge').classList.contains('show')){
+    ctx.font='30px system-ui, Apple Color Emoji';ctx.fillText('😲',3,-68);
+  }
+  ctx.restore();
+
+  // Event emojis fly out from the runner in the lower scene.
+  ctx.textAlign='center';
+  particles.forEach(p=>{
+    if(p.x===0&&p.y===0){p.x=rx+8;p.y=ry-48}
+    p.x+=p.vx;p.y+=p.vy;p.vy+=.035;p.life-=.012;
+    ctx.globalAlpha=Math.max(0,p.life);
+    ctx.font=`${p.size}px system-ui, Apple Color Emoji`;
+    ctx.fillText(p.icon,p.x,p.y);
+  });
+  ctx.globalAlpha=1;
+  particles=particles.filter(p=>p.life>0);
 }
 function updateResults(){
   const b=baseSec(),cur=Math.max(0,b*progress+penalty),finish=Math.max(0,b+penalty);E('simBaseTime').textContent=b?fmt(b):'—';E('simTime').textContent=b?fmt(cur):'—';E('simResultBase').textContent=b?fmt(b):'—';E('simResultDelta').textContent=delta(penalty);E('simResultFinish').textContent=b?fmt(finish):'—';E('simResultProgress').textContent=Math.round(progress*100)+'%';
