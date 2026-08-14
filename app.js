@@ -451,8 +451,8 @@ $('basePace').addEventListener('change',()=>{ if(state.track&&state.track.length
 window.addEventListener('resize',()=>{ if(state.track&&state.track.length) drawTrackProfiles(); });
 
 function handleGpxFileSelected(e){
-  // A new GPX invalidates the previous simulation source and run.
-  if(typeof clearSimulationTrackChoice==='function') clearSimulationTrackChoice();
+  // A real GPX always replaces the virtual simulation and clears its run/state.
+  if(typeof clearVirtualSimulationTrack==='function') clearVirtualSimulationTrack();
   try{ document.getElementById('simReset')?.click(); }catch(_e){}
   abortMapAnalysisForNewGpx();
   invalidateRaceForecast();
@@ -4588,7 +4588,7 @@ function maybeShowFirstPlaceAtFinish(){
 
 if(!E('simStart')) return;
 let timer=null,pauseTimer=null,countTimer=null,progress=0,penalty=0,fired=new Set(),schedule=[],particles=[],simStartDate=null;
-let aidStations=[],fatigueActive=false,luckActive=false,demotivationActive=false,negativeEventCount=0,simulationDNF=false,lastAidIndex=-1;
+let aidStations=[],fatigueActive=false,luckActive=false,demotivationActive=false,negativeStreak=0,simulationDNF=false,lastAidIndex=-1;
 const equipmentState={
   checked:false,
   medkit:true,
@@ -4637,57 +4637,26 @@ const activeEventCount=()=>{
   return minEvents + Math.floor(Math.random()*(maxEvents-minEvents+1));
 };
 let virtualSimTrack=null;
-let simulationTrackMode=null; // null | 'virtual' | 'real'
-
-function dist(){
-  if(simulationTrackMode==='virtual' && virtualSimTrack) return Number(virtualSimTrack.dist||0);
-  if(simulationTrackMode==='real') return Number(state?.dist||0);
-  return 0;
-}
-function gain(){
-  if(simulationTrackMode==='virtual' && virtualSimTrack) return Number(virtualSimTrack.gain||0);
-  if(simulationTrackMode==='real') return Number(state?.gain||0);
-  return 0;
-}
-function baseSec(){
-  if(simulationTrackMode==='virtual' && virtualSimTrack) return Number(virtualSimTrack.totalSec||0);
-  if(simulationTrackMode==='real') return Number(state?.raceForecast?.totalSec||0);
-  return 0;
-}
-function simTrackPoints(){
-  if(simulationTrackMode==='virtual' && virtualSimTrack) return virtualSimTrack.track||[];
-  if(simulationTrackMode==='real') return state?.track||[];
-  return [];
-}
-function simMapAnalysis(){
-  if(simulationTrackMode==='virtual' && virtualSimTrack) return virtualSimTrack.mapAnalysis||{};
-  if(simulationTrackMode==='real') return state?.mapAnalysis||{};
-  return {};
-}
-function updateSimulationSourceButtons(){
-  const vb=E('simVirtual20Btn'), rb=E('simRealTrackBtn');
-  if(vb){
-    vb.disabled=false;
-    vb.classList.toggle('active-source',simulationTrackMode==='virtual');
-  }
-  if(rb){
-    rb.disabled=false;
-    rb.classList.toggle('active-source',simulationTrackMode==='real');
-  }
-}
-function clearSimulationTrackChoice(){
-  simulationTrackMode=null;
+function dist(){return virtualSimTrack ? virtualSimTrack.dist : Number(state?.dist||0)}
+function gain(){return virtualSimTrack ? virtualSimTrack.gain : Number(state?.gain||0)}
+function baseSec(){return virtualSimTrack ? virtualSimTrack.totalSec : Number(state?.raceForecast?.totalSec||0)}
+function simTrackPoints(){return virtualSimTrack ? virtualSimTrack.track : simTrackPoints()}
+function simMapAnalysis(){return virtualSimTrack ? virtualSimTrack.mapAnalysis : (simMapAnalysis())}
+function clearVirtualSimulationTrack(){
   virtualSimTrack=null;
-  updateSimulationSourceButtons();
   const s=E('simVirtual20Status');
-  if(s) s.textContent='Выберите виртуальный трек 20 км или реальный загруженный трек.';
+  if(s) s.textContent='20 км: 3 км подъём · 4 км спуск · дальше ровно · +500 м · 2 брода.';
 }
 function activateVirtualSimulationTrack(){
+  // Simple permanent virtual profile:
+  // 0–3 km: straight climb +500 m
+  // 3–7 km: straight descent -500 m
+  // 7–20 km: flat to the finish.
   const raw=[];
   const n=201;
   for(let i=0;i<n;i++){
     const km=20*i/(n-1);
-    let ele=100;
+    let ele;
     if(km<=3){
       ele=100+(500/3)*km;
     }else if(km<=7){
@@ -4703,34 +4672,14 @@ function activateVirtualSimulationTrack(){
     totalSec:2*3600,
     track:raw,
     mapAnalysis:{
-      fordKms:[6.0],
-      confirmedFordKms:[6.0],
+      fordKms:[6.0,14.0],
+      confirmedFordKms:[6.0,14.0],
       likelyFordKms:[],
       bridgeKms:[]
     }
   };
-  simulationTrackMode='virtual';
-  updateSimulationSourceButtons();
   const s=E('simVirtual20Status');
-  if(s) s.textContent='✓ Выбран виртуальный трек: 20 км · +500 м · брод 6.0 км.';
-  reset();
-}
-function activateRealSimulationTrack(){
-  if(!(state?.track?.length>1)){
-    const s=E('simVirtual20Status');
-    if(s) s.textContent='⚠️ Сначала загрузите реальный GPX во вкладке «Трек гонки».';
-    return;
-  }
-  if(!(state?.raceForecast?.totalSec>0)){
-    const s=E('simVirtual20Status');
-    if(s) s.textContent='⚠️ Для реального трека сначала рассчитайте «Прогноз гонки» в разделе 2.';
-    return;
-  }
-  virtualSimTrack=null;
-  simulationTrackMode='real';
-  updateSimulationSourceButtons();
-  const s=E('simVirtual20Status');
-  if(s) s.textContent=`✓ Выбран реальный трек: ${Number(state.dist||0).toFixed(1)} км · +${Math.round(Number(state.gain||0))} м.`;
+  if(s) s.textContent='✓ Виртуальный трек: 3 км вверх · 4 км вниз · 13 км ровно · +500 м · броды 6.0 и 14.0 км.';
   reset();
 }
 function fmt(sec){sec=Math.max(0,Math.round(sec||0));const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}
@@ -4798,7 +4747,7 @@ function initStartConditions(){
   luckActive=false;
   demotivationActive=false;
   fatigueApplied=false;
-  negativeEventCount=0;
+  negativeStreak=0;
   simulationDNF=false;
   lastAidIndex=-1;
 
@@ -4817,7 +4766,7 @@ function initStartConditions(){
       setTimeout(()=>showConditionChip('🍀','Редкая удача','+20% к положительным событиям'),250);
     }else{
       demotivationActive=true;
-      setTimeout(()=>showConditionChip('😞','Демотивация','3 минуса = DNF'),250);
+      setTimeout(()=>showConditionChip('😞','Демотивация','3 минуса подряд = DNF'),250);
     }
   }
 
@@ -4857,7 +4806,7 @@ function checkAidStation(km){
 }
 function endSimulationDNF(){
   simulationDNF=true;clearInterval(timer);timer=null;clearTimeout(pauseTimer);clearInterval(countTimer);
-  E('simStart').textContent='↻';E('simStatus').textContent='DNF — три отрицательных события.';
+  E('simStart').textContent='↻';E('simStatus').textContent='DNF — три отрицательных события за гонку.';
   E('simDnfBanner')?.classList.add('show');updateResults();draw();
 }
 
@@ -5229,10 +5178,12 @@ function fire(idx){
   penalty+=timeAdjustmentSec;
   randomEventAdjustmentSec+=timeAdjustmentSec;
   addParticles(e[0]);
-  if(timeAdjustmentSec>0)negativeEventCount++;
-  if(demotivationActive&&negativeEventCount>=3){
+  // v0.0235: demotivation counts ALL negative events in the race.
+  // Neutral (0:00) and positive events no longer erase previously accumulated negatives.
+  if(timeAdjustmentSec>0) negativeStreak++;
+  if(demotivationActive&&negativeStreak>=3){
     const km=(at*dist()).toFixed(1),row=document.createElement('div');row.className='current';
-    row.innerHTML=`<span>${km} км</span><span>😞 Три отрицательных события</span><b class="plus">DNF</b>`;
+    row.innerHTML=`<span>${km} км</span><span>😞 Три отрицательных события за гонку</span><b class="plus">DNF</b>`;
     E('simLog').prepend(row);endSimulationDNF();return;
   }
   if(e[1]==='Встреча с Мишей с топором'){
@@ -5277,6 +5228,8 @@ function draw(){
   if(c.width!==Math.round(W*dpr)||c.height!==Math.round(H*dpr)){c.width=Math.round(W*dpr);c.height=Math.round(H*dpr)}
   const ctx=c.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
 
+  // Always paint the simulation scene, even before a forecast/track is selected.
+  // This prevents the large empty black rectangle seen on iPhone.
   const sky=skyInfo();
   let top='#07111f',bottom='#102a43';
   if(sky.day){top='#123c62';bottom='#d97706'}
@@ -5532,7 +5485,7 @@ function tick(){
     maybeShowFirstPlaceAtFinish();
   }
 }
-function run(){clearInterval(timer);timer=setInterval(tick,120);E('simStart').textContent='⏸';E('simStatus').textContent=simulationTrackMode==='virtual'?'Симуляция идёт по виртуальному треку 20 км.':'Симуляция идёт по выбранному реальному треку.'}
+function run(){clearInterval(timer);timer=setInterval(tick,120);E('simStart').textContent='⏸';E('simStatus').textContent=virtualSimTrack?'Симуляция идёт по виртуальному треку 20 км.':'Симуляция идёт по профилю загруженного трека.'}
 function stop(msg){clearInterval(timer);clearTimeout(pauseTimer);clearInterval(countTimer);timer=null;if(msg)E('simStatus').textContent=msg;E('simStart').textContent='▶'}
 function reset(){
   clearTimeout(window.__simStartGateTimer);stop();hideFirstPlaceOverlay();
@@ -5545,12 +5498,7 @@ function reset(){
   if(equipmentBtn){equipmentBtn.disabled=false;equipmentBtn.textContent='Проверить';}
   const equipmentSummary=E('equipmentCheckSummary');
   if(equipmentSummary) equipmentSummary.textContent='Перед каждой новой гонкой нажмите «Проверить».';
-  renderEquipmentState();progress=0;penalty=0;randomEventAdjustmentSec=0;fired.clear();particles=[];lastFordPauseKm=null;fordPauseActive=false;fatigueStartVirtualSec=0;fatiguePenaltyAppliedSec=0;simStartDate=firstTrackDate();E('simDnfBanner')?.classList.remove('show');chooseAidStations();initStartConditions();makeSchedule();E('simProgress').style.width='0';E('simDistance').textContent=dist()?`0.0 / ${dist().toFixed(1)} км`:'—';E('simGain').textContent=gain()?`${Math.round(gain())} м`:'—';E('simEventsCount').textContent=`0 / ${schedule.length}`;E('simPenalty').textContent='+0:00';E('simLog').innerHTML='<div><span>—</span><span>События появятся случайно по ходу гонки</span><b>31 событие в пуле</b></div>';E('simEventCard')?.classList.remove('show'); E('simEventChip')?.classList.remove('show');E('simPauseBadge').classList.remove('show');E('simStart').textContent='▶';E('simStart').setAttribute('aria-label','Старт');E('simStart').title='Старт';E('simStart').disabled=!(baseSec()&&dist());updateResults();E('simStatus').textContent=baseSec()&&dist()
-    ? (simulationTrackMode==='virtual'
-        ? 'Готово: выбран виртуальный трек 20 км.'
-        : 'Готово: выбран реальный загруженный трек.')
-    : 'Выберите «Симуляция трека 20 км» или «Симуляция реального трека».';
-  draw()}
+  renderEquipmentState();progress=0;penalty=0;randomEventAdjustmentSec=0;fired.clear();particles=[];lastFordPauseKm=null;fordPauseActive=false;fatigueStartVirtualSec=0;fatiguePenaltyAppliedSec=0;simStartDate=firstTrackDate();E('simDnfBanner')?.classList.remove('show');chooseAidStations();initStartConditions();makeSchedule();E('simProgress').style.width='0';E('simDistance').textContent=dist()?`0.0 / ${dist().toFixed(1)} км`:'—';E('simGain').textContent=gain()?`${Math.round(gain())} м`:'—';E('simEventsCount').textContent=`0 / ${schedule.length}`;E('simPenalty').textContent='+0:00';E('simLog').innerHTML='<div><span>—</span><span>События появятся случайно по ходу гонки</span><b>31 событие в пуле</b></div>';E('simEventCard')?.classList.remove('show'); E('simEventChip')?.classList.remove('show');E('simPauseBadge').classList.remove('show');E('simStart').textContent='▶';E('simStart').setAttribute('aria-label','Старт');E('simStart').title='Старт';E('simStart').disabled=!(baseSec()&&dist());updateResults();E('simStatus').textContent=baseSec()&&dist()?(virtualSimTrack?'Готово: виртуальный трек 20 км · +500 м · 2 брода.':'Готово: профиль и время взяты из текущего прогноза.'):'Сначала рассчитайте «Прогноз гонки» в разделе 2.';draw()}
 
 setInterval(()=>{
   const b=E('simStart');
@@ -5621,7 +5569,6 @@ E('equipmentCheckModal')?.addEventListener('click',(ev)=>{
 });
 renderEquipmentState();
 E('simVirtual20Btn')?.addEventListener('click',activateVirtualSimulationTrack);
-E('simRealTrackBtn')?.addEventListener('click',activateRealSimulationTrack);
 E('simReset').addEventListener('click',reset);E('simSpeed').addEventListener('change',draw);window.addEventListener('resize',draw);
 // Keep simulation synced when user switches to tab 5 or recalculates forecast.
 document.querySelector('[data-tab="simulation"]')?.addEventListener('click',()=>setTimeout(reset,0));
@@ -5839,3 +5786,4 @@ document.querySelectorAll('.tab').forEach(btn=>{
     }
   });
 });
+window.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{try{draw()}catch(e){}},80));

@@ -10,7 +10,7 @@
   <title>Прогноз и анализ трейловых гонок</title>
   <link rel="manifest" href="manifest.webmanifest?v=075">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=234switch">
+  <link rel="stylesheet" href="styles.css?v=235">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynBv0TtP4JpC5dQF3Vqv2tLIbV0w=" crossorigin="">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
@@ -39,13 +39,22 @@
 .virtual-track-box span{font-size:13px;color:#94a3b8}
 @media(max-width:600px){.virtual-track-box button{width:100%}.virtual-track-box span{width:100%}}
 
-.virtual-track-box .active-source{
-  outline:2px solid #38bdf8!important;
-  box-shadow:0 0 0 2px rgba(56,189,248,.15)!important;
+.sim-speed-wrap .sim-speed-label{
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+  margin:0 0 5px 0!important;
+  color:#cbd5e1!important;
+  font-size:12px!important;
+  font-weight:700!important;
+  line-height:1.2!important;
+  white-space:normal!important;
 }
-
-#simRealTrackBtn.active-source{background:#22c55e!important;color:#07120a!important;border-color:#22c55e!important;outline:none!important;box-shadow:none!important}
-#simVirtual20Btn:disabled{background:#334155!important;color:#94a3b8!important;border-color:#475569!important;opacity:.6!important;cursor:not-allowed!important}
+.sim-speed-wrap{
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:stretch!important;
+}
 </style>
 
 <style>
@@ -254,7 +263,7 @@
   }
   .sim-icon-btn{width:38px!important;height:38px!important;font-size:16px!important}
   .sim-speed-wrap{display:block!important}
-  .sim-speed-wrap span{display:none!important}
+  .sim-speed-wrap span:not(.sim-speed-label){display:none!important}
   .sim-speed-wrap select{width:100%!important;min-width:0!important;font-size:13px!important}
 
   /* Events + ford map remain side by side on phone like the reference */
@@ -432,7 +441,7 @@
   overflow-wrap:anywhere!important;
 }
 .sim-speed-wrap{min-width:0!important}
-.sim-speed-wrap span{display:none!important}
+.sim-speed-wrap span:not(.sim-speed-label){display:none!important}
 .sim-speed-wrap select{width:100%!important;min-width:0!important;padding:7px!important}
 @media(max-width:600px){
   .sim-scene-controls{grid-template-columns:42px minmax(0,1fr) 68px!important}
@@ -1029,8 +1038,7 @@
   <div class="sim-reference-shell">
     <div class="virtual-track-box">
       <button id="simVirtual20Btn" type="button" class="primary">Симуляция трека 20 км</button>
-      <button id="simRealTrackBtn" type="button" class="secondary">Симуляция реального трека</button>
-      <span id="simVirtual20Status">Выберите виртуальный трек 20 км или реальный загруженный трек.</span>
+      <span id="simVirtual20Status">20 км: 3 км подъём · 4 км спуск · дальше ровно · +500 м · 2 брода.</span>
     </div>
     <div class="sim-top-metrics">
       <div><span>Дистанция</span><b id="simDistance">—</b></div>
@@ -1108,7 +1116,7 @@
         </div>
         <div class="sim-speed-wrap">
           <span>Скорость</span>
-          <span class="sim-speed-label">Ускорить гонку</span>
+          <span class="sim-speed-label">Ускорить прохождение трассы</span>
 <select id="simSpeed">
             <option value="1">1×</option>
             <option value="2">2×</option>
@@ -1122,7 +1130,6 @@
 <div class="sim-mid-grid">
       <div class="sim-events-card">
         <h3>Случайные события <span class="muted">(этой симуляции)</span></h3>
-        <div class="sim-log-header" aria-hidden="true"><span></span><span></span><b>Ко времени гонки</b></div>
         <div id="simLog" class="sim-log"></div>
         <div class="muted sim-events-note">События влияют только на текущую симуляцию и не меняют исходный прогноз. Положительные уменьшают время, отрицательные увеличивают. По длительности: 1 час — 3 события; 2 часа — 4–6; 4 часа — 6–8; 6 часов — 8–10.</div>
       </div>
@@ -1148,7 +1155,7 @@
     Модель является оценочной. Броды, погода, питание, состояние покрытия, самочувствие и другие факторы могут существенно повлиять на фактический результат. Расчёты носят исключительно информационно-ознакомительный характер, не являются гарантией результата или рекомендацией к действию. Автор не несёт ответственности за решения, принятые на основании расчётов приложения.
   </footer>
 
-  <script src="app.js?v=235dnftotalswitch"></script>
+  <script src="app.js?v=235"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
