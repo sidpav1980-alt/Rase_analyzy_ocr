@@ -10,7 +10,7 @@
   <title>Прогноз и анализ трейловых гонок</title>
   <link rel="manifest" href="manifest.webmanifest?v=075">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=234switch">
+  <link rel="stylesheet" href="styles.css?v=240levelsswitch">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynBv0TtP4JpC5dQF3Vqv2tLIbV0w=" crossorigin="">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
@@ -194,7 +194,7 @@
 
 
 <style>
-/* v0.0239 — compact phone simulation */
+/* v0.0241 — compact phone simulation */
 .sim-profile-card{display:none!important}
 .sim-reference-shell{gap:10px!important}
 .sim-scene-title{
@@ -313,7 +313,7 @@
 </style>
 
 <style>
-/* v0.0239 — small event notification above the track profile */
+/* v0.0241 — small event notification above the track profile */
 #simEventCard{display:none!important}
 .sim-event-chip{
   position:absolute;
@@ -391,7 +391,7 @@
 </style>
 
 <style>
-/* v0.0239 — static route map, no zoom/pan */
+/* v0.0241 — static route map, no zoom/pan */
 .ford-leaflet-map,
 .sim-ford-map{
   touch-action:none!important;
@@ -406,7 +406,7 @@
 </style>
 
 <style>
-/* v0.0239: compact controls, nothing overlaps on iPhone */
+/* v0.0241: compact controls, nothing overlaps on iPhone */
 .sim-scene-controls{
   position:static!important;
   display:grid!important;
@@ -450,13 +450,13 @@
 </style>
 
 <style>
-/* v0.0239 */
+/* v0.0241 */
 .sim-fords-card{display:none!important}
 .sim-mid-grid{grid-template-columns:1fr!important}
 </style>
 
 <style>
-/* v0.0239 — map is shown in route analysis, hidden only in simulation */
+/* v0.0241 — map is shown in route analysis, hidden only in simulation */
 #route .ford-map-panel,
 [data-tabpanel="route"] .ford-map-panel,
 #tab-route .ford-map-panel{
@@ -476,7 +476,7 @@
 </style>
 
 <style>
-/* v0.0239 — guaranteed GPX scheme in Analysis map block */
+/* v0.0241 — guaranteed GPX scheme in Analysis map block */
 #mapAnalysisResults .ford-map-panel{
   display:block!important;
   visibility:visible!important;
@@ -505,7 +505,7 @@
 </style>
 
 <style>
-/* v0.0239 — analysis progress UI */
+/* v0.0241 — analysis progress UI */
 .map-analyze-running{
   margin-top:12px;padding:14px;border:1px solid #2a405d;border-radius:15px;
   background:#0b1727;display:grid;grid-template-columns:42px minmax(0,1fr);
@@ -637,7 +637,7 @@
 
 </head>
 <body>
-<div class="app-version">v0.0239</div>
+<div class="app-version">v0.0241</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Прогноз и анализ трейловых гонок</div>
@@ -1028,9 +1028,33 @@
 <section id="simulation" class="tabpanel">
   <div class="sim-reference-shell">
     <div class="virtual-track-box">
-      <button id="simVirtual20Btn" type="button" class="primary">Симуляция трека 20 км</button>
+      <button id="simVirtual20Btn" type="button" class="primary">Виртуальная гонка</button>
       <button id="simRealTrackBtn" type="button" class="secondary">Симуляция реального трека</button>
-      <span id="simVirtual20Status">Выберите виртуальный трек 20 км или реальный загруженный трек.</span>
+      <span id="simVirtual20Status">Выберите виртуальную гонку или реальный загруженный трек.</span>
+    </div>
+
+    <div id="virtualCampaignPanel" class="virtual-campaign-panel">
+      <div class="virtual-campaign-head">
+        <div>
+          <b>🏆 Виртуальный чемпионат</b>
+          <span id="virtualCampaignHint">Чтобы пройти уровень, финишируйте первым.</span>
+        </div>
+        <div class="virtual-lives">Жизни: <b id="virtualLives">❤️❤️❤️</b></div>
+      </div>
+      <div class="virtual-levels">
+        <div id="virtualLevel1" class="virtual-level current"><b>1 уровень</b><span>20 км · +500 м</span></div>
+        <div id="virtualLevel2" class="virtual-level locked"><b>2 уровень</b><span>60 км · +2500 м · 4 ПП</span></div>
+        <div id="virtualLevel3" class="virtual-level locked"><b>3 уровень</b><span>100 км · +6000 м</span></div>
+      </div>
+      <button id="virtualCampaignRestart" class="secondary virtual-restart" type="button">↻ Начать чемпионат заново</button>
+    </div>
+
+    <div id="virtualChampionOverlay" class="virtual-champion-overlay" aria-hidden="true">
+      <div class="virtual-champion-box">
+        <div>🏆👑🏆</div>
+        <b>ТЫ ЧЕМПИОН!</b>
+        <span>Все три уровня пройдены с первым местом.</span>
+      </div>
     </div>
     <div class="sim-top-metrics">
       <div><span>Дистанция</span><b id="simDistance">—</b></div>
@@ -1095,7 +1119,7 @@
         <strong id="simEventDelta"></strong>
       </div>
 
-      <div id="simDnfBanner" class="sim-dnf-banner"><div class="sim-dnf-box"><b>DNF</b><span>Три отрицательных события подряд. Демотивация победила — симуляция завершена.</span></div></div>
+      <div id="simDnfBanner" class="sim-dnf-banner"><div class="sim-dnf-box"><b>DNF</b><span>Три отрицательных события за гонку. Демотивация победила — симуляция завершена.</span></div></div>
 <div id="simPauseBadge" class="sim-pause-badge">
         😲 Событие! Пауза <b id="simPauseCountdown">3</b> сек.
       </div>
@@ -1148,7 +1172,7 @@
     Модель является оценочной. Броды, погода, питание, состояние покрытия, самочувствие и другие факторы могут существенно повлиять на фактический результат. Расчёты носят исключительно информационно-ознакомительный характер, не являются гарантией результата или рекомендацией к действию. Автор не несёт ответственности за решения, принятые на основании расчётов приложения.
   </footer>
 
-  <script src="app.js?v=239speed2pp14setfinishsswitch"></script>
+  <script src="app.js?v=240levelsspeed2pp14setfinishsswitch"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
