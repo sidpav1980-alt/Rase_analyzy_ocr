@@ -287,7 +287,7 @@ $('installBtn').addEventListener('click', async () => {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=104', {updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('./sw.js?v=106', {updateViaCache:'none'});
       await reg.update();
       let refreshing=false;
       navigator.serviceWorker.addEventListener('controllerchange',()=>{
@@ -1188,7 +1188,7 @@ function drawSurfaceStrip(samples){
 
 
 
-function groupFordKmPoints(kms){
+function groupFordKmPoints(kms, maxGapKm=0.15){
   const pts=(Array.isArray(kms)?kms:[])
     .map(Number)
     .filter(Number.isFinite)
@@ -1198,24 +1198,48 @@ function groupFordKmPoints(kms){
   let current=null;
 
   for(const km of pts){
-    if(!current || km-current.start>0.50){
-      if(current) groups.push(current);
+    if(!current){
       current={start:km,end:km,points:[km]};
-    }else{
+      continue;
+    }
+
+    // v1.06: only nearby parts of the SAME water crossing are merged.
+    // 150 m is enough for braided channels / GPS jitter, while separate
+    // crossings 200+ m apart remain separate.
+    if(km-current.end<=maxGapKm){
       current.end=km;
       current.points.push(km);
+    }else{
+      groups.push(current);
+      current={start:km,end:km,points:[km]};
     }
   }
+
   if(current) groups.push(current);
 
   return groups.map(g=>({
     start:g.start,
     end:g.end,
+    center:(g.start+g.end)/2,
     points:g.points,
-    label:g.start.toFixed(1)
+    label:(g.end-g.start>=0.05)
+      ? `${g.start.toFixed(1)}–${g.end.toFixed(1)}`
+      : g.start.toFixed(1)
   }));
 }
 
+function removeBridgeCrossings(kms, bridgeKms, radiusKm=0.08){
+  const bridges=(Array.isArray(bridgeKms)?bridgeKms:[])
+    .map(Number).filter(Number.isFinite);
+  return (Array.isArray(kms)?kms:[])
+    .map(Number).filter(Number.isFinite)
+    .filter(km=>!bridges.some(b=>Math.abs(km-b)<=radiusKm));
+}
+
+function groupedFordStarts(kms, bridgeKms=[]){
+  return groupFordKmPoints(removeBridgeCrossings(kms,bridgeKms),0.15)
+    .map(g=>g.start);
+}
 function filterFordCandidatesClient(fords){
   if(!Array.isArray(fords)) return [];
 
@@ -1227,7 +1251,7 @@ function filterFordCandidatesClient(fords){
     .filter(f=>Number.isFinite(Number(f?.km)))
     .sort((a,b)=>Number(a.km)-Number(b.km));
 
-  const groups=groupFordKmPoints(arr.map(f=>Number(f.km)));
+  const groups=groupFordKmPoints(arr.map(f=>Number(f.km)),0.15);
 
   return groups.map(g=>({
     km:g.start,
@@ -1364,7 +1388,7 @@ async function analyzeMapOSM(){
     if(Array.isArray(data.ford_kms)) rawFordKm=data.ford_kms;
     else if(Array.isArray(data.fords)) rawFordKm=data.fords.map(f=>Number(f?.km)).filter(Number.isFinite);
 
-    const groupedFords=groupFordKmPoints(rawFordKm);
+    const groupedFords=groupFordKmPoints(rawFordKm,0.15);
     data.ford_groups=groupedFords;
     data.ford_count=groupedFords.length;
     data.ford_kms=groupedFords.map(g=>g.start);
@@ -1480,12 +1504,22 @@ function renderFordMap(fordKms=[],confirmedFordKms=[],likelyFordKms=[],bridgeKms
 function renderMapAnalysis(result){
   const {samples,summary,elements=[]}=result;
   const crossings=analyzeWaterCrossings(samples,elements);
-  // One braided/nearby water system is grouped as one physical crossing.
-  const fordGroups=groupFordKmPoints(crossings.fords);
-  const fordKms=fordGroups.map(g=>g.start);
-  const bridgeKms=crossings.bridges;
-  const confirmedFordKms=crossings.confirmed||[];
-  const likelyFordKms=crossings.likely||[];
+
+  // v1.06:
+  // - channels/points within 150 m are one physical ford;
+  // - separate crossings 200+ m apart remain separate;
+  // - anything within 80 m of a mapped bridge is NOT counted as a ford.
+  const bridgeKms=groupFordKmPoints(crossings.bridges||[],0.10).map(g=>g.start);
+
+  const confirmedFordKms=groupedFordStarts(crossings.confirmed||[],bridgeKms);
+  const likelyFordKms=groupedFordStarts(crossings.likely||[],bridgeKms);
+
+  // Combine confirmed + likely without double-counting the same crossing.
+  const combinedFordGroups=groupFordKmPoints(
+    [...confirmedFordKms,...likelyFordKms],
+    0.15
+  );
+  const fordKms=combinedFordGroups.map(g=>g.start);
   state.mapAnalysis={
     result,
     samples:[...samples],
@@ -1544,7 +1578,7 @@ function renderMapAnalysis(result){
 
   $('mapAnalysisNote').textContent=result?.osmUnavailable
     ? 'OSM-серверы временно недоступны. Профиль GPX сохранён; повторите анализ позже для покрытия и бродов.'
-    : `OSM-классификация маршрута. Неизвестно: ${(100-summary.coverage).toFixed(0)}%. Данные зависят от полноты разметки OpenStreetMap.`;
+    : `OSM-классификация маршрута. Броды: близкие рукава до 150 м объединяются, пересечения у моста исключаются. Неизвестно: ${(100-summary.coverage).toFixed(0)}%.`;
   drawSurfaceStrip(samples);
   requestAnimationFrame(()=>drawFordScheme());
 }
@@ -4369,7 +4403,7 @@ let aidStations=[],fatigueActive=false,luckActive=false,demotivationActive=false
 const activeEventCount=()=>{
   const hours=Math.max(0.1,baseSec()/3600);
 
-  // v1.05:
+  // v1.06:
   // Short races stay sparse.
   // From 2 hours onward use about 1.2 events/hour minimum,
   // while NEVER exceeding 2 events/hour.
@@ -4534,7 +4568,7 @@ function makeSchedule(){
   const positives=shuffled(events.filter(e=>e!==misha && e[3]<0));
   const neutral=shuffled(events.filter(e=>e!==misha && e[3]===0));
 
-  // v1.05: balance the selected event pool as close to 50/50 as possible.
+  // v1.06: balance the selected event pool as close to 50/50 as possible.
   // For an odd number of events, the extra event is assigned randomly.
   let negNeed=Math.floor(n/2);
   let posNeed=Math.floor(n/2);
@@ -4930,7 +4964,7 @@ E('simStart').addEventListener('click',()=>{
     return;
   }
 
-  // v1.05: start animation is always a real 3-second start gate.
+  // v1.06: start animation is always a real 3-second start gate.
   // Simulation speed (including 4×) cannot skip or outrun Misha.
   if(startingFresh){
     showMishaStartDirect();
