@@ -172,7 +172,7 @@
 
 
 <style>
-/* v0.83 — compact phone simulation */
+/* v0.84 — compact phone simulation */
 .sim-profile-card{display:none!important}
 .sim-reference-shell{gap:10px!important}
 .sim-scene-title{
@@ -291,7 +291,7 @@
 </style>
 
 <style>
-/* v0.83 — small event notification above the track profile */
+/* v0.84 — small event notification above the track profile */
 #simEventCard{display:none!important}
 .sim-event-chip{
   position:absolute;
@@ -369,7 +369,7 @@
 </style>
 
 <style>
-/* v0.83 — static route map, no zoom/pan */
+/* v0.84 — static route map, no zoom/pan */
 .ford-leaflet-map,
 .sim-ford-map{
   touch-action:none!important;
@@ -384,7 +384,7 @@
 </style>
 
 <style>
-/* v0.83: compact controls, nothing overlaps on iPhone */
+/* v0.84: compact controls, nothing overlaps on iPhone */
 .sim-scene-controls{
   position:static!important;
   display:grid!important;
@@ -428,13 +428,33 @@
 </style>
 
 <style>
-/* v0.83 */
+/* v0.84 */
 .sim-fords-card{display:none!important}
 .sim-mid-grid{grid-template-columns:1fr!important}
 </style>
+
+<style>
+/* v0.84 — map is shown in route analysis, hidden only in simulation */
+#route .ford-map-panel,
+[data-tabpanel="route"] .ford-map-panel,
+#tab-route .ford-map-panel{
+  display:block!important;
+}
+#fordSchemeCanvas{
+  display:block!important;
+  width:100%!important;
+}
+#fordLeafletMap{
+  display:block!important;
+}
+#simulation .sim-fords-card,
+[data-tabpanel="simulation"] .sim-fords-card{
+  display:none!important;
+}
+</style>
 </head>
 <body>
-<div class="app-version">v0.83</div>
+<div class="app-version">v0.84</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Прогноз и анализ трейловых гонок</div>

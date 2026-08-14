@@ -367,9 +367,12 @@ function parseGPX(text){
   }
 
   state.track=out;
+  setTimeout(()=>{
+    try{drawFordScheme();renderFordMap();}catch(e){}
+  },120);
   document.getElementById('mishaStartSendoff')?.classList.remove('show');
   document.getElementById('mishaFinishWelcome')?.classList.remove('show');
-  // v0.83: a new GPX must never leave the previous route/map analysis on screen.
+  // v0.84: a new GPX must never leave the previous route/map analysis on screen.
   state.mapAnalysis=null;
   if(typeof fordLeafletMap!=='undefined' && fordLeafletMap){
     try{fordLeafletMap.remove()}catch(e){}
@@ -1223,7 +1226,7 @@ async function analyzeMapOSM(){
 
   $('mapAnalyzeStatus').textContent='⏳ Отправляю запрос через серверный proxy…';
 
-  // v0.83: no second internal timer here.
+  // v0.84: no second internal timer here.
   // The map-analysis button owns the single hard 20 second timeout.
   let analysisTimedOut=false;
 
@@ -1871,7 +1874,7 @@ $('mapAnalyzeBtn')?.addEventListener('click',async ()=>{
 
     clearTimeout(timeoutId);
     p.value=85;
-    renderMapAnalysis(result);
+    renderMapAnalysis(result); setTimeout(()=>{try{drawFordScheme();renderFordMap();}catch(e){}},120);
     p.value=100;
     stopMapAnalysisTimer();
     $('mapAnalyzeStatus').textContent='✓ Анализ карты завершён.';
@@ -4115,7 +4118,7 @@ function setMovingTimeFieldFromOCR(value){
     if(m) seconds=Number(m[1])*60+Number(m[2]);
   }
 
-  // v0.83 lower field originally inherited a numeric "minutes" input.
+  // v0.84 lower field originally inherited a numeric "minutes" input.
   if(el.type==='number'){
     if(seconds!=null) el.value=(seconds/60).toFixed(2).replace(/\.00$/,'');
     else{
@@ -4350,13 +4353,31 @@ function conditionChip(icon,title,deltaText=''){
   c.classList.add('show');setTimeout(()=>c.classList.remove('show'),3000);
 }
 function initStartConditions(){
-  fatigueActive=Math.random()<.40;
-  luckActive=Math.random()<.15;
-  demotivationActive=Math.random()<.15;
-  negativeStreak=0;simulationDNF=false;lastAidIndex=-1;
-  if(fatigueActive){penalty+=1800;setTimeout(()=>conditionChip('🥱','Стартовая усталость','+30:00'),250)}
-  if(luckActive)setTimeout(()=>conditionChip('🍀','Редкая удача','+20% к позитиву'),fatigueActive?3400:250);
-  if(demotivationActive)setTimeout(()=>conditionChip('😞','Демотивация','3 минуса = DNF'),(fatigueActive?3400:0)+(luckActive?3200:250));
+  fatigueActive=false;
+  luckActive=false;
+  demotivationActive=false;
+  fatigueApplied=false;
+  negativeStreak=0;
+  simulationDNF=false;
+  lastAidIndex=-1;
+
+  // v0.84: only one start state can appear, and only in 30% of simulations total.
+  if(Math.random()<0.30){
+    const pick=Math.floor(Math.random()*3);
+    if(pick===0){
+      fatigueActive=true;
+      fatigueApplied=true;
+      penalty+=1800;
+      setTimeout(()=>showConditionChip('🥱','Усталость на старте','+30:00 до ближайшего ПП'),250);
+    }else if(pick===1){
+      luckActive=true;
+      setTimeout(()=>showConditionChip('🍀','Редкая удача','+20% к положительным событиям'),250);
+    }else{
+      demotivationActive=true;
+      setTimeout(()=>showConditionChip('😞','Демотивация','3 минуса подряд = DNF'),250);
+    }
+  }
+
   renderSimConditions();
 }
 function checkAidStation(km){
@@ -4907,3 +4928,19 @@ document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{
 
 
 
+
+// v0.84 route map redraw
+
+document.querySelectorAll('.tab').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    if(btn.dataset.tab==='route'){
+      setTimeout(()=>{
+        try{
+          drawFordScheme();
+          renderFordMap();
+          if(fordLeafletMap) fordLeafletMap.invalidateSize();
+        }catch(e){}
+      },180);
+    }
+  });
+});
