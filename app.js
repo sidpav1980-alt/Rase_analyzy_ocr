@@ -451,8 +451,8 @@ $('basePace').addEventListener('change',()=>{ if(state.track&&state.track.length
 window.addEventListener('resize',()=>{ if(state.track&&state.track.length) drawTrackProfiles(); });
 
 function handleGpxFileSelected(e){
-  // A real GPX always replaces the virtual simulation and clears its run/state.
-  if(typeof clearVirtualSimulationTrack==='function') clearVirtualSimulationTrack();
+  // A new GPX invalidates the previous simulation source and run.
+  if(typeof clearSimulationTrackChoice==='function') clearSimulationTrackChoice();
   try{ document.getElementById('simReset')?.click(); }catch(_e){}
   abortMapAnalysisForNewGpx();
   invalidateRaceForecast();
@@ -965,7 +965,7 @@ function buildOverpassQuery(points){
   const pts=(points||[]).filter(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lon));
   if(!pts.length) return '[out:json][timeout:90];();out;';
 
-  // v0.0235: do NOT ask Overpass for one huge route bbox. On long/curvy tracks
+  // v0.0242: do NOT ask Overpass for one huge route bbox. On long/curvy tracks
   // that query was too heavy and all endpoints could time out, producing 0%.
   // Build several small boxes along the GPX corridor instead.
   const boxes=[];
@@ -1077,7 +1077,7 @@ function analyzeWaterCrossings(samples,elements=[]){
     return bestD<=maxKm?bestKm:NaN;
   }
 
-  // v0.0235: suppress false "city fords".
+  // v0.0242: suppress false "city fords".
   // If GPX follows an OSM road/paved way at the crossing, water geometry alone
   // is not enough: only an explicit OSM ford node can create a ford there.
   const roadWays=(elements||[]).filter(el=>{
@@ -1330,7 +1330,7 @@ function groupFordKmPoints(kms, maxGapKm=0.35){
       continue;
     }
 
-    // v0.0235: only nearby parts of the SAME water crossing are merged.
+    // v0.0242: only nearby parts of the SAME water crossing are merged.
     // 150 m is enough for braided channels / GPS jitter, while separate
     // crossings 200+ m apart remain separate.
     if(km-current.end<=maxGapKm){
@@ -1507,7 +1507,7 @@ async function analyzeMapOSM(){
   // analysis with the GPX itself. Surface/ford values remain unknown rather
   // than stopping the whole analysis.
   if(!data){
-    // v0.0235: if OSM is temporarily down, reuse ONLY a cache matching this GPX.
+    // v0.0242: if OSM is temporarily down, reuse ONLY a cache matching this GPX.
     try{
       const c=JSON.parse(localStorage.getItem('trailOSMElementsCache')||'null');
       const first=state.track?.[0], last=state.track?.[state.track.length-1];
@@ -1665,7 +1665,7 @@ function renderMapAnalysis(result){
   const {samples,summary,elements=[]}=result;
   const crossings=analyzeWaterCrossings(samples,elements);
 
-  // v0.0235: analyzeWaterCrossings already groups by OSM water object first,
+  // v0.0242: analyzeWaterCrossings already groups by OSM water object first,
   // then deduplicates only near-identical physical crossings.
   const bridgeKms=(crossings.bridges||[]).slice();
   const confirmedFordKms=(crossings.confirmed||[]).slice();
@@ -4437,7 +4437,7 @@ const events=[
   ['🩸','Поранился','Нужно обработать травму.',0],
   ['🐻','Встреча с Мишей с топором','Миша подбодрил — ноги неожиданно побежали быстрее.',-300],
   ['😅','Слишком быстро на старте','Пришлось сбросить темп и восстановить дыхание.',120],
-  ['📸','Остановились пофоткать','Вид оказался слишком красивым, чтобы пройти мимо.',600],
+  ['📸','Остановились пофоткать','Вид оказался слишком красивым, чтобы пройти мимо.',180],
   ['🐱','Засмотрелись на котика','Котик уверенно выиграл борьбу за внимание.',300],
   ['📱','Потеряли телефон','Обыскали рюкзак, карманы и немного вернулись назад.',300],
   ['🍔','Зажрались на ПП','Пункт питания оказался подозрительно хорош.',420],
@@ -4588,7 +4588,7 @@ function maybeShowFirstPlaceAtFinish(){
 
 if(!E('simStart')) return;
 let timer=null,pauseTimer=null,countTimer=null,progress=0,penalty=0,fired=new Set(),schedule=[],particles=[],simStartDate=null;
-let aidStations=[],fatigueActive=false,luckActive=false,demotivationActive=false,negativeStreak=0,simulationDNF=false,lastAidIndex=-1;
+let aidStations=[],fatigueActive=false,luckActive=false,demotivationActive=false,negativeEventCount=0,simulationDNF=false,lastAidIndex=-1;
 const equipmentState={
   checked:false,
   medkit:true,
@@ -4603,7 +4603,7 @@ let randomEventAdjustmentSec=0;
 const activeEventCount=()=>{
   const hours=Math.max(0.1,baseSec()/3600);
 
-  // v0.0235 — event count by forecast duration:
+  // v0.0242 — event count by forecast duration:
   // ~1 h  -> exactly 3
   // ~2 h  -> 4–6
   // ~3 h  -> 5–7
@@ -4637,49 +4637,275 @@ const activeEventCount=()=>{
   return minEvents + Math.floor(Math.random()*(maxEvents-minEvents+1));
 };
 let virtualSimTrack=null;
-function dist(){return virtualSimTrack ? virtualSimTrack.dist : Number(state?.dist||0)}
-function gain(){return virtualSimTrack ? virtualSimTrack.gain : Number(state?.gain||0)}
-function baseSec(){return virtualSimTrack ? virtualSimTrack.totalSec : Number(state?.raceForecast?.totalSec||0)}
-function simTrackPoints(){return virtualSimTrack ? virtualSimTrack.track : simTrackPoints()}
-function simMapAnalysis(){return virtualSimTrack ? virtualSimTrack.mapAnalysis : (simMapAnalysis())}
-function clearVirtualSimulationTrack(){
-  virtualSimTrack=null;
-  const s=E('simVirtual20Status');
-  if(s) s.textContent='20 км: 3 км подъём · 4 км спуск · дальше ровно · +500 м · 2 брода.';
+let simulationTrackMode=null; // null | 'virtual' | 'real'
+
+function dist(){
+  if(simulationTrackMode==='virtual' && virtualSimTrack) return Number(virtualSimTrack.dist||0);
+  if(simulationTrackMode==='real') return Number(state?.dist||0);
+  return 0;
 }
-function activateVirtualSimulationTrack(){
-  // Simple permanent virtual profile:
-  // 0–3 km: straight climb +500 m
-  // 3–7 km: straight descent -500 m
-  // 7–20 km: flat to the finish.
-  const raw=[];
-  const n=201;
-  for(let i=0;i<n;i++){
-    const km=20*i/(n-1);
-    let ele;
-    if(km<=3){
-      ele=100+(500/3)*km;
-    }else if(km<=7){
-      ele=600-(500/4)*(km-3);
-    }else{
-      ele=100;
-    }
-    raw.push({km,ele,lat:55.75+km*0.00005,lon:37.60+km*0.00005});
+function gain(){
+  if(simulationTrackMode==='virtual' && virtualSimTrack) return Number(virtualSimTrack.gain||0);
+  if(simulationTrackMode==='real') return Number(state?.gain||0);
+  return 0;
+}
+function baseSec(){
+  if(simulationTrackMode==='virtual' && virtualSimTrack) return Number(virtualSimTrack.totalSec||0);
+  if(simulationTrackMode==='real') return Number(state?.raceForecast?.totalSec||0);
+  return 0;
+}
+function simTrackPoints(){
+  if(simulationTrackMode==='virtual' && virtualSimTrack) return virtualSimTrack.track||[];
+  if(simulationTrackMode==='real') return state?.track||[];
+  return [];
+}
+function simMapAnalysis(){
+  if(simulationTrackMode==='virtual' && virtualSimTrack) return virtualSimTrack.mapAnalysis||{};
+  if(simulationTrackMode==='real') return state?.mapAnalysis||{};
+  return {};
+}
+function updateSimulationSourceButtons(){
+  const vb=E('simVirtual20Btn'), rb=E('simRealTrackBtn');
+  if(vb){
+    vb.disabled=false;
+    vb.classList.toggle('active-source',simulationTrackMode==='virtual');
   }
+  if(rb){
+    rb.disabled=false;
+    rb.classList.toggle('active-source',simulationTrackMode==='real');
+  }
+}
+function clearSimulationTrackChoice(){
+  simulationTrackMode=null;
+  virtualSimTrack=null;
+  updateSimulationSourceButtons();
+  renderVirtualCampaign();
+  const s=E('simVirtual20Status');
+  if(s) s.textContent='Выберите виртуальный трек 20 км или реальный загруженный трек.';
+}
+
+const VIRTUAL_LEVELS=[
+  {
+    id:1, dist:20, gain:500, totalSec:2*3600,
+    aidStations:[14],
+    fords:[6],
+    label:'20 км · +500 м · ПП 14 км'
+  },
+  {
+    id:2, dist:60, gain:2500, totalSec:6*3600,
+    aidStations:[12,24,36,48],
+    fords:[18,42],
+    label:'60 км · +2500 м · 4 ПП'
+  },
+  {
+    id:3, dist:100, gain:6000, totalSec:12*3600,
+    aidStations:[15,35,55,75,90],
+    fords:[28,68],
+    label:'100 км · +6000 м · 5 ПП'
+  }
+];
+let virtualCampaign={
+  level:1,
+  lives:3,
+  passed:[false,false,false],
+  champion:false,
+  attemptActive:false
+};
+
+function buildLevelTrack(level){
+  const raw=[];
+  const n=Math.max(201,Math.round(level.dist*10)+1);
+
+  for(let i=0;i<n;i++){
+    const km=level.dist*i/(n-1);
+    let ele=100;
+
+    if(level.id===1){
+      // Level 1 stays exactly as requested:
+      // 0–3 km +500 m, 3–7 km down, then flat.
+      if(km<=3) ele=100+(500/3)*km;
+      else if(km<=7) ele=600-(500/4)*(km-3);
+      else ele=100;
+    }else{
+      // Repeating triangular climbs whose cumulative ascent equals level.gain.
+      const climbs=level.id===2 ? 5 : 6;
+      const climbGain=level.gain/climbs;
+      const cycle=level.dist/climbs;
+      const phase=(km%cycle)/cycle;
+      ele=phase<=0.5
+        ? 100+climbGain*(phase/0.5)
+        : 100+climbGain*((1-phase)/0.5);
+    }
+
+    raw.push({
+      km, ele,
+      lat:55.75+km*0.00003,
+      lon:37.60+km*0.00003
+    });
+  }
+  return raw;
+}
+
+function virtualLevelConfig(){
+  return VIRTUAL_LEVELS[Math.max(0,Math.min(2,virtualCampaign.level-1))];
+}
+
+function renderVirtualCampaign(){
+  const panel=E('virtualCampaignPanel');
+  if(panel) panel.classList.toggle('show',simulationTrackMode==='virtual');
+
+  const lives=E('virtualLives');
+  if(lives){
+    lives.textContent='❤️'.repeat(Math.max(0,virtualCampaign.lives))+
+      '🖤'.repeat(Math.max(0,3-virtualCampaign.lives));
+  }
+
+  for(let i=1;i<=3;i++){
+    const el=E('virtualLevel'+i);
+    if(!el) continue;
+    el.classList.remove('current','passed','locked');
+    if(virtualCampaign.passed[i-1]) el.classList.add('passed');
+    else if(i===virtualCampaign.level && !virtualCampaign.champion) el.classList.add('current');
+    else if(i>virtualCampaign.level) el.classList.add('locked');
+  }
+
+  const hint=E('virtualCampaignHint');
+  if(hint){
+    if(virtualCampaign.champion) hint.textContent='🏆 Все уровни пройдены.';
+    else if(virtualCampaign.lives<=0) hint.textContent='💔 Жизни закончились. Начните чемпионат заново.';
+    else hint.textContent=`Уровень ${virtualCampaign.level}/3. Первое место открывает следующий уровень и восстанавливает 3 жизни.`;
+  }
+
+  const restart=E('virtualCampaignRestart');
+  if(restart) restart.classList.toggle('show',virtualCampaign.lives<=0 || virtualCampaign.champion);
+}
+
+function showVirtualChampion(){
+  virtualCampaign.champion=true;
+  renderVirtualCampaign();
+  const el=E('virtualChampionOverlay');
+  if(el){
+    el.classList.add('show');
+    el.setAttribute('aria-hidden','false');
+  }
+}
+
+function restartVirtualCampaign(){
+  virtualCampaign={level:1,lives:3,passed:[false,false,false],champion:false,attemptActive:false};
+  E('virtualChampionOverlay')?.classList.remove('show');
+  if(simulationTrackMode==='virtual') activateVirtualSimulationTrack();
+  else renderVirtualCampaign();
+}
+
+function loadCurrentVirtualLevel(){
+  const level=virtualLevelConfig();
   virtualSimTrack={
-    dist:20,
-    gain:500,
-    totalSec:2*3600,
-    track:raw,
+    dist:level.dist,
+    gain:level.gain,
+    totalSec:level.totalSec,
+    track:buildLevelTrack(level),
     mapAnalysis:{
-      fordKms:[6.0,14.0],
-      confirmedFordKms:[6.0,14.0],
+      fordKms:level.fords.slice(),
+      confirmedFordKms:level.fords.slice(),
       likelyFordKms:[],
       bridgeKms:[]
-    }
+    },
+    aidStations:level.aidStations.slice(),
+    level:level.id
   };
+  chooseAidStations();
+  return level;
+}
+
+function activateVirtualSimulationTrack(){
+  const level=loadCurrentVirtualLevel();
+  simulationTrackMode='virtual';
+  virtualCampaign.attemptActive=false;
+  updateSimulationSourceButtons();
+  renderVirtualCampaign();
+
   const s=E('simVirtual20Status');
-  if(s) s.textContent='✓ Виртуальный трек: 3 км вверх · 4 км вниз · 13 км ровно · +500 м · броды 6.0 и 14.0 км.';
+  if(s) s.textContent=`✓ Виртуальный уровень ${level.id}: ${level.label}. Жизни: ${virtualCampaign.lives}/3.`;
+  reset();
+}
+
+function beginVirtualAttempt(){
+  if(simulationTrackMode!=='virtual') return true;
+  if(virtualCampaign.champion){
+    showVirtualChampion();
+    return false;
+  }
+  if(virtualCampaign.lives<=0){
+    renderVirtualCampaign();
+    E('simStatus').textContent='💔 Жизни закончились. Нажмите «Начать чемпионат заново».';
+    return false;
+  }
+  if(!virtualCampaign.attemptActive){
+    virtualCampaign.lives--;
+    virtualCampaign.attemptActive=true;
+    renderVirtualCampaign();
+    const level=virtualLevelConfig();
+    const s=E('simVirtual20Status');
+    if(s) s.textContent=`▶ Уровень ${level.id}: попытка началась. Осталось жизней: ${virtualCampaign.lives}/3.`;
+  }
+  return true;
+}
+
+function finishVirtualAttempt(firstPlace){
+  if(simulationTrackMode!=='virtual' || !virtualCampaign.attemptActive) return;
+  virtualCampaign.attemptActive=false;
+
+  if(firstPlace){
+    const idx=virtualCampaign.level-1;
+    virtualCampaign.passed[idx]=true;
+    virtualCampaign.lives=3;
+
+    if(virtualCampaign.level>=3){
+      showVirtualChampion();
+      E('simStatus').textContent='🏆 ТЫ ЧЕМПИОН! Все три уровня пройдены.';
+      return;
+    }
+
+    virtualCampaign.level++;
+    virtualCampaign.lives=3;
+
+    // v0.0242: immediately rebuild the track/profile/map for the newly unlocked level.
+    const next=loadCurrentVirtualLevel();
+    renderVirtualCampaign();
+    reset();
+    renderVirtualCampaign();
+
+    const s=E('simVirtual20Status');
+    if(s) s.textContent=`🥇 Уровень пройден! Жизни: 3/3. Загружен уровень ${next.id}: ${next.label}.`;
+  }else{
+    renderVirtualCampaign();
+    const s=E('simVirtual20Status');
+    if(s){
+      s.textContent=virtualCampaign.lives>0
+        ? `Финиш без 1 места. Уровень ${virtualCampaign.level} не пройден. Осталось жизней: ${virtualCampaign.lives}/3.`
+        : `💔 Жизни закончились на уровне ${virtualCampaign.level}.`;
+    }
+  }
+}
+
+function activateRealSimulationTrack(){
+  if(!(state?.track?.length>1)){
+    const s=E('simVirtual20Status');
+    if(s) s.textContent='⚠️ Сначала загрузите реальный GPX во вкладке «Трек гонки».';
+    return;
+  }
+  if(!(state?.raceForecast?.totalSec>0)){
+    const s=E('simVirtual20Status');
+    if(s) s.textContent='⚠️ Для реального трека сначала рассчитайте «Прогноз гонки» в разделе 2.';
+    return;
+  }
+  virtualSimTrack=null;
+  simulationTrackMode='real';
+  virtualCampaign.attemptActive=false;
+  updateSimulationSourceButtons();
+  renderVirtualCampaign();
+  const s=E('simVirtual20Status');
+  if(s) s.textContent=`✓ Выбран реальный трек: ${Number(state.dist||0).toFixed(1)} км · +${Math.round(Number(state.gain||0))} м.`;
   reset();
 }
 function fmt(sec){sec=Math.max(0,Math.round(sec||0));const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}
@@ -4689,6 +4915,12 @@ function shuffled(a){return a.slice().sort(()=>Math.random()-.5)}
 function chooseAidStations(){
   const d=dist();
   if(!d){aidStations=[];return}
+
+  // v0.0242: each virtual level has its own fixed aid stations.
+  if(simulationTrackMode==='virtual' && virtualSimTrack){
+    aidStations=(virtualSimTrack.aidStations||[]).slice();
+    return;
+  }
 
   // Минимум 5 ПП на 90 км и длиннее.
   let minCount=Math.max(1,Math.ceil(d/18));
@@ -4747,7 +4979,7 @@ function initStartConditions(){
   luckActive=false;
   demotivationActive=false;
   fatigueApplied=false;
-  negativeStreak=0;
+  negativeEventCount=0;
   simulationDNF=false;
   lastAidIndex=-1;
 
@@ -4766,18 +4998,62 @@ function initStartConditions(){
       setTimeout(()=>showConditionChip('🍀','Редкая удача','+20% к положительным событиям'),250);
     }else{
       demotivationActive=true;
-      setTimeout(()=>showConditionChip('😞','Демотивация','3 минуса подряд = DNF'),250);
+      setTimeout(()=>showConditionChip('😞','Демотивация','3 минуса = DNF'),250);
     }
   }
 
   renderSimConditions();
 }
+
+function celebrateAidStation(km,index){
+  // Visual burst: music notes, smiles and fruit.
+  const icons=['🎵','🎶','😄','🤩','🍌','🍊','🍎','🍉','🥤'];
+  for(let i=0;i<20;i++){
+    const icon=icons[Math.floor(Math.random()*icons.length)];
+    particles.push({
+      icon,
+      life:1.4,
+      x:0,
+      y:0,
+      vx:(Math.random()-.5)*4.2,
+      vy:-1.8-Math.random()*2.8,
+      rot:(Math.random()-.5)*.35,
+      size:22+Math.random()*14
+    });
+  }
+
+  showConditionChip('🍊',`ПП ${index+1} · ${km.toFixed(1)} км`,'🎵 перекусили');
+
+  // Short cheerful jingle via WebAudio; ignore silently if browser blocks audio.
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext;
+    if(AC){
+      const ctx=new AC();
+      const now=ctx.currentTime;
+      [523.25,659.25,783.99].forEach((freq,i)=>{
+        const osc=ctx.createOscillator();
+        const gain=ctx.createGain();
+        osc.type='sine';
+        osc.frequency.value=freq;
+        gain.gain.setValueAtTime(0.0001,now+i*.12);
+        gain.gain.exponentialRampToValueAtTime(0.08,now+i*.12+.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001,now+i*.12+.22);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(now+i*.12);
+        osc.stop(now+i*.12+.24);
+      });
+      setTimeout(()=>{try{ctx.close()}catch(_e){}},1200);
+    }
+  }catch(_e){}
+}
+
 function checkAidStation(km){
   if(!aidStations.length)return;
 
   for(let i=lastAidIndex+1;i<aidStations.length;i++){
     if(km>=aidStations[i]){
       lastAidIndex=i;
+      celebrateAidStation(aidStations[i],i);
 
       if(fatigueActive){
         fatigueActive=false;
@@ -4806,8 +5082,9 @@ function checkAidStation(km){
 }
 function endSimulationDNF(){
   simulationDNF=true;clearInterval(timer);timer=null;clearTimeout(pauseTimer);clearInterval(countTimer);
-  E('simStart').textContent='↻';E('simStatus').textContent='DNF — три отрицательных события за гонку.';
+  E('simStart').textContent='↻';E('simStatus').textContent='DNF — три отрицательных события.';
   E('simDnfBanner')?.classList.add('show');updateResults();draw();
+  finishVirtualAttempt(false);
 }
 
 
@@ -4926,7 +5203,7 @@ function makeSchedule(){
 
   let balanced=shuffled(selected);
 
-  // v0.0235: each equipment-dependent event may occur at most once per race.
+  // v0.0242: each equipment-dependent event may occur at most once per race.
   // We still guarantee at least one equipment event, but do not repeat the same
   // injury/rain/heat/night event several times.
   const equipmentNames=['Поранился','Дождь','Жара','Ночь'];
@@ -4945,7 +5222,7 @@ function makeSchedule(){
     return replacementPool[0] || shuffled(events.filter(x=>x!==misha && !equipmentNames.includes(x?.[1])))[0] || ev;
   });
 
-  // v0.0235: Night/Heat depend on the same virtual time that controls the sky.
+  // v0.0242: Night/Heat depend on the same virtual time that controls the sky.
   // If a selected Night/Heat event has no compatible time slot, replace it
   // with another ordinary event instead of showing it against the wrong sky.
   const used=new Set();
@@ -5001,6 +5278,26 @@ function makeSchedule(){
     }
   }
 
+  // v0.0242: positional rules for specific events.
+  for(const item of scheduleDraft){
+    if(item.e?.[1]==='Слишком быстро на старте' && item.at>=0.5){
+      item.at=0.06+Math.random()*0.42; // only first half of the track
+    }
+
+    if(item.e?.[1]==='Очередь за водой'){
+      const d=Math.max(0.1,dist());
+      if(aidStations.length){
+        // Queue can happen only exactly at one of this race's aid stations.
+        const ppKm=aidStations[Math.floor(Math.random()*aidStations.length)];
+        item.at=Math.max(0.01,Math.min(0.99,ppKm/d));
+      }else{
+        // No aid station => this event cannot happen; replace with another ordinary event.
+        const fallback=shuffled(events.filter(x=>x[1]!=='Очередь за водой'))[0];
+        if(fallback) item.e=fallback;
+      }
+    }
+  }
+
   schedule=scheduleDraft.sort((a,b)=>a.at-b.at);
 }
 function firstTrackDate(){
@@ -5049,6 +5346,18 @@ function skyInfoAtProgress(p){
 function eventAllowedAtProgress(e,p){
   if(!e) return false;
   const info=skyInfoAtProgress(p);
+
+  // «Слишком быстро на старте» — только в первой половине дистанции.
+  if(e[1]==='Слишком быстро на старте'){
+    return p < 0.5;
+  }
+
+  // «Очередь за водой» привязана отдельно к фактическому ПП в makeSchedule().
+  // Здесь не ограничиваем, чтобы событие можно было выбрать в пул.
+  if(e[1]==='Очередь за водой'){
+    return true;
+  }
+
   if(e[1]==='Ночь'){
     // Only when the visual simulator is in night mode.
     return !info.day && !info.twilight;
@@ -5113,7 +5422,7 @@ function fire(idx){
       e[2]='Фонарика нет — в темноте потеряно 5 минут.';
     }
   }
-  // v0.0235: equipment events always show the actual equipment result in the popup.
+  // v0.0242: equipment events always show the actual equipment result in the popup.
   // A zero adjustment is intentional when the required item is present.
   if(e[1]==='Нашли аптечку'){
     equipmentState.medkit=true;
@@ -5146,7 +5455,7 @@ function fire(idx){
     }
   }
 
-  // v0.0235: explicit equipment result message for ALL equipment-dependent events.
+  // v0.0242: explicit equipment result message for ALL equipment-dependent events.
   let equipmentOutcomeText='';
   if(e[1]==='Поранился'){
     equipmentOutcomeText = equipmentState.medkit
@@ -5173,17 +5482,15 @@ function fire(idx){
   // Event sign convention:
   // positive event -> negative adjustment -> time is SUBTRACTED;
   // negative event -> positive adjustment -> time is ADDED.
-  // v0.0235: случайное событие меняет ТОЛЬКО время текущей симуляции.
+  // v0.0242: случайное событие меняет ТОЛЬКО время текущей симуляции.
   // Исходный прогноз raceForecast не изменяется.
   penalty+=timeAdjustmentSec;
   randomEventAdjustmentSec+=timeAdjustmentSec;
   addParticles(e[0]);
-  // v0.0235: demotivation counts ALL negative events in the race.
-  // Neutral (0:00) and positive events no longer erase previously accumulated negatives.
-  if(timeAdjustmentSec>0) negativeStreak++;
-  if(demotivationActive&&negativeStreak>=3){
+  if(timeAdjustmentSec>0)negativeEventCount++;
+  if(demotivationActive&&negativeEventCount>=3){
     const km=(at*dist()).toFixed(1),row=document.createElement('div');row.className='current';
-    row.innerHTML=`<span>${km} км</span><span>😞 Три отрицательных события за гонку</span><b class="plus">DNF</b>`;
+    row.innerHTML=`<span>${km} км</span><span>😞 Три отрицательных события</span><b class="plus">DNF</b>`;
     E('simLog').prepend(row);endSimulationDNF();return;
   }
   if(e[1]==='Встреча с Мишей с топором'){
@@ -5210,7 +5517,7 @@ function fire(idx){
     }
   E('simEventDelta').className=timeAdjustmentSec<0?'positive':(timeAdjustmentSec>0?'negative':'neutral');E('simEventCard').classList.add('show');E('simPauseBadge').classList.add('show');
 
-  // v0.0235: mandatory equipment-dependent events stay on screen 3 seconds longer.
+  // v0.0242: mandatory equipment-dependent events stay on screen 3 seconds longer.
   // Normal event = 3 sec; injury/rain/heat/night = 6 sec.
   const mandatoryEquipmentEventNames=['Поранился','Дождь','Жара','Ночь'];
   const eventPauseSeconds=mandatoryEquipmentEventNames.includes(e[1]) ? 6 : 3;
@@ -5228,8 +5535,6 @@ function draw(){
   if(c.width!==Math.round(W*dpr)||c.height!==Math.round(H*dpr)){c.width=Math.round(W*dpr);c.height=Math.round(H*dpr)}
   const ctx=c.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
 
-  // Always paint the simulation scene, even before a forecast/track is selected.
-  // This prevents the large empty black rectangle seen on iPhone.
   const sky=skyInfo();
   let top='#07111f',bottom='#102a43';
   if(sky.day){top='#123c62';bottom='#d97706'}
@@ -5482,13 +5787,19 @@ function tick(){
     E('simStatus').textContent=`🏁 Финишное время: ${fmt(baseSec()+penalty)} · исходный прогноз ${fmt(baseSec())} · поправка ${delta(penalty)}`;
     updateResults();draw();renderSimFordMap();
     showMishaFinishDirect();
-    maybeShowFirstPlaceAtFinish();
+    const firstPlace=maybeShowFirstPlaceAtFinish();
+    finishVirtualAttempt(!!firstPlace);
   }
 }
-function run(){clearInterval(timer);timer=setInterval(tick,120);E('simStart').textContent='⏸';E('simStatus').textContent=virtualSimTrack?'Симуляция идёт по виртуальному треку 20 км.':'Симуляция идёт по профилю загруженного трека.'}
+function run(){clearInterval(timer);timer=setInterval(tick,120);E('simStart').textContent='⏸';E('simStatus').textContent=simulationTrackMode==='virtual'?`Виртуальный чемпионат · уровень ${virtualCampaign.level}/3 · ${dist().toFixed(0)} км.`:'Симуляция идёт по выбранному реальному треку.'}
 function stop(msg){clearInterval(timer);clearTimeout(pauseTimer);clearInterval(countTimer);timer=null;if(msg)E('simStatus').textContent=msg;E('simStart').textContent='▶'}
 function reset(){
+  const abandoningVirtualAttempt=(simulationTrackMode==='virtual' && virtualCampaign.attemptActive && progress>0 && progress<1);
   clearTimeout(window.__simStartGateTimer);stop();hideFirstPlaceOverlay();
+  if(abandoningVirtualAttempt){
+    virtualCampaign.attemptActive=false;
+    renderVirtualCampaign();
+  }
   equipmentState.checked=false;
   equipmentState.medkit=true;
   equipmentState.water=true;
@@ -5498,7 +5809,12 @@ function reset(){
   if(equipmentBtn){equipmentBtn.disabled=false;equipmentBtn.textContent='Проверить';}
   const equipmentSummary=E('equipmentCheckSummary');
   if(equipmentSummary) equipmentSummary.textContent='Перед каждой новой гонкой нажмите «Проверить».';
-  renderEquipmentState();progress=0;penalty=0;randomEventAdjustmentSec=0;fired.clear();particles=[];lastFordPauseKm=null;fordPauseActive=false;fatigueStartVirtualSec=0;fatiguePenaltyAppliedSec=0;simStartDate=firstTrackDate();E('simDnfBanner')?.classList.remove('show');chooseAidStations();initStartConditions();makeSchedule();E('simProgress').style.width='0';E('simDistance').textContent=dist()?`0.0 / ${dist().toFixed(1)} км`:'—';E('simGain').textContent=gain()?`${Math.round(gain())} м`:'—';E('simEventsCount').textContent=`0 / ${schedule.length}`;E('simPenalty').textContent='+0:00';E('simLog').innerHTML='<div><span>—</span><span>События появятся случайно по ходу гонки</span><b>31 событие в пуле</b></div>';E('simEventCard')?.classList.remove('show'); E('simEventChip')?.classList.remove('show');E('simPauseBadge').classList.remove('show');E('simStart').textContent='▶';E('simStart').setAttribute('aria-label','Старт');E('simStart').title='Старт';E('simStart').disabled=!(baseSec()&&dist());updateResults();E('simStatus').textContent=baseSec()&&dist()?(virtualSimTrack?'Готово: виртуальный трек 20 км · +500 м · 2 брода.':'Готово: профиль и время взяты из текущего прогноза.'):'Сначала рассчитайте «Прогноз гонки» в разделе 2.';draw()}
+  renderEquipmentState();progress=0;penalty=0;randomEventAdjustmentSec=0;fired.clear();particles=[];lastFordPauseKm=null;fordPauseActive=false;fatigueStartVirtualSec=0;fatiguePenaltyAppliedSec=0;simStartDate=firstTrackDate();E('simDnfBanner')?.classList.remove('show');chooseAidStations();initStartConditions();makeSchedule();E('simProgress').style.width='0';E('simDistance').textContent=dist()?`0.0 / ${dist().toFixed(1)} км`:'—';E('simGain').textContent=gain()?`${Math.round(gain())} м`:'—';E('simEventsCount').textContent=`0 / ${schedule.length}`;E('simPenalty').textContent='+0:00';E('simLog').innerHTML='<div><span>—</span><span>События появятся случайно по ходу гонки</span><b>31 событие в пуле</b></div>';E('simEventCard')?.classList.remove('show'); E('simEventChip')?.classList.remove('show');E('simPauseBadge').classList.remove('show');E('simStart').textContent='▶';E('simStart').setAttribute('aria-label','Старт');E('simStart').title='Старт';E('simStart').disabled=!(baseSec()&&dist());updateResults();E('simStatus').textContent=baseSec()&&dist()
+    ? (simulationTrackMode==='virtual'
+        ? `Готово: виртуальный уровень ${virtualCampaign.level}/3 · ${dist().toFixed(0)} км.`
+        : 'Готово: выбран реальный загруженный трек.')
+    : 'Выберите «Симуляция трека 20 км» или «Симуляция реального трека».';
+  draw()}
 
 setInterval(()=>{
   const b=E('simStart');
@@ -5511,11 +5827,23 @@ setInterval(()=>{
 },500);
 setInterval(()=>{if(document.querySelector('[data-tab="simulation"]')?.classList.contains('active')) draw();},120);
 E('simStart').addEventListener('click',()=>{
-  // v0.0235: completed race = a NEW race.
+  // v0.0242: completed race = a NEW race.
   // Reset first, so the old equipment check can never carry over.
   if(progress>=1) reset();
 
   const startingFresh=(progress<=0);
+
+  // v0.0242: every fresh run starts with a clean finish-time adjustment.
+  // Do not carry penalties/bonuses from the previous run into the new race.
+  if(startingFresh){
+    penalty=0;
+    randomEventAdjustmentSec=0;
+    negativeEventCount=0;
+    simulationDNF=false;
+    fired.clear();
+    E('simPenalty').textContent='+0:00';
+    updateResults();
+  }
 
   if(startingFresh && !equipmentState.checked){
     const msg='⚠️ Перед каждой гонкой пройдите проверку экипировки.';
@@ -5523,6 +5851,10 @@ E('simStart').addEventListener('click',()=>{
     const summary=E('equipmentCheckSummary');
     if(summary) summary.textContent=msg;
     E('equipmentCheckBtn')?.scrollIntoView({behavior:'smooth',block:'center'});
+    return;
+  }
+
+  if(startingFresh && simulationTrackMode==='virtual' && !beginVirtualAttempt()){
     return;
   }
 
@@ -5538,7 +5870,7 @@ E('simStart').addEventListener('click',()=>{
     return;
   }
 
-  // v0.0235: start animation is always a real 3-second start gate.
+  // v0.0242: start animation is always a real 3-second start gate.
   // Simulation speed (including 4×) cannot skip or outrun Misha.
   if(startingFresh){
     showMishaStartDirect();
@@ -5569,6 +5901,9 @@ E('equipmentCheckModal')?.addEventListener('click',(ev)=>{
 });
 renderEquipmentState();
 E('simVirtual20Btn')?.addEventListener('click',activateVirtualSimulationTrack);
+E('simRealTrackBtn')?.addEventListener('click',activateRealSimulationTrack);
+E('virtualCampaignRestart')?.addEventListener('click',restartVirtualCampaign);
+E('virtualChampionOverlay')?.addEventListener('click',()=>E('virtualChampionOverlay')?.classList.remove('show'));
 E('simReset').addEventListener('click',reset);E('simSpeed').addEventListener('change',draw);window.addEventListener('resize',draw);
 // Keep simulation synced when user switches to tab 5 or recalculates forecast.
 document.querySelector('[data-tab="simulation"]')?.addEventListener('click',()=>setTimeout(reset,0));
@@ -5786,4 +6121,3 @@ document.querySelectorAll('.tab').forEach(btn=>{
     }
   });
 });
-window.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{try{draw()}catch(e){}},80));
