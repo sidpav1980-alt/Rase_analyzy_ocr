@@ -4369,7 +4369,7 @@ let aidStations=[],fatigueActive=false,luckActive=false,demotivationActive=false
 const activeEventCount=()=>{
   const hours=Math.max(0.1,baseSec()/3600);
 
-  // v1.04:
+  // v1.05:
   // Short races stay sparse.
   // From 2 hours onward use about 1.2 events/hour minimum,
   // while NEVER exceeding 2 events/hour.
@@ -4534,7 +4534,7 @@ function makeSchedule(){
   const positives=shuffled(events.filter(e=>e!==misha && e[3]<0));
   const neutral=shuffled(events.filter(e=>e!==misha && e[3]===0));
 
-  // v1.04: balance the selected event pool as close to 50/50 as possible.
+  // v1.05: balance the selected event pool as close to 50/50 as possible.
   // For an odd number of events, the extra event is assigned randomly.
   let negNeed=Math.floor(n/2);
   let posNeed=Math.floor(n/2);
@@ -4930,7 +4930,7 @@ E('simStart').addEventListener('click',()=>{
     return;
   }
 
-  // v1.04: start animation is always a real 3-second start gate.
+  // v1.05: start animation is always a real 3-second start gate.
   // Simulation speed (including 4×) cannot skip or outrun Misha.
   if(startingFresh){
     showMishaStartDirect();
