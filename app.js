@@ -287,7 +287,7 @@ $('installBtn').addEventListener('click', async () => {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=110', {updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('./sw.js?v=201', {updateViaCache:'none'});
       await reg.update();
       let refreshing=false;
       navigator.serviceWorker.addEventListener('controllerchange',()=>{
@@ -962,7 +962,7 @@ function buildOverpassQuery(points){
   const pts=(points||[]).filter(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lon));
   if(!pts.length) return '[out:json][timeout:90];();out;';
 
-  // v0.0200: do NOT ask Overpass for one huge route bbox. On long/curvy tracks
+  // v0.0201: do NOT ask Overpass for one huge route bbox. On long/curvy tracks
   // that query was too heavy and all endpoints could time out, producing 0%.
   // Build several small boxes along the GPX corridor instead.
   const boxes=[];
@@ -1289,7 +1289,7 @@ function groupFordKmPoints(kms, maxGapKm=0.35){
       continue;
     }
 
-    // v0.0200: only nearby parts of the SAME water crossing are merged.
+    // v0.0201: only nearby parts of the SAME water crossing are merged.
     // 150 m is enough for braided channels / GPS jitter, while separate
     // crossings 200+ m apart remain separate.
     if(km-current.end<=maxGapKm){
@@ -1466,7 +1466,7 @@ async function analyzeMapOSM(){
   // analysis with the GPX itself. Surface/ford values remain unknown rather
   // than stopping the whole analysis.
   if(!data){
-    // v0.0200: if OSM is temporarily down, reuse ONLY a cache matching this GPX.
+    // v0.0201: if OSM is temporarily down, reuse ONLY a cache matching this GPX.
     try{
       const c=JSON.parse(localStorage.getItem('trailOSMElementsCache')||'null');
       const first=state.track?.[0], last=state.track?.[state.track.length-1];
@@ -1624,7 +1624,7 @@ function renderMapAnalysis(result){
   const {samples,summary,elements=[]}=result;
   const crossings=analyzeWaterCrossings(samples,elements);
 
-  // v0.0200: analyzeWaterCrossings already groups by OSM water object first,
+  // v0.0201: analyzeWaterCrossings already groups by OSM water object first,
   // then deduplicates only near-identical physical crossings.
   const bridgeKms=(crossings.bridges||[]).slice();
   const confirmedFordKms=(crossings.confirmed||[]).slice();
@@ -1828,14 +1828,14 @@ function normalizeRoster(rows){
   }).filter(x=>x.athlete);
 }
 function genderOkay(g){
-  const mode=$('genderFilter').value, s=String(g).toLowerCase();
+  const mode=($('genderFilter')?.value||'Все'), s=String(g).toLowerCase();
   if(mode==='Все')return true;
   if(mode==='Женщины')return s.startsWith('ж')||s==='f'||s.includes('female');
   return s.startsWith('м')||s==='m'||s.includes('male');
 }
 function renderRoster(){
   const tb=$('rosterTable').querySelector('tbody'); tb.innerHTML='';
-  const athlete=$('athleteName').value.trim().toLowerCase();
+  const athlete=($('athleteName')?.value||'').trim().toLowerCase();
   state.roster.filter(x=>genderOkay(x.gender)).forEach((r,i)=>{
     if(r.athlete.toLowerCase()===athlete && !r.pi) r.pi=+$('itraPi').value||0;
     const tr=document.createElement('tr');
@@ -1851,7 +1851,7 @@ function renderRoster(){
     visible[+inp.dataset.i][inp.dataset.k]=+inp.value||0;
   }));
 }
-$('genderFilter').addEventListener('change',renderRoster);
+$('genderFilter')?.addEventListener('change',renderRoster);
 
 function estimateLTHR(){
   const known=+$('lthr').value||0; if(known)return known;
@@ -3991,7 +3991,7 @@ $('calcBtn').addEventListener('click',()=>{
   const finish = state.raceForecast?.totalSec || finishPrediction();
   $('finishMetric').textContent=finish?hms(finish):'—';
 
-  const athlete=$('athleteName').value.trim();
+  const athlete=($('athleteName')?.value||'').trim();
   const rows=state.roster.filter(x=>genderOkay(x.gender));
   const a=rows.find(r=>r.athlete.toLowerCase()===athlete.toLowerCase());
 
@@ -4034,7 +4034,7 @@ $('calcBtn').addEventListener('click',()=>{
 
 $('saveBtn').addEventListener('click',()=>{
   const payload={
-    athlete:$('athleteName').value, pi:$('itraPi').value,
+    athlete:($('athleteName')?.value||''), pi:($('itraPi')?.value||''),
     route:{dist:state.dist,gain:state.gain,loss:state.loss},
     training:{dist:$('refDist').value,gain:$('refGain').value,avgHr:$('refAvgHr').value,maxHr:$('refMaxHr').value,lthr:$('lthr').value},
     roster:state.roster,
@@ -4513,7 +4513,7 @@ let aidStations=[],fatigueActive=false,luckActive=false,demotivationActive=false
 const activeEventCount=()=>{
   const hours=Math.max(0.1,baseSec()/3600);
 
-  // v0.0200: every race gets at least 3 random events.
+  // v0.0201: every race gets at least 3 random events.
   // Longer races still scale upward, but never exceed 2 events per hour.
   let minEvents=3;
   let maxEvents=Math.max(3,Math.floor(hours*2));
@@ -4670,7 +4670,7 @@ function makeSchedule(){
   const positives=shuffled(events.filter(e=>e!==misha && e[3]<0));
   const neutral=shuffled(events.filter(e=>e!==misha && e[3]===0));
 
-  // v0.0200: balance the selected event pool as close to 50/50 as possible.
+  // v0.0201: balance the selected event pool as close to 50/50 as possible.
   // For an odd number of events, the extra event is assigned randomly.
   let negNeed=Math.floor(n/2);
   let posNeed=Math.floor(n/2);
@@ -5066,7 +5066,7 @@ E('simStart').addEventListener('click',()=>{
     return;
   }
 
-  // v0.0200: start animation is always a real 3-second start gate.
+  // v0.0201: start animation is always a real 3-second start gate.
   // Simulation speed (including 4×) cannot skip or outrun Misha.
   if(startingFresh){
     showMishaStartDirect();
