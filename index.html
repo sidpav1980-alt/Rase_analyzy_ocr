@@ -10,7 +10,7 @@
   <title>Прогноз и анализ трейловых гонок</title>
   <link rel="manifest" href="manifest.webmanifest?v=075">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=203">
+  <link rel="stylesheet" href="styles.css?v=206">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynBv0TtP4JpC5dQF3Vqv2tLIbV0w=" crossorigin="">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
@@ -172,7 +172,7 @@
 
 
 <style>
-/* v0.0203 — compact phone simulation */
+/* v0.0206 — compact phone simulation */
 .sim-profile-card{display:none!important}
 .sim-reference-shell{gap:10px!important}
 .sim-scene-title{
@@ -291,7 +291,7 @@
 </style>
 
 <style>
-/* v0.0203 — small event notification above the track profile */
+/* v0.0206 — small event notification above the track profile */
 #simEventCard{display:none!important}
 .sim-event-chip{
   position:absolute;
@@ -369,7 +369,7 @@
 </style>
 
 <style>
-/* v0.0203 — static route map, no zoom/pan */
+/* v0.0206 — static route map, no zoom/pan */
 .ford-leaflet-map,
 .sim-ford-map{
   touch-action:none!important;
@@ -384,7 +384,7 @@
 </style>
 
 <style>
-/* v0.0203: compact controls, nothing overlaps on iPhone */
+/* v0.0206: compact controls, nothing overlaps on iPhone */
 .sim-scene-controls{
   position:static!important;
   display:grid!important;
@@ -428,13 +428,13 @@
 </style>
 
 <style>
-/* v0.0203 */
+/* v0.0206 */
 .sim-fords-card{display:none!important}
 .sim-mid-grid{grid-template-columns:1fr!important}
 </style>
 
 <style>
-/* v0.0203 — map is shown in route analysis, hidden only in simulation */
+/* v0.0206 — map is shown in route analysis, hidden only in simulation */
 #route .ford-map-panel,
 [data-tabpanel="route"] .ford-map-panel,
 #tab-route .ford-map-panel{
@@ -454,7 +454,7 @@
 </style>
 
 <style>
-/* v0.0203 — guaranteed GPX scheme in Analysis map block */
+/* v0.0206 — guaranteed GPX scheme in Analysis map block */
 #mapAnalysisResults .ford-map-panel{
   display:block!important;
   visibility:visible!important;
@@ -483,7 +483,7 @@
 </style>
 
 <style>
-/* v0.0203 — analysis progress UI */
+/* v0.0206 — analysis progress UI */
 .map-analyze-running{
   margin-top:12px;padding:14px;border:1px solid #2a405d;border-radius:15px;
   background:#0b1727;display:grid;grid-template-columns:42px minmax(0,1fr);
@@ -511,9 +511,41 @@
   100%{transform:translateX(330%)}
 }
 </style>
+
+<style>
+.sim-scene-card{position:relative}
+.sim-chest{
+  position:absolute;top:70px;right:12px;z-index:40;width:62px;height:62px;
+  border:0;background:transparent;padding:0;cursor:pointer;touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent
+}
+.sim-chest-box{position:absolute;right:0;bottom:0;font-size:38px;line-height:1;filter:drop-shadow(0 4px 8px #0008)}
+.sim-chest-cat{
+  position:absolute;left:0;top:0;font-size:35px;line-height:1;opacity:0;
+  transform:translateY(16px) scale(.65);pointer-events:none
+}
+.sim-chest.cat-open .sim-chest-cat{animation:simCatPeek .5s ease-out both}
+@keyframes simCatPeek{
+  0%{opacity:0;transform:translateY(16px) scale(.65)}
+  18%{opacity:1;transform:translateY(-10px) scale(1.08)}
+  76%{opacity:1;transform:translateY(-10px) scale(1)}
+  100%{opacity:0;transform:translateY(6px) scale(.8)}
+}
+.sim-chest-hit{
+  position:absolute;top:134px;right:10px;z-index:41;padding:5px 8px;border-radius:9px;
+  border:1px solid #22c55e;background:rgba(6,18,31,.96);color:#dcfce7;
+  font-size:12px;opacity:0;pointer-events:none;transform:translateY(-4px);transition:.16s
+}
+.sim-chest-hit.show{opacity:1;transform:translateY(0)}
+@media(max-width:600px){
+  .sim-chest{top:66px;right:8px;width:56px;height:56px}
+  .sim-chest-box{font-size:34px}.sim-chest-cat{font-size:32px}
+  .sim-chest-hit{top:124px;right:8px}
+}
+</style>
 </head>
 <body>
-<div class="app-version">v0.0203</div>
+<div class="app-version">v0.0206</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Прогноз и анализ трейловых гонок</div>
@@ -924,7 +956,13 @@
   <b id="simEventChipTitle"></b>
   <strong id="simEventChipDelta"></strong>
 </div>
-      <canvas id="simCourseCanvas"></canvas>
+      
+<button id="simChest" class="sim-chest" type="button" aria-label="Сундук с кошкой" title="Лови кошку">
+  <span class="sim-chest-box">🧰</span>
+  <span class="sim-chest-cat">🐱</span>
+</button>
+<div id="simChestHit" class="sim-chest-hit">🐱 Поймано! +1 событие</div>
+<canvas id="simCourseCanvas"></canvas>
 
       <div id="simEventCard" class="event-card">
         <b id="simEventTitle"></b>
@@ -959,7 +997,7 @@
       <div class="sim-events-card">
         <h3>Случайные события <span class="muted">(этой симуляции)</span></h3>
         <div id="simLog" class="sim-log"></div>
-        <div class="muted sim-events-note">События выбираются примерно 50/50: положительные и отрицательные. По длительности: 1 час — 3 события; 2 часа — 4–6; 4 часа — 6–8; 6 часов — 8–10.</div>
+        <div class="muted sim-events-note">События выбираются примерно 50/50: положительные и отрицательные. По длительности: 1 час — 3 события; 2 часа — 4–6; 4 часа — 6–8; 6 часов — 8–10. Кошка из сундука появляется 3 раза на 0,5 сек: успей нажать — получишь +1 дополнительное случайное событие.</div>
       </div>
 </div>
 <div class="sim-bottom-grid">
@@ -983,7 +1021,7 @@
     Модель является оценочной. Броды, погода, питание, состояние покрытия, самочувствие и другие факторы могут существенно повлиять на фактический результат. Расчёты носят исключительно информационно-ознакомительный характер, не являются гарантией результата или рекомендацией к действию. Автор не несёт ответственности за решения, принятые на основании расчётов приложения.
   </footer>
 
-  <script src="app.js?v=203"></script>
+  <script src="app.js?v=206"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
