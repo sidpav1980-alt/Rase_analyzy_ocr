@@ -1,7 +1,12 @@
-const CACHE='trail-analyzer-web-v057';
+const CACHE='trail-analyzer-web-v060';
 const CORE=[
-  './','./index.html','./styles.css','./app.js','./manifest.webmanifest',
-  './icon-192.png','./icon-512.png'
+  './',
+  './index.html',
+  './styles.css?v=060',
+  './app.js?v=060',
+  './manifest.webmanifest?v=060',
+  './icon-192.png',
+  './icon-512.png'
 ];
 
 self.addEventListener('install',event=>{
@@ -17,25 +22,41 @@ self.addEventListener('activate',event=>{
   );
 });
 
+async function networkFirst(request){
+  try{
+    const response=await fetch(request,{cache:'no-store'});
+    if(response && response.ok){
+      const cache=await caches.open(CACHE);
+      cache.put(request,response.clone());
+    }
+    return response;
+  }catch(e){
+    return (await caches.match(request)) || (await caches.match('./index.html'));
+  }
+}
+
+async function staleWhileRevalidate(request){
+  const cache=await caches.open(CACHE);
+  const cached=await cache.match(request);
+  const network=fetch(request,{cache:'no-store'}).then(resp=>{
+    if(resp && resp.ok) cache.put(request,resp.clone());
+    return resp;
+  }).catch(()=>null);
+  return cached || (await network) || (await cache.match('./index.html'));
+}
+
 self.addEventListener('fetch',event=>{
   if(event.request.method!=='GET') return;
   const url=new URL(event.request.url);
 
-  // API endpoints are online-only.
-  if(url.pathname.startsWith('/api/') || url.pathname==='/health'){
+  if(url.pathname.startsWith('/api/') || url.pathname==='/health') return;
+
+  // Always check network for page navigation so a fresh deployment appears immediately.
+  if(event.request.mode==='navigate' || url.pathname.endsWith('/index.html') || url.pathname==='/'){
+    event.respondWith(networkFirst(event.request));
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then(cached=>{
-      if(cached) return cached;
-      return fetch(event.request).then(resp=>{
-        if(resp && resp.ok){
-          const copy=resp.clone();
-          caches.open(CACHE).then(c=>c.put(event.request,copy));
-        }
-        return resp;
-      }).catch(()=>caches.match('./index.html'));
-    })
-  );
+  // Versioned JS/CSS can be cache-first-ish; query string changes on every release.
+  event.respondWith(staleWhileRevalidate(event.request));
 });

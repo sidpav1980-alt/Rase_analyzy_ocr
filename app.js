@@ -278,7 +278,18 @@ $('installBtn').addEventListener('click', async () => {
 });
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  window.addEventListener('load', async ()=>{
+    try{
+      const reg=await navigator.serviceWorker.register('./sw.js?v=060', {updateViaCache:'none'});
+      await reg.update();
+      let refreshing=false;
+      navigator.serviceWorker.addEventListener('controllerchange',()=>{
+        if(refreshing) return;
+        refreshing=true;
+        location.reload();
+      });
+    }catch(e){}
+  });
 }
 
 function haversine(a,b,c,d){
@@ -1090,7 +1101,7 @@ async function analyzeMapOSM(){
   const timer=setTimeout(()=>{
     analysisTimedOut=true;
     controller.abort();
-  },25000);
+  },20000);
 
   let resp;
   try{
@@ -1107,7 +1118,7 @@ async function analyzeMapOSM(){
 
   if(runId!==mapAnalysisRunId || controller.signal.aborted){
     const err=new Error(analysisTimedOut
-      ? 'Анализ карты остановлен: превышено 25 секунд'
+      ? 'Анализ карты остановлен: превышено 20 секунд'
       : 'Анализ карты остановлен');
     err.name=analysisTimedOut?'TimeoutError':'AbortError';
     throw err;
@@ -1125,7 +1136,7 @@ async function analyzeMapOSM(){
   const data=await resp.json();
   if(runId!==mapAnalysisRunId || controller.signal.aborted){
     const err=new Error(analysisTimedOut
-      ? 'Анализ карты остановлен: превышено 25 секунд'
+      ? 'Анализ карты остановлен: превышено 20 секунд'
       : 'Анализ карты остановлен');
     err.name=analysisTimedOut?'TimeoutError':'AbortError';
     throw err;
@@ -1628,7 +1639,7 @@ $('mapAnalyzeBtn')?.addEventListener('click',async ()=>{
       $('mapAnalyzeStatus').textContent='Анализ карты остановлен.';
       setActionState('mapAnalyzeBtn','idle');
     }else if(err?.name==='TimeoutError'){
-      $('mapAnalyzeStatus').textContent='Анализ карты остановлен: превышено 25 секунд.';
+      $('mapAnalyzeStatus').textContent='Анализ карты остановлен: превышено 20 секунд.';
       setActionState('mapAnalyzeBtn','idle');
     }else{
       $('mapAnalyzeStatus').textContent='✕ Ошибка анализа карты: '+(err.message||String(err));
@@ -3895,7 +3906,7 @@ window.addEventListener('pageshow',()=>{
   clearBestTrainingOnPageLoad();
 });
 
-// v0.58 profile-driven race simulation
+// v0.59 profile-driven race simulation
 (()=>{
 const events=[
   ['😅','Слишком быстро на старте','Пришлось сбросить темп и восстановить дыхание.',120],
@@ -4020,7 +4031,9 @@ function tick(){
 }
 function run(){clearInterval(timer);timer=setInterval(tick,120);E('simStart').textContent='⏸ Пауза';E('simStatus').textContent='Симуляция идёт по профилю загруженного трека.'}
 function stop(msg){clearInterval(timer);clearTimeout(pauseTimer);clearInterval(countTimer);timer=null;if(msg)E('simStatus').textContent=msg;E('simStart').textContent='▶ Симуляция гонки'}
-function reset(){stop();progress=0;penalty=0;fired.clear();particles=[];simStartDate=firstTrackDate();makeSchedule();E('simProgress').style.width='0';E('simDistance').textContent=dist()?`0.0 / ${dist().toFixed(1)} км`:'—';E('simGain').textContent=gain()?`${Math.round(gain())} м`:'—';E('simEventsCount').textContent='0 / 30';E('simPenalty').textContent='+0:00';E('simLog').innerHTML='<div><span>—</span><span>События появятся случайно по ходу гонки</span><b>30 в пуле</b></div>';E('simEventCard').classList.remove('show');E('simPauseBadge').classList.remove('show');E('simStart').textContent='▶ Симуляция гонки';updateResults();E('simStatus').textContent=baseSec()&&dist()?'Готово: профиль и время взяты из текущего прогноза.':'Загрузите трек и рассчитайте прогноз гонки.';draw()}
+function reset(){stop();progress=0;penalty=0;fired.clear();particles=[];simStartDate=firstTrackDate();makeSchedule();E('simProgress').style.width='0';E('simDistance').textContent=dist()?`0.0 / ${dist().toFixed(1)} км`:'—';E('simGain').textContent=gain()?`${Math.round(gain())} м`:'—';E('simEventsCount').textContent='0 / 30';E('simPenalty').textContent='+0:00';E('simLog').innerHTML='<div><span>—</span><span>События появятся случайно по ходу гонки</span><b>30 в пуле</b></div>';E('simEventCard').classList.remove('show');E('simPauseBadge').classList.remove('show');E('simStart').textContent='▶ Симуляция гонки';E('simStart').disabled=!(baseSec()&&dist());updateResults();E('simStatus').textContent=baseSec()&&dist()?'Готово: профиль и время взяты из текущего прогноза.':'Сначала рассчитайте «Прогноз гонки» в разделе 2.';draw()}
+
+setInterval(()=>{const b=E('simStart');if(b&&!timer)b.disabled=!(baseSec()&&dist());},500);
 E('simStart').addEventListener('click',()=>{if(progress>=1)reset();if(!baseSec()||!dist()){reset();return}if(timer){clearInterval(timer);timer=null;E('simStart').textContent='▶ Продолжить';E('simStatus').textContent='Пауза';}else run()});E('simReset').addEventListener('click',reset);E('simSpeed').addEventListener('change',draw);window.addEventListener('resize',draw);
 // Keep simulation synced when user switches to tab 5 or recalculates forecast.
 document.querySelector('[data-tab="simulation"]')?.addEventListener('click',()=>setTimeout(reset,0));

@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Trail Analyzer">
   <title>Прогноз и анализ трейловых гонок</title>
-  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="manifest" href="manifest.webmanifest?v=060">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=060">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
 <style>
@@ -45,7 +45,7 @@
 </style>
 </head>
 <body>
-<div class="app-version">v0.56</div>
+<div class="app-version">v0.60</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Прогноз и анализ трейловых гонок</div>
@@ -98,7 +98,7 @@
         <div class="field">
           <span>Анализ карты</span>
           <button id="mapAnalyzeBtn" type="button" class="primary action-idle" disabled>Анализ карты</button>
-        <div id="mapTimingNote" class="muted">Анализ карты использует OSM и требует интернет. После выполненного онлайн-анализа его результат сохраняется локально и может использоваться офлайн.</div>
+        <div id="mapTimingNote" class="muted"><b>Анализ карты нужен для улучшенного прогноза по треку.</b> Он определяет покрытие и особенности маршрута — тропы, грунт, асфальт, воду и броды — чтобы точнее скорректировать темп и итоговое время. Если анализ не завершится за 20 секунд, он будет автоматически остановлен; обычный прогноз по GPX останется доступен.</div>
           <div id="mapAnalyzeStatus" class="muted">Сначала загрузите и обработайте GPX.</div>
           <progress id="mapAnalyzeProgress" value="0" max="100" style="width:100%;display:none"></progress>
         </div>
@@ -411,6 +411,7 @@
       <div class="card sim-card">
         <h2>Симуляция гонки</h2>
         <p class="muted">Виртуальное прохождение загруженной трассы со случайными событиями. Событие останавливает анимацию на 3 секунды и добавляет потерянное или выигранное время.</p>
+        <p class="sim-requirement"><b>⚠️ Для запуска симуляции сначала рассчитайте «Прогноз гонки» в разделе 2.</b></p>
         <div class="sim-metrics"><div><span>Дистанция</span><b id="simDistance">0.0 км</b></div><div><span>Время</span><b id="simTime">0:00:00</b></div><div><span>События</span><b id="simEventsCount">0</b></div><div><span>Поправка</span><b id="simPenalty">+0:00</b></div></div>
         <div class="sim-profile"><div id="simMarker"></div><div class="mountain m1"></div><div class="mountain m2"></div><div class="trail-line"></div></div>
         <div class="sim-scene" id="simScene">
@@ -429,7 +430,7 @@
     Модель является оценочной. Броды, погода, питание, состояние покрытия, самочувствие и другие факторы могут существенно повлиять на фактический результат. Расчёты носят исключительно информационно-ознакомительный характер, не являются гарантией результата или рекомендацией к действию. Автор не несёт ответственности за решения, принятые на основании расчётов приложения.
   </footer>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=060"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 </body>
 </html>
