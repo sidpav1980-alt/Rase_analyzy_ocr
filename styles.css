@@ -402,3 +402,28 @@ button.action-error:disabled {
 /* v0.59 simulation prerequisite */
 .sim-requirement{margin:12px 0 18px;padding:12px 14px;border:1px solid #f0b429;border-radius:12px;background:rgba(240,180,41,.08);color:#f7c948;line-height:1.4}
 #simStart:disabled{opacity:.45;filter:saturate(.4);cursor:not-allowed}
+
+.sim-log-header{
+  display:grid;
+  grid-template-columns:56px minmax(0,1fr) auto;
+  gap:8px;
+  align-items:end;
+  padding:0 10px 5px;
+  color:var(--muted);
+  font-size:12px;
+}
+.sim-log-header b{font-weight:700;text-align:right;white-space:nowrap}
+@media(max-width:720px){
+  .sim-log-header{grid-template-columns:50px minmax(0,1fr) auto;font-size:11px}
+}
+
+.virtual-track-box .active-source{
+  background:#22c55e!important;
+  border-color:#22c55e!important;
+  color:#04130a!important;
+  opacity:1!important;
+}
+.virtual-track-box button:not(.active-source){
+  opacity:1!important;
+  cursor:pointer!important;
+}

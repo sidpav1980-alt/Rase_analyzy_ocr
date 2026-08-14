@@ -10,7 +10,7 @@
   <title>Прогноз и анализ трейловых гонок</title>
   <link rel="manifest" href="manifest.webmanifest?v=075">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=235">
+  <link rel="stylesheet" href="styles.css?v=234switch">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynBv0TtP4JpC5dQF3Vqv2tLIbV0w=" crossorigin="">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
@@ -39,22 +39,13 @@
 .virtual-track-box span{font-size:13px;color:#94a3b8}
 @media(max-width:600px){.virtual-track-box button{width:100%}.virtual-track-box span{width:100%}}
 
-.sim-speed-wrap .sim-speed-label{
-  display:block!important;
-  visibility:visible!important;
-  opacity:1!important;
-  margin:0 0 5px 0!important;
-  color:#cbd5e1!important;
-  font-size:12px!important;
-  font-weight:700!important;
-  line-height:1.2!important;
-  white-space:normal!important;
+.virtual-track-box .active-source{
+  outline:2px solid #38bdf8!important;
+  box-shadow:0 0 0 2px rgba(56,189,248,.15)!important;
 }
-.sim-speed-wrap{
-  display:flex!important;
-  flex-direction:column!important;
-  align-items:stretch!important;
-}
+
+#simRealTrackBtn.active-source{background:#22c55e!important;color:#07120a!important;border-color:#22c55e!important;outline:none!important;box-shadow:none!important}
+#simVirtual20Btn:disabled{background:#334155!important;color:#94a3b8!important;border-color:#475569!important;opacity:.6!important;cursor:not-allowed!important}
 </style>
 
 <style>
@@ -203,7 +194,7 @@
 
 
 <style>
-/* v0.0235 — compact phone simulation */
+/* v0.0238 — compact phone simulation */
 .sim-profile-card{display:none!important}
 .sim-reference-shell{gap:10px!important}
 .sim-scene-title{
@@ -263,7 +254,7 @@
   }
   .sim-icon-btn{width:38px!important;height:38px!important;font-size:16px!important}
   .sim-speed-wrap{display:block!important}
-  .sim-speed-wrap span:not(.sim-speed-label){display:none!important}
+  .sim-speed-wrap span{display:none!important}
   .sim-speed-wrap select{width:100%!important;min-width:0!important;font-size:13px!important}
 
   /* Events + ford map remain side by side on phone like the reference */
@@ -322,7 +313,7 @@
 </style>
 
 <style>
-/* v0.0235 — small event notification above the track profile */
+/* v0.0238 — small event notification above the track profile */
 #simEventCard{display:none!important}
 .sim-event-chip{
   position:absolute;
@@ -400,7 +391,7 @@
 </style>
 
 <style>
-/* v0.0235 — static route map, no zoom/pan */
+/* v0.0238 — static route map, no zoom/pan */
 .ford-leaflet-map,
 .sim-ford-map{
   touch-action:none!important;
@@ -415,7 +406,7 @@
 </style>
 
 <style>
-/* v0.0235: compact controls, nothing overlaps on iPhone */
+/* v0.0238: compact controls, nothing overlaps on iPhone */
 .sim-scene-controls{
   position:static!important;
   display:grid!important;
@@ -441,7 +432,7 @@
   overflow-wrap:anywhere!important;
 }
 .sim-speed-wrap{min-width:0!important}
-.sim-speed-wrap span:not(.sim-speed-label){display:none!important}
+.sim-speed-wrap span{display:none!important}
 .sim-speed-wrap select{width:100%!important;min-width:0!important;padding:7px!important}
 @media(max-width:600px){
   .sim-scene-controls{grid-template-columns:42px minmax(0,1fr) 68px!important}
@@ -459,13 +450,13 @@
 </style>
 
 <style>
-/* v0.0235 */
+/* v0.0238 */
 .sim-fords-card{display:none!important}
 .sim-mid-grid{grid-template-columns:1fr!important}
 </style>
 
 <style>
-/* v0.0235 — map is shown in route analysis, hidden only in simulation */
+/* v0.0238 — map is shown in route analysis, hidden only in simulation */
 #route .ford-map-panel,
 [data-tabpanel="route"] .ford-map-panel,
 #tab-route .ford-map-panel{
@@ -485,7 +476,7 @@
 </style>
 
 <style>
-/* v0.0235 — guaranteed GPX scheme in Analysis map block */
+/* v0.0238 — guaranteed GPX scheme in Analysis map block */
 #mapAnalysisResults .ford-map-panel{
   display:block!important;
   visibility:visible!important;
@@ -514,7 +505,7 @@
 </style>
 
 <style>
-/* v0.0235 — analysis progress UI */
+/* v0.0238 — analysis progress UI */
 .map-analyze-running{
   margin-top:12px;padding:14px;border:1px solid #2a405d;border-radius:15px;
   background:#0b1727;display:grid;grid-template-columns:42px minmax(0,1fr);
@@ -646,7 +637,7 @@
 
 </head>
 <body>
-<div class="app-version">v0.0235</div>
+<div class="app-version">v0.0238</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Прогноз и анализ трейловых гонок</div>
@@ -1038,7 +1029,8 @@
   <div class="sim-reference-shell">
     <div class="virtual-track-box">
       <button id="simVirtual20Btn" type="button" class="primary">Симуляция трека 20 км</button>
-      <span id="simVirtual20Status">20 км: 3 км подъём · 4 км спуск · дальше ровно · +500 м · 2 брода.</span>
+      <button id="simRealTrackBtn" type="button" class="secondary">Симуляция реального трека</button>
+      <span id="simVirtual20Status">Выберите виртуальный трек 20 км или реальный загруженный трек.</span>
     </div>
     <div class="sim-top-metrics">
       <div><span>Дистанция</span><b id="simDistance">—</b></div>
@@ -1116,7 +1108,7 @@
         </div>
         <div class="sim-speed-wrap">
           <span>Скорость</span>
-          <span class="sim-speed-label">Ускорить прохождение трассы</span>
+          <span class="sim-speed-label">Ускорить гонку</span>
 <select id="simSpeed">
             <option value="1">1×</option>
             <option value="2">2×</option>
@@ -1130,6 +1122,7 @@
 <div class="sim-mid-grid">
       <div class="sim-events-card">
         <h3>Случайные события <span class="muted">(этой симуляции)</span></h3>
+        <div class="sim-log-header" aria-hidden="true"><span></span><span></span><b>Ко времени гонки</b></div>
         <div id="simLog" class="sim-log"></div>
         <div class="muted sim-events-note">События влияют только на текущую симуляцию и не меняют исходный прогноз. Положительные уменьшают время, отрицательные увеличивают. По длительности: 1 час — 3 события; 2 часа — 4–6; 4 часа — 6–8; 6 часов — 8–10.</div>
       </div>
@@ -1155,7 +1148,7 @@
     Модель является оценочной. Броды, погода, питание, состояние покрытия, самочувствие и другие факторы могут существенно повлиять на фактический результат. Расчёты носят исключительно информационно-ознакомительный характер, не являются гарантией результата или рекомендацией к действию. Автор не несёт ответственности за решения, принятые на основании расчётов приложения.
   </footer>
 
-  <script src="app.js?v=235"></script>
+  <script src="app.js?v=238resetfinishsswitch"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
