@@ -287,7 +287,7 @@ $('installBtn').addEventListener('click', async () => {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=106', {updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('./sw.js?v=107', {updateViaCache:'none'});
       await reg.update();
       let refreshing=false;
       navigator.serviceWorker.addEventListener('controllerchange',()=>{
@@ -1025,13 +1025,12 @@ function analyzeWaterCrossings(samples,elements=[]){
           {lat:g[i-1].lat,lon:g[i-1].lon},
           {lat:g[i].lat,lon:g[i].lon}
         );
-        if(Number.isFinite(d)&&d<=0.040) return true;
+        if(Number.isFinite(d)&&d<=0.080) return true;
       }
     }
     return false;
   }
 
-  // Fast 2D segment intersection; adequate at the scale of one race route.
   function orient(a,b,c){
     return (b.lon-a.lon)*(c.lat-a.lat)-(b.lat-a.lat)*(c.lon-a.lon);
   }
@@ -1058,83 +1057,153 @@ function analyzeWaterCrossings(samples,elements=[]){
     return bestD<=maxKm?bestKm:NaN;
   }
 
-  const confirmed=[];
-  for(const n of explicitFordNodes){
-    const km=nearestTrackKmToPoint(n.lat,n.lon,0.050);
-    if(Number.isFinite(km)&&!bridgeNearKm(km)) confirmed.push(km);
+  function waterObjectKey(way){
+    const t=way.tags||{};
+    const name=String(t.name||t['name:ru']||t.ref||'').trim().toLowerCase();
+    const type=String(t.waterway||t.water||t.natural||'water').toLowerCase();
+    return name ? `${type}:${name}` : `${type}:way:${way.id||Math.random()}`;
   }
 
-  // Detect actual geometric crossings of the GPX line with OSM river/stream ways.
-  // This catches crossings even when OSM has no ford=yes tag.
-  const likely=[];
+  // Candidate = one raw hit with an OSM water-object identity.
+  const candidates=[];
+
+  // Explicit ford nodes are authoritative and kept as confirmed.
+  for(const n of explicitFordNodes){
+    const km=nearestTrackKmToPoint(n.lat,n.lon,0.050);
+    if(Number.isFinite(km)&&!bridgeNearKm(km)){
+      candidates.push({km,kind:'confirmed',objectKey:`ford-node:${n.id||km}`});
+    }
+  }
+
+  // Detect geometric crossing of GPX with every water object.
   for(const ww of waterWays){
     const g=ww.geometry||[];
+    const objectKey=waterObjectKey(ww);
     for(let wi=1;wi<g.length;wi++){
       const c={lat:g[wi-1].lat,lon:g[wi-1].lon};
       const d={lat:g[wi].lat,lon:g[wi].lon};
       const minLat=Math.min(c.lat,d.lat)-0.00015,maxLat=Math.max(c.lat,d.lat)+0.00015;
       const minLon=Math.min(c.lon,d.lon)-0.00020,maxLon=Math.max(c.lon,d.lon)+0.00020;
+
       for(let ti=1;ti<track.length;ti++){
         const a=track[ti-1],b=track[ti];
         if(Math.max(a.lat,b.lat)<minLat||Math.min(a.lat,b.lat)>maxLat||
            Math.max(a.lon,b.lon)<minLon||Math.min(a.lon,b.lon)>maxLon) continue;
 
         let hit=segmentIntersects(a,b,c,d);
-        // OSM and GPX can be offset by several metres. Treat <=8 m as crossing candidate.
+
         if(!hit){
-          const d1=distancePointToSegmentKm(a,c,d);
-          const d2=distancePointToSegmentKm(b,c,d);
-          hit=Math.min(d1,d2)<=0.008;
+          const da=distancePointToSegmentKm(a,c,d);
+          const db=distancePointToSegmentKm(b,c,d);
+          hit=Math.min(da,db)<=0.018;
         }
+
         if(hit){
           const km=(a.km+b.km)/2;
-          if(!bridgeNearKm(km)) likely.push(km);
-          break;
+          if(!bridgeNearKm(km)){
+            candidates.push({km,kind:'likely',objectKey});
+          }
         }
       }
     }
   }
 
-  // Keep legacy polygon/sample water detection as an additional signal.
+  // Water polygons / sampled water bands: collapse each continuous band.
   let inWater=false,startKm=0;
-  function finishSample(endKm){
-    const len=Math.max(0,endKm-startKm);
-    if(len<0.002) return;
-    const mid=(startKm+endKm)/2;
-    if(!bridgeNearKm(mid)) likely.push(mid);
+  function finishWaterBand(endKm){
+    const center=(startKm+endKm)/2;
+    if(!bridgeNearKm(center)){
+      candidates.push({
+        km:center,
+        kind:'likely',
+        objectKey:`water-band:${Math.round(center*2)/2}`
+      });
+    }
   }
   for(let i=0;i<samples.length;i++){
     const water=String(samples[i].cls||'').toLowerCase()==='water';
-    if(water&&!inWater){inWater=true;startKm=Number(samples[i].km||0);}
-    else if(!water&&inWater){
-      finishSample(Number(samples[Math.max(0,i-1)].km||startKm));
+    if(water&&!inWater){
+      inWater=true;
+      startKm=Number(samples[i].km||0);
+    }else if(!water&&inWater){
+      finishWaterBand(Number(samples[Math.max(0,i-1)].km||startKm));
       inWater=false;
     }
   }
-  if(inWater) finishSample(Number(samples[samples.length-1].km||startKm));
+  if(inWater) finishWaterBand(Number(samples[samples.length-1].km||startKm));
 
-  // Deduplicate braided channels / several nearby OSM lines into one physical crossing.
-  const confirmedGroups=groupFordKmPoints(confirmed);
-  const confirmedKm=confirmedGroups.map(g=>g.start);
-  const likelyNoConfirmed=likely.filter(k=>!confirmedKm.some(c=>Math.abs(c-k)<=0.25));
-  const likelyGroups=groupFordKmPoints(likelyNoConfirmed);
-  const likelyKm=likelyGroups.map(g=>g.start);
+  // First cluster hits that belong to the SAME OSM water object.
+  const byObject=new Map();
+  for(const c of candidates){
+    if(!byObject.has(c.objectKey)) byObject.set(c.objectKey,[]);
+    byObject.get(c.objectKey).push(c);
+  }
 
-  const all=groupFordKmPoints([...confirmedKm,...likelyKm]).map(g=>g.start);
-  const bridges=[];
-  // Retain bridge crossings from sampled water sections for display.
-  for(const s of samples){
-    if(String(s.cls||'').toLowerCase()==='water'&&bridgeNearKm(Number(s.km||0))){
-      bridges.push(Number(s.km||0));
+  const objectCrossings=[];
+  for(const [key,arr0] of byObject){
+    const arr=arr0.slice().sort((a,b)=>a.km-b.km);
+    let cluster=[];
+    const flush=()=>{
+      if(!cluster.length) return;
+      const kms=cluster.map(x=>x.km);
+      const confirmed=cluster.some(x=>x.kind==='confirmed');
+      objectCrossings.push({
+        km:kms.reduce((a,b)=>a+b,0)/kms.length,
+        start:Math.min(...kms),
+        end:Math.max(...kms),
+        kind:confirmed?'confirmed':'likely',
+        objectKey:key
+      });
+      cluster=[];
+    };
+
+    for(const c of arr){
+      // Same named/object water system can have braided arms spread along the
+      // route. Up to 400 m is treated as one crossing of that object.
+      if(!cluster.length || c.km-cluster[cluster.length-1].km<=0.40){
+        cluster.push(c);
+      }else{
+        flush();
+        cluster.push(c);
+      }
+    }
+    flush();
+  }
+
+  // Second pass: merge duplicated representations of the same physical ford.
+  // Different OSM objects are only merged when they are very close (<=180 m).
+  objectCrossings.sort((a,b)=>a.km-b.km);
+  const physical=[];
+  for(const c of objectCrossings){
+    const prev=physical[physical.length-1];
+    if(prev && c.km-prev.km<=0.18){
+      const n=prev.count||1;
+      prev.km=(prev.km*n+c.km)/(n+1);
+      prev.start=Math.min(prev.start,c.start);
+      prev.end=Math.max(prev.end,c.end);
+      prev.count=n+1;
+      if(c.kind==='confirmed') prev.kind='confirmed';
+    }else{
+      physical.push({...c,count:1});
     }
   }
 
-  return {
-    fords:all,
-    bridges:groupFordKmPoints(bridges).map(g=>g.start),
-    confirmed:confirmedKm,
-    likely:likelyKm
-  };
+  // Final bridge exclusion after all grouping.
+  const clean=physical.filter(c=>!bridgeNearKm(c.km));
+  const confirmed=clean.filter(c=>c.kind==='confirmed').map(c=>c.km);
+  const likely=clean.filter(c=>c.kind!=='confirmed').map(c=>c.km);
+  const all=clean.map(c=>c.km);
+
+  // Display bridge crossings separately.
+  const bridgeHits=[];
+  for(const s of samples){
+    if(String(s.cls||'').toLowerCase()==='water'&&bridgeNearKm(Number(s.km||0))){
+      bridgeHits.push(Number(s.km||0));
+    }
+  }
+  const bridges=groupFordKmPoints(bridgeHits,0.25).map(g=>g.center||g.start);
+
+  return {fords:all,bridges,confirmed,likely};
 }
 function findLikelyFords(samples,elements=[]){
   return analyzeWaterCrossings(samples,elements).fords;
@@ -1203,7 +1272,7 @@ function groupFordKmPoints(kms, maxGapKm=0.15){
       continue;
     }
 
-    // v1.06: only nearby parts of the SAME water crossing are merged.
+    // v1.07: only nearby parts of the SAME water crossing are merged.
     // 150 m is enough for braided channels / GPS jitter, while separate
     // crossings 200+ m apart remain separate.
     if(km-current.end<=maxGapKm){
@@ -1505,21 +1574,12 @@ function renderMapAnalysis(result){
   const {samples,summary,elements=[]}=result;
   const crossings=analyzeWaterCrossings(samples,elements);
 
-  // v1.06:
-  // - channels/points within 150 m are one physical ford;
-  // - separate crossings 200+ m apart remain separate;
-  // - anything within 80 m of a mapped bridge is NOT counted as a ford.
-  const bridgeKms=groupFordKmPoints(crossings.bridges||[],0.10).map(g=>g.start);
-
-  const confirmedFordKms=groupedFordStarts(crossings.confirmed||[],bridgeKms);
-  const likelyFordKms=groupedFordStarts(crossings.likely||[],bridgeKms);
-
-  // Combine confirmed + likely without double-counting the same crossing.
-  const combinedFordGroups=groupFordKmPoints(
-    [...confirmedFordKms,...likelyFordKms],
-    0.15
-  );
-  const fordKms=combinedFordGroups.map(g=>g.start);
+  // v1.07: analyzeWaterCrossings already groups by OSM water object first,
+  // then deduplicates only near-identical physical crossings.
+  const bridgeKms=(crossings.bridges||[]).slice();
+  const confirmedFordKms=(crossings.confirmed||[]).slice();
+  const likelyFordKms=(crossings.likely||[]).slice();
+  const fordKms=(crossings.fords||[]).slice();
   state.mapAnalysis={
     result,
     samples:[...samples],
@@ -1578,7 +1638,7 @@ function renderMapAnalysis(result){
 
   $('mapAnalysisNote').textContent=result?.osmUnavailable
     ? 'OSM-серверы временно недоступны. Профиль GPX сохранён; повторите анализ позже для покрытия и бродов.'
-    : `OSM-классификация маршрута. Броды: близкие рукава до 150 м объединяются, пересечения у моста исключаются. Неизвестно: ${(100-summary.coverage).toFixed(0)}%.`;
+    : `OSM-классификация маршрута. Броды группируются по одному OSM-водному объекту; рукава одной реки объединяются, мосты исключаются. Неизвестно: ${(100-summary.coverage).toFixed(0)}%.`;
   drawSurfaceStrip(samples);
   requestAnimationFrame(()=>drawFordScheme());
 }
@@ -4403,7 +4463,7 @@ let aidStations=[],fatigueActive=false,luckActive=false,demotivationActive=false
 const activeEventCount=()=>{
   const hours=Math.max(0.1,baseSec()/3600);
 
-  // v1.06:
+  // v1.07:
   // Short races stay sparse.
   // From 2 hours onward use about 1.2 events/hour minimum,
   // while NEVER exceeding 2 events/hour.
@@ -4568,7 +4628,7 @@ function makeSchedule(){
   const positives=shuffled(events.filter(e=>e!==misha && e[3]<0));
   const neutral=shuffled(events.filter(e=>e!==misha && e[3]===0));
 
-  // v1.06: balance the selected event pool as close to 50/50 as possible.
+  // v1.07: balance the selected event pool as close to 50/50 as possible.
   // For an odd number of events, the extra event is assigned randomly.
   let negNeed=Math.floor(n/2);
   let posNeed=Math.floor(n/2);
@@ -4964,7 +5024,7 @@ E('simStart').addEventListener('click',()=>{
     return;
   }
 
-  // v1.06: start animation is always a real 3-second start gate.
+  // v1.07: start animation is always a real 3-second start gate.
   // Simulation speed (including 4×) cannot skip or outrun Misha.
   if(startingFresh){
     showMishaStartDirect();
