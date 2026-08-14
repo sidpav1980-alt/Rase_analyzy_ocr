@@ -3895,21 +3895,134 @@ window.addEventListener('pageshow',()=>{
   clearBestTrainingOnPageLoad();
 });
 
-// v0.56 race simulation
+// v0.58 profile-driven race simulation
 (()=>{
 const events=[
-['😅','Слишком быстро на старте','Увлеклись темпом и пришлось восстановиться.',120],['📸','Остановились пофоткать','Красивый вид победил секундомер.',600],['🐱','Засмотрелись на котика','Котик оказался важнее результата.',300],['📱','Потеряли телефон','Обыскали рюкзак и карманы.',300],['🍔','Зажрались на ПП','Пункт питания оказался слишком вкусным.',420],['🗺️','Сбились с трека','Пришлось вернуться к разметке.',360],['😣','Свело ногу','Небольшая остановка и растяжка.',240],['💧','Брод пройден идеально','Удалось пройти воду быстрее ожиданий.',-60],['👟','Развязался шнурок','Техническая остановка.',60],['🪨','Споткнулись о камень','Без падения, но ритм потерян.',90],['🌧️','Начался ливень','Тропа стала скользкой.',240],['☀️','Вышло солнце','Стало жарко — сбросили темп.',180],['🐕','Побежали за собакой','Она знала короткую дорогу. Кажется.',120],['🥤','Кола на пункте питания','Внезапный заряд бодрости.',-90],['🍌','Банан спас гонку','Энергия вернулась.',-60],['🤳','Селфи с волонтёром','На память о гонке.',120],['🧦','Поправили носок','Мелочь, а время идёт.',90],['🦟','Атака комаров','Ускорение с неожиданной мотивацией.',-30],['🎵','Любимый трек в наушниках','Поймали ритм.',-60],['🔥','Поймали второе дыхание','Несколько быстрых километров.',-120]
+  ['😅','Слишком быстро на старте','Пришлось сбросить темп и восстановить дыхание.',120],
+  ['📸','Остановились пофоткать','Вид оказался слишком красивым, чтобы пройти мимо.',600],
+  ['🐱','Засмотрелись на котика','Котик уверенно выиграл борьбу за внимание.',300],
+  ['📱','Потеряли телефон','Обыскали рюкзак, карманы и немного вернулись назад.',300],
+  ['🍔','Зажрались на ПП','Пункт питания оказался подозрительно хорош.',420],
+  ['🗺️','Сбились с трека','Пришлось вернуться к разметке.',360],
+  ['😣','Свело ногу','Остановка, растяжка и осторожный рестарт.',240],
+  ['🌧️','Начался ливень','Покрытие стало скользким и медленным.',240],
+  ['👟','Развязался шнурок','Короткая техническая остановка.',60],
+  ['🪨','Споткнулись о камень','Ритм потерян, но падения удалось избежать.',90],
+  ['🤳','Селфи с волонтёром','Память о гонке важнее пары минут.',120],
+  ['🧦','Поправили носок','Та самая мелочь, которую невозможно игнорировать.',90],
+  ['🧥','Куртка туда-сюда','Сняли, убрали, достали и снова надели.',120],
+  ['🚰','Очередь за водой','На пункте питания внезапно аншлаг.',180],
+  ['🦟','Атака насекомых','Пришлось отбиваться на ходу.',75],
+  ['💧','Брод пройден идеально','Не тормозили и быстро вернулись в ритм.',-60],
+  ['🥤','Кола сработала','Появилась энергия и несколько быстрых минут.',-90],
+  ['🍌','Банан спас гонку','Топливо поступило точно вовремя.',-60],
+  ['🎵','Любимый трек','Поймали ритм и незаметно ускорились.',-75],
+  ['🔥','Второе дыхание','Ноги неожиданно вспомнили, зачем они здесь.',-120],
+  ['⚡','Идеальный спуск','Отпустили ноги и отыграли время.',-150],
+  ['📣','Болельщики включили турбо','Поддержка сработала лучше геля.',-45],
+  ['🦌','Встретили оленя','Пришлось остановиться и убедиться, что это реально.',150],
+  ['🌄','Залипли на рассвет','Красиво. Очень красиво. Время идёт.',180],
+  ['🧭','Идеально срезали развилку','Разметку прочитали с первого раза.',-45],
+  ['🏃','Прицепились к сильной группе','Группа помогла держать хороший ритм.',-90],
+  ['🧃','Гель открылся в рюкзаке','Спасательная операция липких запасов.',105],
+  ['🫠','Засосало в грязь','Кроссовок остался с вами, но не сразу.',150],
+  ['🌬️','Попутный ветер','Несколько открытых километров прошли легче.',-75],
+  ['🧠','Идеально разложились','Не форсировали начало и отыграли на второй половине.',-120]
 ];
-let timer=null, pauseTimer=null, progress=0, penalty=0, elapsed=0, fired=new Set(), schedule=[];
-const E=id=>document.getElementById(id); if(!E('simStart'))return;
-function distance(){return (state?.track?.distanceKm||state?.race?.distanceKm||50)}
-function makeSchedule(){schedule=events.map((e,i)=>({at:(i+1)/(events.length+1)*.92+.025*Math.random(),e})).sort((a,b)=>a.at-b.at)}
-function fmt(sec){sec=Math.max(0,Math.round(sec));return Math.floor(sec/3600)+':'+String(Math.floor(sec%3600/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0')}
-function delta(s){return (s>=0?'+':'−')+Math.floor(Math.abs(s)/60)+':'+String(Math.abs(s)%60).padStart(2,'0')}
-function burst(icon){const box=E('emojiBurst');box.innerHTML='';let n=3+Math.floor(Math.random()*5);for(let i=0;i<n;i++){let x=document.createElement('span');x.textContent=icon;x.style.setProperty('--x',(60+Math.random()*240)+'px');x.style.setProperty('--y',(-100+Math.random()*190)+'px');x.style.animationDelay=(Math.random()*.3)+'s';box.appendChild(x)}}
-function fire(idx){let {at,e}=schedule[idx];fired.add(idx);penalty+=e[3];E('simEventTitle').textContent=e[0]+' '+e[1];E('simEventText').textContent=e[2];E('simEventDelta').textContent=delta(e[3]);E('simEventCard').classList.add('show');E('simRunner').classList.add('event');burst(e[0]);E('simStatus').textContent='Случайное событие — пауза 5 секунд…';let row=document.createElement('div');row.textContent=(at*distance()).toFixed(1)+' км · '+e[0]+' '+e[1]+' · '+delta(e[3]);E('simLog').prepend(row);E('simEventsCount').textContent=fired.size;E('simPenalty').textContent=delta(penalty);clearInterval(timer);pauseTimer=setTimeout(()=>{E('simEventCard').classList.remove('show');E('simRunner').classList.remove('event');E('simStatus').textContent='Гонка продолжается';run()},5000)}
-function tick(){let speed=+E('simSpeed').value||1;progress=Math.min(1,progress+.0025*speed);elapsed+=5*speed;E('simProgress').style.width=(progress*100)+'%';E('simMarker').style.left=(progress*100)+'%';E('simRunner').style.left=(5+progress*72)+'%';E('simDistance').textContent=(progress*distance()).toFixed(1)+' / '+distance().toFixed(1)+' км';E('simTime').textContent=fmt(elapsed+penalty);let idx=schedule.findIndex((x,i)=>!fired.has(i)&&progress>=x.at);if(idx>=0){fire(idx);return}if(progress>=1){clearInterval(timer);timer=null;E('simStart').textContent='▶ Запустить снова';E('simStatus').textContent='🏁 Финиш! Виртуальное время '+fmt(elapsed+penalty)}}
-function run(){clearInterval(timer);timer=setInterval(tick,120);E('simStart').textContent='⏸ Пауза';}
-function reset(){clearInterval(timer);clearTimeout(pauseTimer);timer=null;progress=penalty=elapsed=0;fired.clear();makeSchedule();E('simProgress').style.width='0';E('simMarker').style.left='0';E('simRunner').style.left='5%';E('simDistance').textContent='0.0 / '+distance().toFixed(1)+' км';E('simTime').textContent='0:00:00';E('simEventsCount').textContent='0';E('simPenalty').textContent='+0:00';E('simLog').innerHTML='';E('simEventCard').classList.remove('show');E('simRunner').classList.remove('event');E('simStart').textContent='▶ Симуляция гонки';E('simStatus').textContent='Готово к старту.'}
-E('simStart').addEventListener('click',()=>{if(progress>=1)reset(); if(timer){clearInterval(timer);timer=null;E('simStart').textContent='▶ Продолжить';E('simStatus').textContent='Пауза';}else run()});E('simReset').addEventListener('click',reset);reset();
-})();
+
+const E=id=>document.getElementById(id);
+if(!E('simStart')) return;
+let timer=null,pauseTimer=null,countTimer=null,progress=0,penalty=0,fired=new Set(),schedule=[],particles=[],simStartDate=null;
+const activeEventCount=()=>Math.min(30, Math.max(8, Math.round((Number(state?.dist)||30)/4)+6));
+
+function dist(){return Number(state?.dist||0)}
+function gain(){return Number(state?.gain||0)}
+function baseSec(){return Number(state?.raceForecast?.totalSec||0)}
+function fmt(sec){sec=Math.max(0,Math.round(sec||0));const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}
+function delta(s){const sign=s>=0?'+':'−',a=Math.abs(Math.round(s));return `${sign}${Math.floor(a/60)}:${String(a%60).padStart(2,'0')}`}
+function shuffled(a){return a.slice().sort(()=>Math.random()-.5)}
+function makeSchedule(){
+  const n=activeEventCount(), selected=shuffled(events).slice(0,n);
+  schedule=selected.map((e,i)=>{
+    const center=(i+1)/(n+1),jitter=(Math.random()-.5)*Math.min(.055,.45/(n+1));
+    return {at:Math.max(.035,Math.min(.965,center+jitter)),e};
+  }).sort((a,b)=>a.at-b.at);
+}
+function firstTrackDate(){
+  const p=(state?.track||[]).find(x=>x?.time);
+  if(p?.time){const d=new Date(p.time);if(!Number.isNaN(d.getTime()))return d}
+  const d=new Date();d.setHours(6,0,0,0);return d;
+}
+function interpElevation(km){
+  const pts=(state?.track||[]).filter(p=>Number.isFinite(p.km)&&Number.isFinite(p.ele));
+  if(!pts.length)return 0;if(km<=pts[0].km)return pts[0].ele;
+  for(let i=1;i<pts.length;i++){if(pts[i].km>=km){const a=pts[i-1],b=pts[i],r=(km-a.km)/Math.max(.0001,b.km-a.km);return a.ele+(b.ele-a.ele)*r}}
+  return pts.at(-1).ele;
+}
+function simClockSec(){return baseSec()*progress+penalty}
+function skyInfo(){
+  const d=new Date(simStartDate.getTime()+simClockSec()*1000);const h=d.getHours()+d.getMinutes()/60;
+  const sunrise=6,sunset=18.5;let day=0,sunT=0;
+  if(h>=sunrise&&h<=sunset){day=1;sunT=(h-sunrise)/(sunset-sunrise)}
+  const twilight=(h>=5&&h<6)||(h>18.5&&h<=19.5);
+  return {d,h,day,twilight,sunT};
+}
+function addParticles(icon){
+  const n=3+Math.floor(Math.random()*5);
+  for(let i=0;i<n;i++)particles.push({icon,life:1,x:0,y:0,vx:(Math.random()-.5)*2.5,vy:-1.2-Math.random()*2.1,rot:(Math.random()-.5)*.25,size:20+Math.random()*11});
+}
+function fire(idx){
+  const {at,e}=schedule[idx];fired.add(idx);penalty+=e[3];addParticles(e[0]);
+  E('simEventTitle').textContent=e[0]+' '+e[1];E('simEventText').textContent=e[2];E('simEventDelta').textContent=delta(e[3]);
+  E('simEventDelta').className=e[3]<0?'positive':'negative';E('simEventCard').classList.add('show');E('simPauseBadge').classList.add('show');
+  let left=5;E('simPauseCountdown').textContent=left;
+  const km=(at*dist()).toFixed(1);const row=document.createElement('div');row.className='current';row.innerHTML=`<span>${km} км</span><span>${e[0]} ${e[1]}</span><b class="${e[3]<0?'minus':'plus'}">${delta(e[3])}</b>`;E('simLog').prepend(row);
+  E('simEventsCount').textContent=`${fired.size} / 30`;E('simPenalty').textContent=delta(penalty);updateResults();
+  clearInterval(timer);timer=null;clearInterval(countTimer);countTimer=setInterval(()=>{left--;E('simPauseCountdown').textContent=Math.max(0,left);if(left<=0)clearInterval(countTimer)},1000);
+  pauseTimer=setTimeout(()=>{E('simEventCard').classList.remove('show');E('simPauseBadge').classList.remove('show');E('simStatus').textContent='Гонка продолжается';run()},3000);
+}
+function draw(){
+  const c=E('simCourseCanvas');if(!c)return;const r=c.getBoundingClientRect(),dpr=window.devicePixelRatio||1,W=Math.max(320,r.width),H=r.height||360;
+  if(c.width!==Math.round(W*dpr)||c.height!==Math.round(H*dpr)){c.width=Math.round(W*dpr);c.height=Math.round(H*dpr)}
+  const ctx=c.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
+  const sky=skyInfo();
+  let top='#07111f',bottom='#102a43';if(sky.day){top='#123c62';bottom='#f59e0b'}else if(sky.twilight){top='#14213d';bottom='#9a3412'}
+  const grad=ctx.createLinearGradient(0,0,0,H);grad.addColorStop(0,top);grad.addColorStop(.62,bottom);grad.addColorStop(1,'#07111f');ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+  // stars at night
+  if(!sky.day){ctx.fillStyle='rgba(255,255,255,.72)';for(let i=0;i<30;i++){const x=(i*83%997)/997*W,y=18+((i*137)%211)/211*H*.42;ctx.fillRect(x,y,1.3,1.3)}}
+  // sun/moon arc
+  const sunX=sky.day?30+sky.sunT*(W-60):W-45;const sunY=sky.day?(104-Math.sin(Math.PI*sky.sunT)*76):52;
+  ctx.font='30px system-ui, Apple Color Emoji';ctx.textAlign='center';ctx.fillText(sky.day?'☀️':'🌙',sunX,sunY);
+  ctx.strokeStyle='rgba(255,255,255,.28)';ctx.setLineDash([3,5]);ctx.beginPath();for(let x=30;x<W-30;x+=8){const t=(x-30)/(W-60),y=104-Math.sin(Math.PI*t)*76;if(x===30)ctx.moveTo(x,y);else ctx.lineTo(x,y)}ctx.stroke();ctx.setLineDash([]);
+  const pts=(state?.track||[]).filter(p=>Number.isFinite(p.km)&&Number.isFinite(p.ele));const L=42,R=16,T=125,B=42,baseY=H-B;
+  let minE=0,maxE=1;if(pts.length){minE=Math.min(...pts.map(p=>p.ele));maxE=Math.max(...pts.map(p=>p.ele));if(maxE-minE<1)maxE=minE+1}
+  const xOf=km=>L+(km/Math.max(.1,dist()))*(W-L-R);const yOf=ele=>baseY-((ele-minE)/(maxE-minE))*(baseY-T);
+  // profile fill + green profile line
+  if(pts.length){ctx.beginPath();pts.forEach((p,i)=>{const x=xOf(p.km),y=yOf(p.ele);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.lineTo(xOf(dist()),baseY);ctx.lineTo(L,baseY);ctx.closePath();ctx.fillStyle='rgba(22,163,74,.28)';ctx.fill();
+    ctx.beginPath();pts.forEach((p,i)=>{const x=xOf(p.km),y=yOf(p.ele);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.strokeStyle='#22c55e';ctx.lineWidth=3;ctx.stroke();}
+  // axes
+  ctx.fillStyle='rgba(226,232,240,.8)';ctx.font='11px system-ui';ctx.textAlign='left';ctx.fillText(`${Math.round(maxE)} м`,6,T+4);ctx.fillText(`${Math.round(minE)} м`,6,baseY);ctx.textAlign='center';for(let i=0;i<=4;i++){const km=dist()*i/4;ctx.fillText(`${km.toFixed(km<10?1:0)} км`,xOf(km),H-15)}
+  // progress: white vertical time line follows current point on profile
+  const km=dist()*progress,x=xOf(km),ele=interpElevation(km),y=yOf(ele);ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,T-8);ctx.lineTo(x,baseY+2);ctx.stroke();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();
+  // runner: stick-ish, backpack and poles, facing right, no floating cap/arrow
+  const rx=Math.min(W-38,Math.max(38,x)),ry=y-12;ctx.save();ctx.translate(rx,ry);ctx.strokeStyle='#f8fafc';ctx.lineWidth=3;ctx.lineCap='round';ctx.fillStyle='#f1c27d';ctx.beginPath();ctx.arc(0,-24,7,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#f59e0b';ctx.beginPath();ctx.moveTo(0,-16);ctx.lineTo(5,3);ctx.moveTo(3,-9);ctx.lineTo(15,-1);ctx.moveTo(4,2);ctx.lineTo(16,17);ctx.moveTo(4,2);ctx.lineTo(-7,18);ctx.stroke();ctx.fillStyle='#ef4444';ctx.fillRect(-10,-15,8,15);ctx.strokeStyle='#cbd5e1';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(14,-1);ctx.lineTo(24,24);ctx.moveTo(-3,-4);ctx.lineTo(-16,23);ctx.stroke();ctx.font='18px system-ui, Apple Color Emoji';ctx.fillText('🎒',-11,-5);if(E('simPauseBadge').classList.contains('show')){ctx.font='28px system-ui, Apple Color Emoji';ctx.fillText('😲',0,-48)}ctx.restore();
+  // event particles from current runner/profile point
+  ctx.textAlign='center';particles.forEach(p=>{if(p.x===0&&p.y===0){p.x=rx;p.y=ry-25}p.x+=p.vx;p.y+=p.vy;p.vy+=.035;p.life-=.012;ctx.globalAlpha=Math.max(0,p.life);ctx.font=`${p.size}px system-ui, Apple Color Emoji`;ctx.fillText(p.icon,p.x,p.y)});ctx.globalAlpha=1;particles=particles.filter(p=>p.life>0);
+}
+function updateResults(){
+  const b=baseSec(),cur=Math.max(0,b*progress+penalty),finish=Math.max(0,b+penalty);E('simBaseTime').textContent=b?fmt(b):'—';E('simTime').textContent=b?fmt(cur):'—';E('simResultBase').textContent=b?fmt(b):'—';E('simResultDelta').textContent=delta(penalty);E('simResultFinish').textContent=b?fmt(finish):'—';E('simResultProgress').textContent=Math.round(progress*100)+'%';
+}
+function tick(){
+  const b=baseSec();if(!b||!dist()){stop('Сначала загрузите GPX и рассчитайте прогноз гонки.');return}
+  const speed=+E('simSpeed').value||1;const realDuration=Math.max(28000,Math.min(75000,28000+dist()*450));progress=Math.min(1,progress+(120/realDuration)*speed);E('simProgress').style.width=(progress*100)+'%';E('simDistance').textContent=`${(progress*dist()).toFixed(1)} / ${dist().toFixed(1)} км`;updateResults();draw();
+  const idx=schedule.findIndex((x,i)=>!fired.has(i)&&progress>=x.at);if(idx>=0){fire(idx);return}
+  if(progress>=1){clearInterval(timer);timer=null;E('simStart').textContent='▶ Запустить снова';E('simStatus').textContent=`🏁 Финиш: ${fmt(baseSec()+penalty)} (${delta(penalty)} к прогнозу)`;updateResults();draw()}
+}
+function run(){clearInterval(timer);timer=setInterval(tick,120);E('simStart').textContent='⏸ Пауза';E('simStatus').textContent='Симуляция идёт по профилю загруженного трека.'}
+function stop(msg){clearInterval(timer);clearTimeout(pauseTimer);clearInterval(countTimer);timer=null;if(msg)E('simStatus').textContent=msg;E('simStart').textContent='▶ Симуляция гонки'}
+function reset(){stop();progress=0;penalty=0;fired.clear();particles=[];simStartDate=firstTrackDate();makeSchedule();E('simProgress').style.width='0';E('simDistance').textContent=dist()?`0.0 / ${dist().toFixed(1)} км`:'—';E('simGain').textContent=gain()?`${Math.round(gain())} м`:'—';E('simEventsCount').textContent='0 / 30';E('simPenalty').textContent='+0:00';E('simLog').innerHTML='<div><span>—</span><span>События появятся случайно по ходу гонки</span><b>30 в пуле</b></div>';E('simEventCard').classList.remove('show');E('simPauseBadge').classList.remove('show');E('simStart').textContent='▶ Симуляция гонки';updateResults();E('simStatus').textContent=baseSec()&&dist()?'Готово: профиль и время взяты из текущего прогноза.':'Загрузите трек и рассчитайте прогноз гонки.';draw()}
+E('simStart').addEventListener('click',()=>{if(progress>=1)reset();if(!baseSec()||!dist()){reset();return}if(timer){clearInterval(timer);timer=null;E('simStart').textContent='▶ Продолжить';E('simStatus').textContent='Пауза';}else run()});E('simReset').addEventListener('click',reset);E('simSpeed').addEventListener('change',draw);window.addEventListener('resize',draw);
+// Keep simulation synced when user switches to tab 5 or recalculates forecast.
+document.querySelector('[data-tab="simulation"]')?.addEventListener('click',()=>setTimeout(reset,0));
+reset();
+})();;

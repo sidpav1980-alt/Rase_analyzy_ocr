@@ -1,4 +1,4 @@
-const CACHE='trail-analyzer-nodocker-v055';
+const CACHE='trail-analyzer-web-v057';
 const CORE=[
   './','./index.html','./styles.css','./app.js','./manifest.webmanifest',
   './icon-192.png','./icon-512.png'
