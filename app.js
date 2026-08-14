@@ -287,7 +287,7 @@ $('installBtn').addEventListener('click', async () => {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=107', {updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('./sw.js?v=108', {updateViaCache:'none'});
       await reg.update();
       let refreshing=false;
       navigator.serviceWorker.addEventListener('controllerchange',()=>{
@@ -959,18 +959,35 @@ function classifyPointFromOSM(p, elements){
 }
 
 function buildOverpassQuery(points){
-  const lats=points.map(p=>p.lat), lons=points.map(p=>p.lon);
-  const pad=0.01;
-  const s=Math.min(...lats)-pad, n=Math.max(...lats)+pad, w=Math.min(...lons)-pad, e=Math.max(...lons)+pad;
-  return `[out:json][timeout:120];
-(
-  way["natural"="wetland"](${s},${w},${n},${e});
-  way["natural"="water"](${s},${w},${n},${e});
-  way["waterway"](${s},${w},${n},${e});
-  way["highway"](${s},${w},${n},${e});
-  node["ford"](${s},${w},${n},${e});
-);
-out tags geom;`;
+  const pts=(points||[]).filter(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lon));
+  if(!pts.length) return '[out:json][timeout:90];();out;';
+
+  // v1.08: do NOT ask Overpass for one huge route bbox. On long/curvy tracks
+  // that query was too heavy and all endpoints could time out, producing 0%.
+  // Build several small boxes along the GPX corridor instead.
+  const boxes=[];
+  const stride=Math.max(1,Math.floor(pts.length/18));
+  for(let i=0;i<pts.length;i+=stride){
+    const chunk=pts.slice(i,Math.min(pts.length,i+stride+1));
+    const lats=chunk.map(p=>p.lat),lons=chunk.map(p=>p.lon);
+    const pad=0.0035; // ~250-390 m corridor around this part of route
+    boxes.push([
+      Math.min(...lats)-pad,Math.min(...lons)-pad,
+      Math.max(...lats)+pad,Math.max(...lons)+pad
+    ]);
+  }
+
+  const selectors=[];
+  for(const [s,w,n,e] of boxes){
+    selectors.push(
+      `way["natural"="wetland"](${s},${w},${n},${e});`,
+      `way["natural"="water"](${s},${w},${n},${e});`,
+      `way["waterway"](${s},${w},${n},${e});`,
+      `way["highway"](${s},${w},${n},${e});`,
+      `node["ford"](${s},${w},${n},${e});`
+    );
+  }
+  return `[out:json][timeout:90];\n(\n${selectors.join('\n')}\n);\nout tags geom;`;
 }
 
 
@@ -1272,7 +1289,7 @@ function groupFordKmPoints(kms, maxGapKm=0.15){
       continue;
     }
 
-    // v1.07: only nearby parts of the SAME water crossing are merged.
+    // v1.08: only nearby parts of the SAME water crossing are merged.
     // 150 m is enough for braided channels / GPS jitter, while separate
     // crossings 200+ m apart remain separate.
     if(km-current.end<=maxGapKm){
@@ -1341,7 +1358,7 @@ async function analyzeMapOSM(){
 
   const retryEl=document.getElementById('mapAnalyzeRetryText');
 
-  async function fetchWithLimit(url, options, ms=14000){
+  async function fetchWithLimit(url, options, ms=22000){
     const controller=new AbortController();
     currentMapAnalysisFetchController=controller;
     const t=setTimeout(()=>controller.abort(),ms);
@@ -1385,6 +1402,25 @@ async function analyzeMapOSM(){
         body:'data='+encodeURIComponent(query)
       }
     }
+,
+    {
+      name:'Overpass 3',
+      url:'https://overpass.nchc.org.tw/api/interpreter',
+      options:{
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},
+        body:'data='+encodeURIComponent(query)
+      }
+    },
+    {
+      name:'Overpass 4',
+      url:'https://overpass.private.coffee/api/interpreter',
+      options:{
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},
+        body:'data='+encodeURIComponent(query)
+      }
+    }
   ];
 
   for(let i=0;i<attempts.length;i++){
@@ -1395,7 +1431,7 @@ async function analyzeMapOSM(){
     if(retryEl) retryEl.textContent=i ? `Резервный источник ${i}/${attempts.length-1}…` : '';
 
     try{
-      const resp=await fetchWithLimit(a.url,a.options,14000);
+      const resp=await fetchWithLimit(a.url,a.options,22000);
       if(!resp.ok){
         let detail='';
         try{
@@ -1430,27 +1466,41 @@ async function analyzeMapOSM(){
   // analysis with the GPX itself. Surface/ford values remain unknown rather
   // than stopping the whole analysis.
   if(!data){
+    // v1.08: if OSM is temporarily down, reuse ONLY a cache matching this GPX.
+    try{
+      const c=JSON.parse(localStorage.getItem('trailOSMElementsCache')||'null');
+      const first=state.track?.[0], last=state.track?.[state.track.length-1];
+      const sameDist=Math.abs(Number(c?.routeDist||0)-Number(state.dist||0))<0.15;
+      const sameGain=Math.abs(Number(c?.routeGain||0)-Number(state.gain||0))<80;
+      const sameEnds=c?.first&&c?.last&&first&&last &&
+        Math.abs(c.first[0]-first.lat)<0.001 && Math.abs(c.first[1]-first.lon)<0.001 &&
+        Math.abs(c.last[0]-last.lat)<0.001 && Math.abs(c.last[1]-last.lon)<0.001;
+      if(sameDist&&sameGain&&sameEnds&&Array.isArray(c.elements)&&c.elements.length){
+        data={elements:c.elements,fromCache:true};
+        $('mapAnalyzeStatus').textContent='✓ OSM временно недоступен — использованы сохранённые данные этой трассы.';
+      }
+    }catch(e){}
+  }
+
+  if(!data){
     const samples=pts.map(p=>({km:p.km,cls:'unknown'}));
     const summary=summarizeSurfaceClasses(samples);
-    try{
-      localStorage.setItem('trailMapAnalysis',JSON.stringify({
-        routeDist:state.dist,
-        routeGain:state.gain,
-        savedAt:new Date().toISOString(),
-        samples,summary,
-        osmUnavailable:true
-      }));
-    }catch(e){}
-
-    return {
-      samples,
-      summary,
-      elements:[],
-      osmUnavailable:true
-    };
+    return {samples,summary,elements:[],osmUnavailable:true};
   }
 
   normalizeFordData(data);
+
+  // Keep the last successful OSM response for this exact GPX geometry.
+  try{
+    localStorage.setItem('trailOSMElementsCache',JSON.stringify({
+      routeDist:Number(state.dist||0),
+      routeGain:Number(state.gain||0),
+      first:state.track?.[0] ? [state.track[0].lat,state.track[0].lon] : null,
+      last:state.track?.length ? [state.track[state.track.length-1].lat,state.track[state.track.length-1].lon] : null,
+      savedAt:Date.now(),
+      elements:data.elements||[]
+    }));
+  }catch(e){}
 
   {
     let rawFordKm=[];
@@ -1574,7 +1624,7 @@ function renderMapAnalysis(result){
   const {samples,summary,elements=[]}=result;
   const crossings=analyzeWaterCrossings(samples,elements);
 
-  // v1.07: analyzeWaterCrossings already groups by OSM water object first,
+  // v1.08: analyzeWaterCrossings already groups by OSM water object first,
   // then deduplicates only near-identical physical crossings.
   const bridgeKms=(crossings.bridges||[]).slice();
   const confirmedFordKms=(crossings.confirmed||[]).slice();
@@ -4463,7 +4513,7 @@ let aidStations=[],fatigueActive=false,luckActive=false,demotivationActive=false
 const activeEventCount=()=>{
   const hours=Math.max(0.1,baseSec()/3600);
 
-  // v1.07:
+  // v1.08:
   // Short races stay sparse.
   // From 2 hours onward use about 1.2 events/hour minimum,
   // while NEVER exceeding 2 events/hour.
@@ -4628,7 +4678,7 @@ function makeSchedule(){
   const positives=shuffled(events.filter(e=>e!==misha && e[3]<0));
   const neutral=shuffled(events.filter(e=>e!==misha && e[3]===0));
 
-  // v1.07: balance the selected event pool as close to 50/50 as possible.
+  // v1.08: balance the selected event pool as close to 50/50 as possible.
   // For an odd number of events, the extra event is assigned randomly.
   let negNeed=Math.floor(n/2);
   let posNeed=Math.floor(n/2);
@@ -5024,7 +5074,7 @@ E('simStart').addEventListener('click',()=>{
     return;
   }
 
-  // v1.07: start animation is always a real 3-second start gate.
+  // v1.08: start animation is always a real 3-second start gate.
   // Simulation speed (including 4×) cannot skip or outrun Misha.
   if(startingFresh){
     showMishaStartDirect();
