@@ -172,7 +172,7 @@
 
 
 <style>
-/* v0.81 — compact phone simulation */
+/* v0.83 — compact phone simulation */
 .sim-profile-card{display:none!important}
 .sim-reference-shell{gap:10px!important}
 .sim-scene-title{
@@ -291,7 +291,7 @@
 </style>
 
 <style>
-/* v0.81 — small event notification above the track profile */
+/* v0.83 — small event notification above the track profile */
 #simEventCard{display:none!important}
 .sim-event-chip{
   position:absolute;
@@ -369,7 +369,7 @@
 </style>
 
 <style>
-/* v0.81 — static route map, no zoom/pan */
+/* v0.83 — static route map, no zoom/pan */
 .ford-leaflet-map,
 .sim-ford-map{
   touch-action:none!important;
@@ -384,7 +384,7 @@
 </style>
 
 <style>
-/* v0.81: compact controls, nothing overlaps on iPhone */
+/* v0.83: compact controls, nothing overlaps on iPhone */
 .sim-scene-controls{
   position:static!important;
   display:grid!important;
@@ -417,9 +417,24 @@
   .sim-icon-btn{width:40px!important;height:40px!important;min-width:40px!important}
 }
 </style>
+
+<style>
+.sim-condition-bar{display:flex;gap:5px;flex-wrap:wrap;padding:6px 9px;background:#08111d;border-bottom:1px solid #263650}
+.sim-condition-bar span{font-size:10px;padding:4px 7px;border-radius:999px;background:#132238;border:1px solid #2b405e;color:#dbeafe}
+.sim-condition-bar .warn{border-color:#f59e0b;color:#fde68a}.sim-condition-bar .good{border-color:#22c55e;color:#bbf7d0}.sim-condition-bar .bad{border-color:#ef4444;color:#fecaca}
+.sim-dnf-banner{position:absolute;inset:0;z-index:30;display:none;align-items:center;justify-content:center;background:rgba(2,6,23,.82)}
+.sim-dnf-banner.show{display:flex}.sim-dnf-box{width:min(320px,84%);padding:22px;border:2px solid #ef4444;border-radius:18px;background:#091220;text-align:center}
+.sim-dnf-box b{display:block;font-size:38px;color:#f87171;margin-bottom:8px}.sim-dnf-box span{color:#e2e8f0}
+</style>
+
+<style>
+/* v0.83 */
+.sim-fords-card{display:none!important}
+.sim-mid-grid{grid-template-columns:1fr!important}
+</style>
 </head>
 <body>
-<div class="app-version">v0.81</div>
+<div class="app-version">v0.83</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Прогноз и анализ трейловых гонок</div>
@@ -809,6 +824,11 @@
 
     <div class="sim-scene-card">
       <div class="sim-scene-title">СИМУЛЯЦИЯ ГОНКИ</div>
+<div id="simConditionBar" class="sim-condition-bar">
+<span id="simFatigueState">💪 без усталости</span>
+<span id="simLuckState">🍀 обычная удача</span>
+<span id="simMotivationState">🔥 мотивация стабильна</span>
+</div>
 <div id="simEventChip" class="sim-event-chip">
   <span id="simEventChipIcon">😲</span>
   <b id="simEventChipTitle"></b>
@@ -822,7 +842,8 @@
         <strong id="simEventDelta"></strong>
       </div>
 
-      <div id="simPauseBadge" class="sim-pause-badge">
+      <div id="simDnfBanner" class="sim-dnf-banner"><div class="sim-dnf-box"><b>DNF</b><span>Три отрицательных события подряд. Демотивация победила — симуляция завершена.</span></div></div>
+<div id="simPauseBadge" class="sim-pause-badge">
         😲 Событие! Пауза <b id="simPauseCountdown">3</b> сек.
       </div>
 
@@ -850,23 +871,8 @@
         <div id="simLog" class="sim-log"></div>
         <div class="muted sim-events-note">События выбираются случайно из общего пула. Чем дольше гонка — тем их больше, но не чаще двух раз за час.</div>
       </div>
-
-      <div class="sim-fords-card">
-        <div class="sim-fords-info">
-          <h3>Профиль трассы</h3>
-          <div class="sim-ford-lines">
-            <div>🌊 Подтверждённый брод (OSM)</div>
-            <div>💦 Вероятный брод (по пересечению)</div>
-            <div>🌉 Пересечение по мосту</div>
-          </div>
-          <div class="sim-ford-summary" id="simFordSummary">Броды на трассе: —</div>
-          <div class="muted">Нажмите на маркер, чтобы увидеть километраж.</div>
-        </div>
-        <div id="simFordMap" class="sim-ford-map"></div>
-      </div>
-    </div>
-
-    <div class="sim-bottom-grid">
+</div>
+<div class="sim-bottom-grid">
       <div class="sim-result-box">
         <h3>Итоги симуляции</h3>
         <div><span>Базовый прогноз</span><b id="simResultBase">—</b></div>

@@ -367,7 +367,9 @@ function parseGPX(text){
   }
 
   state.track=out;
-  // v0.81: a new GPX must never leave the previous route/map analysis on screen.
+  document.getElementById('mishaStartSendoff')?.classList.remove('show');
+  document.getElementById('mishaFinishWelcome')?.classList.remove('show');
+  // v0.83: a new GPX must never leave the previous route/map analysis on screen.
   state.mapAnalysis=null;
   if(typeof fordLeafletMap!=='undefined' && fordLeafletMap){
     try{fordLeafletMap.remove()}catch(e){}
@@ -1221,7 +1223,7 @@ async function analyzeMapOSM(){
 
   $('mapAnalyzeStatus').textContent='⏳ Отправляю запрос через серверный proxy…';
 
-  // v0.81: no second internal timer here.
+  // v0.83: no second internal timer here.
   // The map-analysis button owns the single hard 20 second timeout.
   let analysisTimedOut=false;
 
@@ -4113,7 +4115,7 @@ function setMovingTimeFieldFromOCR(value){
     if(m) seconds=Number(m[1])*60+Number(m[2]);
   }
 
-  // v0.81 lower field originally inherited a numeric "minutes" input.
+  // v0.83 lower field originally inherited a numeric "minutes" input.
   if(el.type==='number'){
     if(seconds!=null) el.value=(seconds/60).toFixed(2).replace(/\.00$/,'');
     else{
@@ -4274,8 +4276,8 @@ function showMishaStartDirect(){
   const el=document.getElementById('mishaStartSendoff');
   if(!el) return;
   const b=el.querySelector('b'), s=el.querySelector('span');
-  if(b) b.textContent='🐻 Миша с топором провожает тебя со старта!';
-  if(s) s.textContent='Удачной гонки! 🪓';
+  if(b) b.textContent='🐻 Миша с топором';
+  if(s) s.textContent='СТАРТ 🏁';
   el.classList.add('show');
   clearTimeout(window.__mishaStartTimer);
   window.__mishaStartTimer=setTimeout(()=>el.classList.remove('show'),3000);
@@ -4284,8 +4286,8 @@ function showMishaFinishDirect(){
   const el=document.getElementById('mishaFinishWelcome');
   if(!el) return;
   const b=el.querySelector('b'), s=el.querySelector('span');
-  if(b) b.textContent='🏁 Миша с топором встречает тебя на финише!';
-  if(s) s.textContent='Финиш! 🐻🪓';
+  if(b) b.textContent='🐻 Миша с топором';
+  if(s) s.textContent='ФИНИШ 🏁';
   el.classList.add('show');
   clearTimeout(window.__mishaFinishTimer);
   window.__mishaFinishTimer=setTimeout(()=>el.classList.remove('show'),3000);
@@ -4293,6 +4295,8 @@ function showMishaFinishDirect(){
 
 if(!E('simStart')) return;
 let timer=null,pauseTimer=null,countTimer=null,progress=0,penalty=0,fired=new Set(),schedule=[],particles=[],simStartDate=null;
+let aidStations=[],fatigueActive=false,luckActive=false,demotivationActive=false,negativeStreak=0,simulationDNF=false,lastAidIndex=-1;
+
 const activeEventCount=()=>{
   const hours=Math.max(0.1,baseSec()/3600);
 
@@ -4322,34 +4326,75 @@ function baseSec(){return Number(state?.raceForecast?.totalSec||0)}
 function fmt(sec){sec=Math.max(0,Math.round(sec||0));const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}
 function delta(s){const sign=s>=0?'+':'−',a=Math.abs(Math.round(s));return `${sign}${Math.floor(a/60)}:${String(a%60).padStart(2,'0')}`}
 function shuffled(a){return a.slice().sort(()=>Math.random()-.5)}
+
+function chooseAidStations(){
+  const d=dist(); if(!d){aidStations=[];return}
+  const maxCount=Math.min(5,Math.max(1,Math.round(d/18)));
+  const count=Math.max(1,Math.floor(Math.random()*maxCount)+1);
+  const pts=[];let tries=0;
+  while(pts.length<count&&tries++<300){
+    const km=d*(0.12+Math.random()*.76);
+    if(pts.every(x=>Math.abs(x-km)>=Math.max(2,d*.06)))pts.push(km);
+  }
+  aidStations=pts.sort((a,b)=>a-b);
+}
+function renderSimConditions(){
+  const f=E('simFatigueState'),l=E('simLuckState'),m=E('simMotivationState');
+  if(f){f.textContent=fatigueActive?'🥱 Усталость: +30:00 до ПП':'💪 без усталости';f.className=fatigueActive?'warn':''}
+  if(l){l.textContent=luckActive?'🍀 Удача: +20% к позитивным событиям':'🍀 обычная удача';l.className=luckActive?'good':''}
+  if(m){m.textContent=demotivationActive?'😞 Демотивация: 3 минуса = DNF':'🔥 мотивация стабильна';m.className=demotivationActive?'bad':''}
+}
+function conditionChip(icon,title,deltaText=''){
+  const c=E('simEventChip');if(!c)return;
+  E('simEventChipIcon').textContent=icon;E('simEventChipTitle').textContent=title;E('simEventChipDelta').textContent=deltaText;
+  c.classList.add('show');setTimeout(()=>c.classList.remove('show'),3000);
+}
+function initStartConditions(){
+  fatigueActive=Math.random()<.40;
+  luckActive=Math.random()<.15;
+  demotivationActive=Math.random()<.15;
+  negativeStreak=0;simulationDNF=false;lastAidIndex=-1;
+  if(fatigueActive){penalty+=1800;setTimeout(()=>conditionChip('🥱','Стартовая усталость','+30:00'),250)}
+  if(luckActive)setTimeout(()=>conditionChip('🍀','Редкая удача','+20% к позитиву'),fatigueActive?3400:250);
+  if(demotivationActive)setTimeout(()=>conditionChip('😞','Демотивация','3 минуса = DNF'),(fatigueActive?3400:0)+(luckActive?3200:250));
+  renderSimConditions();
+}
+function checkAidStation(km){
+  for(let i=lastAidIndex+1;i<aidStations.length;i++){
+    if(km<aidStations[i])break;
+    lastAidIndex=i;
+    if(fatigueActive){fatigueActive=false;renderSimConditions();conditionChip('🍊',`ПП ${i+1}: усталость отпустила`,'')}
+    else conditionChip('🍊',`ПП ${i+1}`,'подкрепились');
+  }
+}
+function endSimulationDNF(){
+  simulationDNF=true;clearInterval(timer);timer=null;clearTimeout(pauseTimer);clearInterval(countTimer);
+  E('simStart').textContent='↻';E('simStatus').textContent='DNF — три отрицательных события подряд.';
+  E('simDnfBanner')?.classList.add('show');updateResults();draw();
+}
+
 function makeSchedule(){
   const n=activeEventCount();
   const misha=events.find(e=>e[1]==='Встреча с Мишей с топором');
-  const normalEvents=events.filter(e=>e!==misha);
-  const selected=shuffled(normalEvents).slice(0,n);
-
-  // Rare event: only ~8% of simulations.
-  if(misha && n>0 && Math.random()<0.08){
-    selected[Math.floor(Math.random()*selected.length)]=misha;
+  const normal=events.filter(e=>e!==misha);
+  let pool=[...normal];
+  if(luckActive){
+    const positives=normal.filter(e=>e[3]<0);
+    pool.push(...shuffled(positives).slice(0,Math.max(1,Math.round(positives.length*.20))));
   }
-
-  const total=Math.max(1,baseSec());
-
-  // События ставятся в случайные моменты, но минимум через 30 минут
-  // виртуального времени друг от друга. Это гарантирует не более 2/час.
-  const minGapSec=1800;
-  const times=[];
-  let attempts=0;
-  while(times.length<n && attempts<2000){
-    attempts++;
-    const t=total*(0.06+Math.random()*0.88);
-    if(times.every(x=>Math.abs(x-t)>=minGapSec)) times.push(t);
+  const selected=[];
+  while(selected.length<n&&pool.length){
+    const pick=pool[Math.floor(Math.random()*pool.length)];
+    if(!selected.includes(pick))selected.push(pick);
+    else pool=pool.filter(x=>x!==pick);
   }
-
-  // На коротких гонках, где физически нельзя разместить столько событий,
-  // уменьшаем выборку вместо уплотнения.
-  times.sort((a,b)=>a-b);
-  schedule=times.map((t,i)=>({at:t/total,e:selected[i]}));
+  if(misha&&n>0&&Math.random()<.08)selected[Math.floor(Math.random()*selected.length)]=misha;
+  const total=Math.max(1,baseSec()),minGapSec=1800,times=[];let attempts=0;
+  while(times.length<n&&attempts++<2000){
+    const t=total*(.06+Math.random()*.88);
+    if(times.every(x=>Math.abs(x-t)>=minGapSec))times.push(t);
+  }
+  times.sort((a,b)=>a-b);schedule=times.map((t,i)=>({at:t/total,e:selected[i]}));
 }
 function firstTrackDate(){
   const p=(state?.track||[]).find(x=>x?.time);
@@ -4391,6 +4436,12 @@ function addParticles(icon){
 }
 function fire(idx){
   const {at,e}=schedule[idx];fired.add(idx);penalty+=e[3];addParticles(e[0]);
+  if(e[3]>0)negativeStreak++;else negativeStreak=0;
+  if(demotivationActive&&negativeStreak>=3){
+    const km=(at*dist()).toFixed(1),row=document.createElement('div');row.className='current';
+    row.innerHTML=`<span>${km} км</span><span>😞 Три отрицательных события подряд</span><b class="plus">DNF</b>`;
+    E('simLog').prepend(row);endSimulationDNF();return;
+  }
   if(e[1]==='Встреча с Мишей с топором'){
     const m=document.getElementById('mishaStartSendoff');
     if(m){
@@ -4415,7 +4466,7 @@ function fire(idx){
   const km=(at*dist()).toFixed(1);const row=document.createElement('div');row.className='current';row.innerHTML=`<span>${km} км</span><span>${e[0]} ${e[1]}</span><b class="${e[3]<0?'minus':'plus'}">${delta(e[3])}</b>`;E('simLog').prepend(row);
   E('simEventsCount').textContent=`${fired.size} / ${schedule.length}`;E('simPenalty').textContent=delta(penalty);updateResults();
   clearInterval(timer);timer=null;clearInterval(countTimer);countTimer=setInterval(()=>{left--;E('simPauseCountdown').textContent=Math.max(0,left);if(left<=0)clearInterval(countTimer)},1000);
-  pauseTimer=setTimeout(()=>{E('simEventCard')?.classList.remove('show'); E('simEventChip')?.classList.remove('show');E('simPauseBadge').classList.remove('show');E('simStatus').textContent='Гонка продолжается';run()},3000);
+  pauseTimer=setTimeout(()=>{E('simEventCard')?.classList.remove('show'); E('simEventChip')?.classList.remove('show');E('simPauseBadge').classList.remove('show');if(!simulationDNF){E('simStatus').textContent='Гонка продолжается';run()}},3000);
 }
 function draw(){
   const c=E('simCourseCanvas');if(!c)return;
@@ -4481,6 +4532,10 @@ function draw(){
     const k=dist()*i/4;ctx.fillText(`${k.toFixed(k<10?1:0)} км`,xOf(k),profileBottom+20);
   }
 
+  if(aidStations.length){
+    ctx.font='16px system-ui, Apple Color Emoji';ctx.textAlign='center';
+    aidStations.forEach(ak=>ctx.fillText('🍊',xOf(ak),Math.max(T+14,yOf(interpElevation(ak))-10)));
+  }
   // White marker shows where the runner currently is on the profile.
   const km=dist()*progress,x=xOf(km),ele=interpElevation(km),y=yOf(ele);
   ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,T-5);ctx.lineTo(x,profileBottom+2);ctx.stroke();
@@ -4592,9 +4647,55 @@ function updateResults(){
   const pm=Math.floor(pace/60),ps=Math.round(pace%60);
   const av=E('simAvgPace');if(av)av.textContent=pace?`${pm}:${String(ps).padStart(2,'0')} /км`:'—';
 }
+
+function maybePauseForFord(km){
+  const fs=fordState(km);
+  if(!fs.active || fs.nearest==null) return false;
+
+  // Don't pause repeatedly while runner remains inside the same crossing zone.
+  if(lastFordPauseKm!==null && Math.abs(lastFordPauseKm-fs.nearest)<0.18) return false;
+
+  lastFordPauseKm=fs.nearest;
+  fordPauseActive=true;
+
+  clearInterval(timer);
+  timer=null;
+
+  E('simStatus').textContent=`💦 Брод ${fs.nearest.toFixed(1)} км — переход через воду`;
+  E('simPauseBadge').classList.add('show');
+  let left=3;
+  E('simPauseCountdown').textContent=left;
+
+  clearInterval(countTimer);
+  countTimer=setInterval(()=>{
+    left--;
+    E('simPauseCountdown').textContent=Math.max(0,left);
+    draw();
+    if(left<=0) clearInterval(countTimer);
+  },1000);
+
+  // Water animation keeps rendering during the pause.
+  const waterAnim=setInterval(draw,120);
+
+  clearTimeout(pauseTimer);
+  pauseTimer=setTimeout(()=>{
+    clearInterval(waterAnim);
+    fordPauseActive=false;
+    E('simPauseBadge').classList.remove('show');
+    E('simStatus').textContent='Брод пройден. Гонка продолжается.';
+    run();
+  },3000);
+
+  return true;
+}
+
 function tick(){
   const b=baseSec();if(!b||!dist()){stop('Сначала загрузите GPX и рассчитайте прогноз гонки.');return}
-  const speed=+E('simSpeed').value||1;const realDuration=Math.max(28000,Math.min(75000,28000+dist()*450));progress=Math.min(1,progress+(120/realDuration)*speed);E('simProgress').style.width=(progress*100)+'%';E('simDistance').textContent=`${(progress*dist()).toFixed(1)} / ${dist().toFixed(1)} км`;updateResults();draw();
+  const speed=+E('simSpeed').value||1;const realDuration=Math.max(28000,Math.min(75000,28000+dist()*450));progress=Math.min(1,progress+(120/realDuration)*speed);E('simProgress').style.width=(progress*100)+'%';E('simDistance').textContent=`${(progress*dist()).toFixed(1)} / ${dist().toFixed(1)} км`;checkAidStation(progress*dist());updateResults();draw();
+
+  // Ford is a route event, not a random event: stop for exactly 3 seconds.
+  if(maybePauseForFord(progress*dist())) return;
+
   const idx=schedule.findIndex((x,i)=>!fired.has(i)&&progress>=x.at);if(idx>=0){fire(idx);return}
   if(progress>=1){
     clearInterval(timer);timer=null;
@@ -4608,7 +4709,7 @@ function tick(){
 }
 function run(){clearInterval(timer);timer=setInterval(tick,120);E('simStart').textContent='⏸';E('simStatus').textContent='Симуляция идёт по профилю загруженного трека.'}
 function stop(msg){clearInterval(timer);clearTimeout(pauseTimer);clearInterval(countTimer);timer=null;if(msg)E('simStatus').textContent=msg;E('simStart').textContent='▶'}
-function reset(){stop();progress=0;penalty=0;fired.clear();particles=[];simStartDate=firstTrackDate();makeSchedule();E('simProgress').style.width='0';E('simDistance').textContent=dist()?`0.0 / ${dist().toFixed(1)} км`:'—';E('simGain').textContent=gain()?`${Math.round(gain())} м`:'—';E('simEventsCount').textContent=`0 / ${schedule.length}`;E('simPenalty').textContent='+0:00';E('simLog').innerHTML='<div><span>—</span><span>События появятся случайно по ходу гонки</span><b>31 событие в пуле</b></div>';E('simEventCard')?.classList.remove('show'); E('simEventChip')?.classList.remove('show');E('simPauseBadge').classList.remove('show');E('simStart').textContent='▶';E('simStart').setAttribute('aria-label','Старт');E('simStart').title='Старт';E('simStart').disabled=!(baseSec()&&dist());updateResults();E('simStatus').textContent=baseSec()&&dist()?'Готово: профиль и время взяты из текущего прогноза.':'Сначала рассчитайте «Прогноз гонки» в разделе 2.';draw()}
+function reset(){stop();progress=0;penalty=0;fired.clear();particles=[];lastFordPauseKm=null;fordPauseActive=false;simStartDate=firstTrackDate();E('simDnfBanner')?.classList.remove('show');chooseAidStations();initStartConditions();makeSchedule();E('simProgress').style.width='0';E('simDistance').textContent=dist()?`0.0 / ${dist().toFixed(1)} км`:'—';E('simGain').textContent=gain()?`${Math.round(gain())} м`:'—';E('simEventsCount').textContent=`0 / ${schedule.length}`;E('simPenalty').textContent='+0:00';E('simLog').innerHTML='<div><span>—</span><span>События появятся случайно по ходу гонки</span><b>31 событие в пуле</b></div>';E('simEventCard')?.classList.remove('show'); E('simEventChip')?.classList.remove('show');E('simPauseBadge').classList.remove('show');E('simStart').textContent='▶';E('simStart').setAttribute('aria-label','Старт');E('simStart').title='Старт';E('simStart').disabled=!(baseSec()&&dist());updateResults();E('simStatus').textContent=baseSec()&&dist()?'Готово: профиль и время взяты из текущего прогноза.':'Сначала рассчитайте «Прогноз гонки» в разделе 2.';draw()}
 
 setInterval(()=>{const b=E('simStart');if(b&&!timer)b.disabled=!(baseSec()&&dist());},500);
 setInterval(()=>{if(document.querySelector('[data-tab="simulation"]')?.classList.contains('active')) draw();},120);
