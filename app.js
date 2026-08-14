@@ -965,7 +965,7 @@ function buildOverpassQuery(points){
   const pts=(points||[]).filter(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lon));
   if(!pts.length) return '[out:json][timeout:90];();out;';
 
-  // v0.0233: do NOT ask Overpass for one huge route bbox. On long/curvy tracks
+  // v0.0234: do NOT ask Overpass for one huge route bbox. On long/curvy tracks
   // that query was too heavy and all endpoints could time out, producing 0%.
   // Build several small boxes along the GPX corridor instead.
   const boxes=[];
@@ -1077,7 +1077,7 @@ function analyzeWaterCrossings(samples,elements=[]){
     return bestD<=maxKm?bestKm:NaN;
   }
 
-  // v0.0233: suppress false "city fords".
+  // v0.0234: suppress false "city fords".
   // If GPX follows an OSM road/paved way at the crossing, water geometry alone
   // is not enough: only an explicit OSM ford node can create a ford there.
   const roadWays=(elements||[]).filter(el=>{
@@ -1330,7 +1330,7 @@ function groupFordKmPoints(kms, maxGapKm=0.35){
       continue;
     }
 
-    // v0.0233: only nearby parts of the SAME water crossing are merged.
+    // v0.0234: only nearby parts of the SAME water crossing are merged.
     // 150 m is enough for braided channels / GPS jitter, while separate
     // crossings 200+ m apart remain separate.
     if(km-current.end<=maxGapKm){
@@ -1507,7 +1507,7 @@ async function analyzeMapOSM(){
   // analysis with the GPX itself. Surface/ford values remain unknown rather
   // than stopping the whole analysis.
   if(!data){
-    // v0.0233: if OSM is temporarily down, reuse ONLY a cache matching this GPX.
+    // v0.0234: if OSM is temporarily down, reuse ONLY a cache matching this GPX.
     try{
       const c=JSON.parse(localStorage.getItem('trailOSMElementsCache')||'null');
       const first=state.track?.[0], last=state.track?.[state.track.length-1];
@@ -1665,7 +1665,7 @@ function renderMapAnalysis(result){
   const {samples,summary,elements=[]}=result;
   const crossings=analyzeWaterCrossings(samples,elements);
 
-  // v0.0233: analyzeWaterCrossings already groups by OSM water object first,
+  // v0.0234: analyzeWaterCrossings already groups by OSM water object first,
   // then deduplicates only near-identical physical crossings.
   const bridgeKms=(crossings.bridges||[]).slice();
   const confirmedFordKms=(crossings.confirmed||[]).slice();
@@ -4603,7 +4603,7 @@ let randomEventAdjustmentSec=0;
 const activeEventCount=()=>{
   const hours=Math.max(0.1,baseSec()/3600);
 
-  // v0.0233 — event count by forecast duration:
+  // v0.0234 — event count by forecast duration:
   // ~1 h  -> exactly 3
   // ~2 h  -> 4–6
   // ~3 h  -> 5–7
@@ -4667,13 +4667,12 @@ function simMapAnalysis(){
 function updateSimulationSourceButtons(){
   const vb=E('simVirtual20Btn'), rb=E('simRealTrackBtn');
   if(vb){
-    const realSelected=simulationTrackMode==='real';
+    vb.disabled=false;
     vb.classList.toggle('active-source',simulationTrackMode==='virtual');
-    vb.disabled=realSelected;
   }
   if(rb){
-    rb.classList.toggle('active-source',simulationTrackMode==='real');
     rb.disabled=false;
+    rb.classList.toggle('active-source',simulationTrackMode==='real');
   }
 }
 function clearSimulationTrackChoice(){
@@ -4681,15 +4680,21 @@ function clearSimulationTrackChoice(){
   virtualSimTrack=null;
   updateSimulationSourceButtons();
   const s=E('simVirtual20Status');
-  if(s) s.textContent='Выберите виртуальный трек или реальный загруженный трек.';
+  if(s) s.textContent='Выберите виртуальный трек 20 км или реальный загруженный трек.';
 }
 function activateVirtualSimulationTrack(){
   const raw=[];
   const n=201;
   for(let i=0;i<n;i++){
     const km=20*i/(n-1);
-    const phase=(km%4)/4;
-    const ele=phase<0.5 ? 100+200*phase : 200-200*(phase-0.5);
+    let ele=100;
+    if(km<=3){
+      ele=100+(500/3)*km;
+    }else if(km<=7){
+      ele=600-(500/4)*(km-3);
+    }else{
+      ele=100;
+    }
     raw.push({km,ele,lat:55.75+km*0.00005,lon:37.60+km*0.00005});
   }
   virtualSimTrack={
@@ -4698,8 +4703,8 @@ function activateVirtualSimulationTrack(){
     totalSec:2*3600,
     track:raw,
     mapAnalysis:{
-      fordKms:[6.0,14.0],
-      confirmedFordKms:[6.0,14.0],
+      fordKms:[6.0],
+      confirmedFordKms:[6.0],
       likelyFordKms:[],
       bridgeKms:[]
     }
@@ -4707,7 +4712,7 @@ function activateVirtualSimulationTrack(){
   simulationTrackMode='virtual';
   updateSimulationSourceButtons();
   const s=E('simVirtual20Status');
-  if(s) s.textContent='✓ Выбран виртуальный трек 20 км · +500 м · 2 брода.';
+  if(s) s.textContent='✓ Выбран виртуальный трек: 20 км · +500 м · брод 6.0 км.';
   reset();
 }
 function activateRealSimulationTrack(){
@@ -4972,7 +4977,7 @@ function makeSchedule(){
 
   let balanced=shuffled(selected);
 
-  // v0.0233: each equipment-dependent event may occur at most once per race.
+  // v0.0234: each equipment-dependent event may occur at most once per race.
   // We still guarantee at least one equipment event, but do not repeat the same
   // injury/rain/heat/night event several times.
   const equipmentNames=['Поранился','Дождь','Жара','Ночь'];
@@ -4991,7 +4996,7 @@ function makeSchedule(){
     return replacementPool[0] || shuffled(events.filter(x=>x!==misha && !equipmentNames.includes(x?.[1])))[0] || ev;
   });
 
-  // v0.0233: Night/Heat depend on the same virtual time that controls the sky.
+  // v0.0234: Night/Heat depend on the same virtual time that controls the sky.
   // If a selected Night/Heat event has no compatible time slot, replace it
   // with another ordinary event instead of showing it against the wrong sky.
   const used=new Set();
@@ -5159,7 +5164,7 @@ function fire(idx){
       e[2]='Фонарика нет — в темноте потеряно 5 минут.';
     }
   }
-  // v0.0233: equipment events always show the actual equipment result in the popup.
+  // v0.0234: equipment events always show the actual equipment result in the popup.
   // A zero adjustment is intentional when the required item is present.
   if(e[1]==='Нашли аптечку'){
     equipmentState.medkit=true;
@@ -5192,7 +5197,7 @@ function fire(idx){
     }
   }
 
-  // v0.0233: explicit equipment result message for ALL equipment-dependent events.
+  // v0.0234: explicit equipment result message for ALL equipment-dependent events.
   let equipmentOutcomeText='';
   if(e[1]==='Поранился'){
     equipmentOutcomeText = equipmentState.medkit
@@ -5219,7 +5224,7 @@ function fire(idx){
   // Event sign convention:
   // positive event -> negative adjustment -> time is SUBTRACTED;
   // negative event -> positive adjustment -> time is ADDED.
-  // v0.0233: случайное событие меняет ТОЛЬКО время текущей симуляции.
+  // v0.0234: случайное событие меняет ТОЛЬКО время текущей симуляции.
   // Исходный прогноз raceForecast не изменяется.
   penalty+=timeAdjustmentSec;
   randomEventAdjustmentSec+=timeAdjustmentSec;
@@ -5254,7 +5259,7 @@ function fire(idx){
     }
   E('simEventDelta').className=timeAdjustmentSec<0?'positive':(timeAdjustmentSec>0?'negative':'neutral');E('simEventCard').classList.add('show');E('simPauseBadge').classList.add('show');
 
-  // v0.0233: mandatory equipment-dependent events stay on screen 3 seconds longer.
+  // v0.0234: mandatory equipment-dependent events stay on screen 3 seconds longer.
   // Normal event = 3 sec; injury/rain/heat/night = 6 sec.
   const mandatoryEquipmentEventNames=['Поранился','Дождь','Жара','Ночь'];
   const eventPauseSeconds=mandatoryEquipmentEventNames.includes(e[1]) ? 6 : 3;
@@ -5558,7 +5563,7 @@ setInterval(()=>{
 },500);
 setInterval(()=>{if(document.querySelector('[data-tab="simulation"]')?.classList.contains('active')) draw();},120);
 E('simStart').addEventListener('click',()=>{
-  // v0.0233: completed race = a NEW race.
+  // v0.0234: completed race = a NEW race.
   // Reset first, so the old equipment check can never carry over.
   if(progress>=1) reset();
 
@@ -5585,7 +5590,7 @@ E('simStart').addEventListener('click',()=>{
     return;
   }
 
-  // v0.0233: start animation is always a real 3-second start gate.
+  // v0.0234: start animation is always a real 3-second start gate.
   // Simulation speed (including 4×) cannot skip or outrun Misha.
   if(startingFresh){
     showMishaStartDirect();
