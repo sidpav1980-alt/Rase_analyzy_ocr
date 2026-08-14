@@ -287,7 +287,7 @@ $('installBtn').addEventListener('click', async () => {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=21310', {updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('./sw.js?v=227', {updateViaCache:'none'});
       await reg.update();
       let refreshing=false;
       navigator.serviceWorker.addEventListener('controllerchange',()=>{
@@ -962,7 +962,7 @@ function buildOverpassQuery(points){
   const pts=(points||[]).filter(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lon));
   if(!pts.length) return '[out:json][timeout:90];();out;';
 
-  // v0.0213: do NOT ask Overpass for one huge route bbox. On long/curvy tracks
+  // v0.0227: do NOT ask Overpass for one huge route bbox. On long/curvy tracks
   // that query was too heavy and all endpoints could time out, producing 0%.
   // Build several small boxes along the GPX corridor instead.
   const boxes=[];
@@ -1290,7 +1290,7 @@ function groupFordKmPoints(kms, maxGapKm=0.35){
       continue;
     }
 
-    // v0.0213: only nearby parts of the SAME water crossing are merged.
+    // v0.0227: only nearby parts of the SAME water crossing are merged.
     // 150 m is enough for braided channels / GPS jitter, while separate
     // crossings 200+ m apart remain separate.
     if(km-current.end<=maxGapKm){
@@ -1467,7 +1467,7 @@ async function analyzeMapOSM(){
   // analysis with the GPX itself. Surface/ford values remain unknown rather
   // than stopping the whole analysis.
   if(!data){
-    // v0.0213: if OSM is temporarily down, reuse ONLY a cache matching this GPX.
+    // v0.0227: if OSM is temporarily down, reuse ONLY a cache matching this GPX.
     try{
       const c=JSON.parse(localStorage.getItem('trailOSMElementsCache')||'null');
       const first=state.track?.[0], last=state.track?.[state.track.length-1];
@@ -1625,7 +1625,7 @@ function renderMapAnalysis(result){
   const {samples,summary,elements=[]}=result;
   const crossings=analyzeWaterCrossings(samples,elements);
 
-  // v0.0213: analyzeWaterCrossings already groups by OSM water object first,
+  // v0.0227: analyzeWaterCrossings already groups by OSM water object first,
   // then deduplicates only near-identical physical crossings.
   const bridgeKms=(crossings.bridges||[]).slice();
   const confirmedFordKms=(crossings.confirmed||[]).slice();
@@ -4391,6 +4391,10 @@ window.addEventListener('pageshow',()=>{
 // v0.59 profile-driven race simulation
 (()=>{
 const events=[
+  ['🩹','Нашли аптечку','По дороге нашли аптечку — теперь она есть до конца гонки.',0],
+  ['🔦','Нашли фонарик','По дороге нашли фонарик — теперь он есть до конца гонки.',0],
+  ['🌙','Ночь','Стемнело — результат зависит от наличия фонарика.',0],
+  ['🩸','Поранился','Нужно обработать травму.',0],
   ['🐻','Встреча с Мишей с топором','Миша подбодрил — ноги неожиданно побежали быстрее.',-300],
   ['😅','Слишком быстро на старте','Пришлось сбросить темп и восстановить дыхание.',120],
   ['📸','Остановились пофоткать','Вид оказался слишком красивым, чтобы пройти мимо.',600],
@@ -4399,7 +4403,8 @@ const events=[
   ['🍔','Зажрались на ПП','Пункт питания оказался подозрительно хорош.',420],
   ['🗺️','Сбились с трека','Пришлось вернуться к разметке.',360],
   ['😣','Свело ногу','Остановка, растяжка и осторожный рестарт.',240],
-  ['🌧️','Начался ливень','Покрытие стало скользким и медленным.',240],
+  ['🌧️','Дождь','Проверяем мембранку.',0],
+  ['☀️','Жара','Проверяем запас воды.',0],
   ['👟','Развязался шнурок','Короткая техническая остановка.',60],
   ['🪨','Споткнулись о камень','Ритм потерян, но падения удалось избежать.',90],
   ['🤳','Селфи с волонтёром','Память о гонке важнее пары минут.',120],
@@ -4544,13 +4549,21 @@ function maybeShowFirstPlaceAtFinish(){
 if(!E('simStart')) return;
 let timer=null,pauseTimer=null,countTimer=null,progress=0,penalty=0,fired=new Set(),schedule=[],particles=[],simStartDate=null;
 let aidStations=[],fatigueActive=false,luckActive=false,demotivationActive=false,negativeStreak=0,simulationDNF=false,lastAidIndex=-1;
+const equipmentState={
+  checked:false,
+  medkit:true,
+  water:true,
+  membrane:true,
+  flashlight:true
+};
+
 let randomEventAdjustmentSec=0;
 
 
 const activeEventCount=()=>{
   const hours=Math.max(0.1,baseSec()/3600);
 
-  // v0.0213 — event count by forecast duration:
+  // v0.0227 — event count by forecast duration:
   // ~1 h  -> exactly 3
   // ~2 h  -> 4–6
   // ~3 h  -> 5–7
@@ -4715,25 +4728,72 @@ function endSimulationDNF(){
 }
 
 
+
+function renderEquipmentState(){
+  const map=[
+    ['eqMedkit','medkit','🩹 Аптечка'],
+    ['eqWater','water','💧 Вода'],
+    ['eqMembrane','membrane','🧥 Мембранка'],
+    ['eqFlashlight','flashlight','🔦 Фонарик']
+  ];
+  for(const [id,key,label] of map){
+    const el=E(id); if(!el) continue;
+    if(!equipmentState.checked){
+      el.textContent=label+': ?'; el.className='';
+    }else if(equipmentState[key]){
+      el.textContent=label+': есть'; el.className='ok';
+    }else{
+      el.textContent=label+': НЕТ'; el.className='miss';
+    }
+  }
+}
+function checkEquipmentRandom(){
+  if(equipmentState.checked) return;
+  // 0, 1 or 2 missing items; never more than two.
+  const keys=['medkit','water','membrane','flashlight'];
+  const missingCount=Math.floor(Math.random()*3);
+  const shuffledKeys=shuffled(keys);
+  for(const key of keys) equipmentState[key]=true;
+  for(let i=0;i<missingCount;i++) equipmentState[shuffledKeys[i]]=false;
+  equipmentState.checked=true;
+  renderEquipmentState();
+  const equipmentBtn=E('equipmentCheckBtn');
+  if(equipmentBtn){
+    equipmentBtn.disabled=true;
+    equipmentBtn.textContent='Проверка пройдена';
+  }
+
+  const names={medkit:'аптечки',water:'воды',membrane:'мембранки',flashlight:'фонарика'};
+  const missing=keys.filter(k=>!equipmentState[k]);
+  const summary=E('equipmentCheckSummary');
+  const result=E('equipmentCheckResult');
+
+  if(!missing.length){
+    if(summary) summary.textContent='✅ Всё есть.';
+    if(result){result.className='equipment-check-result good';result.textContent='✅ Всё в порядке! Вся обязательная экипировка на месте.'}
+  }else{
+    const txt=missing.map(k=>names[k]).join(' и ');
+    if(summary) summary.textContent='⚠️ Не хватает: '+txt+'.';
+    if(result){result.className='equipment-check-result bad';result.textContent='⚠️ Проверка: не хватает '+txt+'.'}
+  }
+  E('equipmentCheckModal')?.classList.add('show');
+}
+function closeEquipmentModal(){
+  E('equipmentCheckModal')?.classList.remove('show');
+}
 function makeSchedule(){
-  const n=activeEventCount();
+  const n=Math.max(1,activeEventCount());
   const misha=events.find(e=>e[1]==='Встреча с Мишей с топором');
 
-  // Negative event = adds time. Positive event = saves time.
   const negatives=shuffled(events.filter(e=>e!==misha && e[3]>0));
   const positives=shuffled(events.filter(e=>e!==misha && e[3]<0));
   const neutral=shuffled(events.filter(e=>e!==misha && e[3]===0));
 
-  // v0.0213: balance the selected event pool as close to 50/50 as possible.
-  // For an odd number of events, the extra event is assigned randomly.
   let negNeed=Math.floor(n/2);
   let posNeed=Math.floor(n/2);
   if(n%2){
     if(Math.random()<.5) negNeed++; else posNeed++;
   }
-
-  // Luck remains meaningful, but no longer allows a run to become overwhelmingly negative.
-  // With luck, the odd extra slot prefers a positive event.
   if(luckActive && n%2){
     posNeed=Math.ceil(n/2);
     negNeed=Math.floor(n/2);
@@ -4743,41 +4803,122 @@ function makeSchedule(){
   selected.push(...negatives.slice(0,negNeed));
   selected.push(...positives.slice(0,posNeed));
 
-  // If one category is too small, fill from the other categories.
-  let remaining=n-selected.length;
-  if(remaining>0){
+  if(selected.length<n){
     const rest=shuffled([
       ...negatives.slice(negNeed),
       ...positives.slice(posNeed),
       ...neutral
     ]).filter(e=>!selected.includes(e));
-    selected.push(...rest.slice(0,remaining));
+    selected.push(...rest.slice(0,n-selected.length));
   }
 
-  // Misha remains rare. If he appears, replace a positive slot so the
-  // positive/negative balance is not shifted toward more negative events.
   if(misha && selected.length && Math.random()<.08){
-    const positiveIndexes=selected
-      .map((e,i)=>e[3]<0?i:-1)
-      .filter(i=>i>=0);
+    const positiveIndexes=selected.map((e,i)=>e[3]<0?i:-1).filter(i=>i>=0);
     const idx=positiveIndexes.length
       ? positiveIndexes[Math.floor(Math.random()*positiveIndexes.length)]
       : Math.floor(Math.random()*selected.length);
     selected[idx]=misha;
   }
 
-  // Shuffle event identities after balancing.
-  const balanced=shuffled(selected);
+  const total=Math.max(1,baseSec());
+  const count=Math.max(1,selected.length);
 
-  const total=Math.max(1,baseSec()),minGapSec=1800,times=[];
+  // Random event moments. No even distribution requirement.
+  const minGapSec=Math.min(900,Math.max(90,total/count*0.28));
+  const times=[];
   let attempts=0;
-  while(times.length<balanced.length&&attempts++<2000){
-    const t=total*(.06+Math.random()*.88);
-    if(times.every(x=>Math.abs(x-t)>=minGapSec))times.push(t);
+  while(times.length<count && attempts++<5000){
+    const t=total*(.05+Math.random()*.90);
+    if(times.every(x=>Math.abs(x-t)>=minGapSec)) times.push(t);
+  }
+  while(times.length<count){
+    let t=total*(.05+Math.random()*.90);
+    let guard=0;
+    while(times.some(x=>Math.abs(x-t)<Math.max(20,minGapSec*.35)) && guard++<300){
+      t=total*(.05+Math.random()*.90);
+    }
+    times.push(t);
+  }
+  times.sort((a,b)=>a-b);
+
+  let balanced=shuffled(selected);
+
+  // v0.0227: each equipment-dependent event may occur at most once per race.
+  // We still guarantee at least one equipment event, but do not repeat the same
+  // injury/rain/heat/night event several times.
+  const equipmentNames=['Поранился','Дождь','Жара','Ночь'];
+  const seenEquipment=new Set();
+  balanced=balanced.map(ev=>{
+    if(!equipmentNames.includes(ev?.[1])) return ev;
+    if(!seenEquipment.has(ev[1])){
+      seenEquipment.add(ev[1]);
+      return ev;
+    }
+    const replacementPool=shuffled(events.filter(x=>
+      x!==misha &&
+      !equipmentNames.includes(x?.[1]) &&
+      !balanced.includes(x)
+    ));
+    return replacementPool[0] || shuffled(events.filter(x=>x!==misha && !equipmentNames.includes(x?.[1])))[0] || ev;
+  });
+
+  // v0.0227: Night/Heat depend on the same virtual time that controls the sky.
+  // If a selected Night/Heat event has no compatible time slot, replace it
+  // with another ordinary event instead of showing it against the wrong sky.
+  const used=new Set();
+  const scheduleDraft=[];
+  for(const ev of balanced){
+    let compatible=times
+      .map((t,i)=>({t,i,p:t/total}))
+      .filter(x=>!used.has(x.i) && eventAllowedAtProgress(ev,x.p));
+
+    if(!compatible.length){
+      const fallbackPool=shuffled(events.filter(x=>
+        x!==misha &&
+        x[1]!=='Ночь' &&
+        x[1]!=='Жара'
+      ));
+      const replacement=fallbackPool.find(x=>
+        times.some((t,i)=>!used.has(i) && eventAllowedAtProgress(x,t/total))
+      );
+      if(replacement) ev.splice(0,ev.length,...replacement);
+      compatible=times.map((t,i)=>({t,i,p:t/total})).filter(x=>!used.has(x.i));
+    }
+
+    const slot=compatible[Math.floor(Math.random()*compatible.length)];
+    used.add(slot.i);
+    scheduleDraft.push({at:slot.p,e:ev});
   }
 
-  times.sort((a,b)=>a-b);
-  schedule=times.map((t,i)=>({at:t/total,e:balanced[i]}));
+  // Guarantee at least one equipment-related event that is valid for its time.
+  if(!scheduleDraft.some(x=>equipmentNames.includes(x.e?.[1]))){
+    const candidates=[];
+    for(const eventName of equipmentNames){
+      const ev=events.find(x=>x[1]===eventName);
+      if(!ev) continue;
+      for(let i=0;i<times.length;i++){
+        const p=times[i]/total;
+        if(eventAllowedAtProgress(ev,p)) candidates.push({ev,p});
+      }
+    }
+    // Injury/Rain are always valid, so this should always have options.
+    if(candidates.length){
+      const chosen=candidates[Math.floor(Math.random()*candidates.length)];
+      const idx=Math.floor(Math.random()*scheduleDraft.length);
+      scheduleDraft[idx]={at:scheduleDraft[idx].at,e:chosen.ev};
+    }
+  }
+
+  // Final repair for Night/Heat if a later replacement/guarantee ever conflicts.
+  for(let i=0;i<scheduleDraft.length;i++){
+    const item=scheduleDraft[i];
+    if(!eventAllowedAtProgress(item.e,item.at)){
+      const validEquipmentFallback=events.find(x=>x[1]==='Дождь') || events.find(x=>x[1]==='Поранился');
+      item.e=validEquipmentFallback || item.e;
+    }
+  }
+
+  schedule=scheduleDraft.sort((a,b)=>a.at-b.at);
 }
 function firstTrackDate(){
   const p=(state?.track||[]).find(x=>x?.time);
@@ -4813,18 +4954,143 @@ function skyInfo(){
   const twilight=(h>=5&&h<6)||(h>18.5&&h<=19.5);
   return {d,h,day,twilight,sunT};
 }
+function skyInfoAtProgress(p){
+  const sec=Math.max(0,baseSec()*Math.max(0,Math.min(1,p)));
+  const d=new Date(simStartDate.getTime()+sec*1000);
+  const h=d.getHours()+d.getMinutes()/60;
+  const sunrise=6,sunset=18.5;
+  const day=(h>=sunrise&&h<=sunset);
+  const twilight=(h>=5&&h<6)||(h>18.5&&h<=19.5);
+  return {d,h,day,twilight};
+}
+function eventAllowedAtProgress(e,p){
+  if(!e) return false;
+  const info=skyInfoAtProgress(p);
+  if(e[1]==='Ночь'){
+    // Only when the visual simulator is in night mode.
+    return !info.day && !info.twilight;
+  }
+  if(e[1]==='Жара'){
+    // Heat only during daytime, and preferably away from sunrise/sunset.
+    return info.day && info.h>=9 && info.h<=17.5;
+  }
+  return true;
+}
+
 function addParticles(icon){
   const n=3+Math.floor(Math.random()*5);
   for(let i=0;i<n;i++)particles.push({icon,life:1,x:0,y:0,vx:(Math.random()-.5)*2.5,vy:-1.2-Math.random()*2.1,rot:(Math.random()-.5)*.25,size:20+Math.random()*11});
 }
 function fire(idx){
-  const {at,e}=schedule[idx];
+  let {at,e}=schedule[idx];
   fired.add(idx);
-  const timeAdjustmentSec=Number(e[3])||0;
+
+  // Safety check: visual sky and time-dependent events must agree.
+  if(!eventAllowedAtProgress(e,at)){
+    const fallback=events.find(x=>x[1]==='Дождь') || events.find(x=>x[1]==='Поранился');
+    if(fallback){
+      e=fallback;
+      schedule[idx].e=e;
+    }
+  }
+  let timeAdjustmentSec=Number(e[3])||0;
+  if(e[1]==='Поранился'){
+    if(equipmentState.medkit){
+      timeAdjustmentSec=0;
+      e[2]='Есть аптечка — травму обработали сразу, время не потеряно.';
+    }else{
+      timeAdjustmentSec=300;
+      e[2]='Аптечки нет — потеряно 5 минут на решение проблемы.';
+    }
+  }
+  if(e[1]==='Дождь'){
+    if(equipmentState.membrane){
+      timeAdjustmentSec=0;
+      e[2]='Мембранка есть — дождь не дал штрафа по времени.';
+    }else{
+      timeAdjustmentSec=300;
+      e[2]='Мембранки нет — дождь добавил 5 минут.';
+    }
+  }
+  if(e[1]==='Жара'){
+    if(equipmentState.water){
+      timeAdjustmentSec=0;
+      e[2]='Вода есть — жару прошли без штрафа.';
+    }else{
+      timeAdjustmentSec=300;
+      e[2]='Воды нет — жара добавила 5 минут.';
+    }
+  }
+  if(e[1]==='Ночь'){
+    if(equipmentState.flashlight){
+      timeAdjustmentSec=0;
+      e[2]='Фонарик есть — ночь не замедлила гонку.';
+    }else{
+      timeAdjustmentSec=300;
+      e[2]='Фонарика нет — в темноте потеряно 5 минут.';
+    }
+  }
+  // v0.0227: equipment events always show the actual equipment result in the popup.
+  // A zero adjustment is intentional when the required item is present.
+  if(e[1]==='Нашли аптечку'){
+    equipmentState.medkit=true;
+    timeAdjustmentSec=0;
+    e[2]='Аптечка найдена — теперь она есть до конца этой гонки.';
+    renderEquipmentState();
+  }
+  if(e[1]==='Нашли фонарик'){
+    equipmentState.flashlight=true;
+    timeAdjustmentSec=0;
+    e[2]='Фонарик найден — теперь он есть до конца этой гонки.';
+    renderEquipmentState();
+  }
+  if(e[1]==='Дождь'){
+    if(equipmentState.membrane){
+      timeAdjustmentSec=0;
+      e[2]='Мембранка есть — дождь не добавил времени.';
+    }else{
+      timeAdjustmentSec=300;
+      e[2]='Мембранки нет — +5 минут к финишному времени.';
+    }
+  }
+  if(e[1]==='Жара'){
+    if(equipmentState.water){
+      timeAdjustmentSec=0;
+      e[2]='Вода есть — жара не добавила времени.';
+    }else{
+      timeAdjustmentSec=300;
+      e[2]='Воды нет — +5 минут к финишному времени.';
+    }
+  }
+
+  // v0.0227: explicit equipment result message for ALL equipment-dependent events.
+  let equipmentOutcomeText='';
+  if(e[1]==='Поранился'){
+    equipmentOutcomeText = equipmentState.medkit
+      ? '🩸 Поранился → аптечка есть → травма обработана → штраф 0:00'
+      : '🩸 Поранился → аптечки нет → штраф +5:00';
+  }else if(e[1]==='Дождь'){
+    equipmentOutcomeText = equipmentState.membrane
+      ? '🌧️ Дождь → мембранка есть → штраф 0:00'
+      : '🌧️ Дождь → мембранки нет → штраф +5:00';
+  }else if(e[1]==='Жара'){
+    equipmentOutcomeText = equipmentState.water
+      ? '☀️ Жара → вода есть → штраф 0:00'
+      : '☀️ Жара → воды нет → штраф +5:00';
+  }else if(e[1]==='Ночь'){
+    equipmentOutcomeText = equipmentState.flashlight
+      ? '🌙 Ночь → фонарик есть → штраф 0:00'
+      : '🌙 Ночь → фонарика нет → штраф +5:00';
+  }else if(e[1]==='Нашли аптечку'){
+    equipmentOutcomeText = '🩹 Нашли аптечку → аптечка добавлена в экипировку → штраф 0:00';
+  }else if(e[1]==='Нашли фонарик'){
+    equipmentOutcomeText = '🔦 Нашли фонарик → фонарик добавлен в экипировку → штраф 0:00';
+  }
+
   // Event sign convention:
   // positive event -> negative adjustment -> time is SUBTRACTED;
   // negative event -> positive adjustment -> time is ADDED.
-  // v0.0213: случайное событие меняет ТОЛЬКО время текущей симуляции.
+  // v0.0227: случайное событие меняет ТОЛЬКО время текущей симуляции.
   // Исходный прогноз raceForecast не изменяется.
   penalty+=timeAdjustmentSec;
   randomEventAdjustmentSec+=timeAdjustmentSec;
@@ -4845,18 +5111,21 @@ function fire(idx){
       setTimeout(()=>m.classList.remove('show'),3000);
     }
   }
-  E('simEventTitle').textContent=e[0]+' '+e[1];E('simEventText').textContent=e[2];E('simEventDelta').textContent=delta(e[3]);
+  E('simEventTitle').textContent=e[0]+' '+e[1];
+  E('simEventText').textContent=equipmentOutcomeText || e[2];
+  E('simEventDelta').textContent=delta(timeAdjustmentSec);
     const chip=E('simEventChip');
     if(chip){
       E('simEventChipIcon').textContent=e[0];
-      E('simEventChipTitle').textContent=e[1];
-      E('simEventChipDelta').textContent=delta(e[3]);
+      E('simEventChipTitle').textContent=equipmentOutcomeText || e[1];
+      E('simEventChipDelta').textContent=delta(timeAdjustmentSec);
       chip.classList.add('show');
       setTimeout(()=>chip.classList.remove('show'),3000);
     }
-  E('simEventDelta').className=e[3]<0?'positive':'negative';E('simEventCard').classList.add('show');E('simPauseBadge').classList.add('show');
+  E('simEventDelta').className=timeAdjustmentSec<0?'positive':(timeAdjustmentSec>0?'negative':'neutral');E('simEventCard').classList.add('show');E('simPauseBadge').classList.add('show');
   let left=3;E('simPauseCountdown').textContent=left;
-  const km=(at*dist()).toFixed(1);const row=document.createElement('div');row.className='current';row.innerHTML=`<span>${km} км</span><span>${e[0]} ${e[1]}</span><b class="${e[3]<0?'minus':'plus'}">${delta(e[3])}</b>`;E('simLog').prepend(row);
+  const km=(at*dist()).toFixed(1);const row=document.createElement('div');row.className='current';
+  row.innerHTML=`<span>${km} км</span><span>${equipmentOutcomeText || (e[0]+' '+e[1])}</span><b class="${timeAdjustmentSec<0?'minus':(timeAdjustmentSec>0?'plus':'zero')}">${delta(timeAdjustmentSec)}</b>`;E('simLog').prepend(row);
   E('simEventsCount').textContent=`${fired.size} / ${schedule.length}`;E('simPenalty').textContent=delta(penalty);updateResults();
   clearInterval(timer);timer=null;clearInterval(countTimer);countTimer=setInterval(()=>{left--;E('simPauseCountdown').textContent=Math.max(0,left);if(left<=0)clearInterval(countTimer)},1000);
   pauseTimer=setTimeout(()=>{E('simEventCard')?.classList.remove('show'); E('simEventChip')?.classList.remove('show');E('simPauseBadge').classList.remove('show');if(!simulationDNF){E('simStatus').textContent='Гонка продолжается';run()}},3000);
@@ -5124,7 +5393,18 @@ function tick(){
 }
 function run(){clearInterval(timer);timer=setInterval(tick,120);E('simStart').textContent='⏸';E('simStatus').textContent='Симуляция идёт по профилю загруженного трека.'}
 function stop(msg){clearInterval(timer);clearTimeout(pauseTimer);clearInterval(countTimer);timer=null;if(msg)E('simStatus').textContent=msg;E('simStart').textContent='▶'}
-function reset(){clearTimeout(window.__simStartGateTimer);stop();hideFirstPlaceOverlay();progress=0;penalty=0;randomEventAdjustmentSec=0;fired.clear();particles=[];lastFordPauseKm=null;fordPauseActive=false;fatigueStartVirtualSec=0;fatiguePenaltyAppliedSec=0;simStartDate=firstTrackDate();E('simDnfBanner')?.classList.remove('show');chooseAidStations();initStartConditions();makeSchedule();E('simProgress').style.width='0';E('simDistance').textContent=dist()?`0.0 / ${dist().toFixed(1)} км`:'—';E('simGain').textContent=gain()?`${Math.round(gain())} м`:'—';E('simEventsCount').textContent=`0 / ${schedule.length}`;E('simPenalty').textContent='+0:00';E('simLog').innerHTML='<div><span>—</span><span>События появятся случайно по ходу гонки</span><b>31 событие в пуле</b></div>';E('simEventCard')?.classList.remove('show'); E('simEventChip')?.classList.remove('show');E('simPauseBadge').classList.remove('show');E('simStart').textContent='▶';E('simStart').setAttribute('aria-label','Старт');E('simStart').title='Старт';E('simStart').disabled=!(baseSec()&&dist());updateResults();E('simStatus').textContent=baseSec()&&dist()?'Готово: профиль и время взяты из текущего прогноза.':'Сначала рассчитайте «Прогноз гонки» в разделе 2.';draw()}
+function reset(){
+  clearTimeout(window.__simStartGateTimer);stop();hideFirstPlaceOverlay();
+  equipmentState.checked=false;
+  equipmentState.medkit=true;
+  equipmentState.water=true;
+  equipmentState.membrane=true;
+  equipmentState.flashlight=true;
+  const equipmentBtn=E('equipmentCheckBtn');
+  if(equipmentBtn){equipmentBtn.disabled=false;equipmentBtn.textContent='Проверить';}
+  const equipmentSummary=E('equipmentCheckSummary');
+  if(equipmentSummary) equipmentSummary.textContent='Перед каждой новой гонкой нажмите «Проверить».';
+  renderEquipmentState();progress=0;penalty=0;randomEventAdjustmentSec=0;fired.clear();particles=[];lastFordPauseKm=null;fordPauseActive=false;fatigueStartVirtualSec=0;fatiguePenaltyAppliedSec=0;simStartDate=firstTrackDate();E('simDnfBanner')?.classList.remove('show');chooseAidStations();initStartConditions();makeSchedule();E('simProgress').style.width='0';E('simDistance').textContent=dist()?`0.0 / ${dist().toFixed(1)} км`:'—';E('simGain').textContent=gain()?`${Math.round(gain())} м`:'—';E('simEventsCount').textContent=`0 / ${schedule.length}`;E('simPenalty').textContent='+0:00';E('simLog').innerHTML='<div><span>—</span><span>События появятся случайно по ходу гонки</span><b>31 событие в пуле</b></div>';E('simEventCard')?.classList.remove('show'); E('simEventChip')?.classList.remove('show');E('simPauseBadge').classList.remove('show');E('simStart').textContent='▶';E('simStart').setAttribute('aria-label','Старт');E('simStart').title='Старт';E('simStart').disabled=!(baseSec()&&dist());updateResults();E('simStatus').textContent=baseSec()&&dist()?'Готово: профиль и время взяты из текущего прогноза.':'Сначала рассчитайте «Прогноз гонки» в разделе 2.';draw()}
 
 setInterval(()=>{
   const b=E('simStart');
@@ -5137,9 +5417,21 @@ setInterval(()=>{
 },500);
 setInterval(()=>{if(document.querySelector('[data-tab="simulation"]')?.classList.contains('active')) draw();},120);
 E('simStart').addEventListener('click',()=>{
+  // v0.0227: completed race = a NEW race.
+  // Reset first, so the old equipment check can never carry over.
+  if(progress>=1) reset();
+
   const startingFresh=(progress<=0);
 
-  if(progress>=1) reset();
+  if(startingFresh && !equipmentState.checked){
+    const msg='⚠️ Перед каждой гонкой пройдите проверку экипировки.';
+    E('simStatus').textContent=msg;
+    const summary=E('equipmentCheckSummary');
+    if(summary) summary.textContent=msg;
+    E('equipmentCheckBtn')?.scrollIntoView({behavior:'smooth',block:'center'});
+    return;
+  }
+
   if(!baseSec()||!dist()){reset();return}
 
   if(timer){
@@ -5152,7 +5444,7 @@ E('simStart').addEventListener('click',()=>{
     return;
   }
 
-  // v0.0213: start animation is always a real 3-second start gate.
+  // v0.0227: start animation is always a real 3-second start gate.
   // Simulation speed (including 4×) cannot skip or outrun Misha.
   if(startingFresh){
     showMishaStartDirect();
@@ -5174,6 +5466,14 @@ E('simStart').addEventListener('click',()=>{
     E('simStart').title='Пауза';
   }
 });
+
+E('equipmentCheckBtn')?.addEventListener('click',checkEquipmentRandom);
+E('equipmentCheckClose')?.addEventListener('click',closeEquipmentModal);
+E('equipmentCheckOk')?.addEventListener('click',closeEquipmentModal);
+E('equipmentCheckModal')?.addEventListener('click',(ev)=>{
+  if(ev.target===E('equipmentCheckModal')) closeEquipmentModal();
+});
+renderEquipmentState();
 E('simReset').addEventListener('click',reset);E('simSpeed').addEventListener('change',draw);window.addEventListener('resize',draw);
 // Keep simulation synced when user switches to tab 5 or recalculates forecast.
 document.querySelector('[data-tab="simulation"]')?.addEventListener('click',()=>setTimeout(reset,0));

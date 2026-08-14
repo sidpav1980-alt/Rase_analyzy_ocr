@@ -10,7 +10,7 @@
   <title>Прогноз и анализ трейловых гонок</title>
   <link rel="manifest" href="manifest.webmanifest?v=075">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=21310">
+  <link rel="stylesheet" href="styles.css?v=227">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynBv0TtP4JpC5dQF3Vqv2tLIbV0w=" crossorigin="">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
@@ -24,7 +24,7 @@
   width: 100%;
   flex-basis: 100%;
 }
-</style>
+#equipmentCheckBtn:disabled{opacity:.55;cursor:not-allowed}\n</style>
 
 <style>
 /* v0.09: реальный визуальный разделитель между кнопками прогноза */
@@ -172,7 +172,7 @@
 
 
 <style>
-/* v0.0213 — compact phone simulation */
+/* v0.0227 — compact phone simulation */
 .sim-profile-card{display:none!important}
 .sim-reference-shell{gap:10px!important}
 .sim-scene-title{
@@ -291,7 +291,7 @@
 </style>
 
 <style>
-/* v0.0213 — small event notification above the track profile */
+/* v0.0227 — small event notification above the track profile */
 #simEventCard{display:none!important}
 .sim-event-chip{
   position:absolute;
@@ -369,7 +369,7 @@
 </style>
 
 <style>
-/* v0.0213 — static route map, no zoom/pan */
+/* v0.0227 — static route map, no zoom/pan */
 .ford-leaflet-map,
 .sim-ford-map{
   touch-action:none!important;
@@ -384,7 +384,7 @@
 </style>
 
 <style>
-/* v0.0213: compact controls, nothing overlaps on iPhone */
+/* v0.0227: compact controls, nothing overlaps on iPhone */
 .sim-scene-controls{
   position:static!important;
   display:grid!important;
@@ -428,13 +428,13 @@
 </style>
 
 <style>
-/* v0.0213 */
+/* v0.0227 */
 .sim-fords-card{display:none!important}
 .sim-mid-grid{grid-template-columns:1fr!important}
 </style>
 
 <style>
-/* v0.0213 — map is shown in route analysis, hidden only in simulation */
+/* v0.0227 — map is shown in route analysis, hidden only in simulation */
 #route .ford-map-panel,
 [data-tabpanel="route"] .ford-map-panel,
 #tab-route .ford-map-panel{
@@ -454,7 +454,7 @@
 </style>
 
 <style>
-/* v0.0213 — guaranteed GPX scheme in Analysis map block */
+/* v0.0227 — guaranteed GPX scheme in Analysis map block */
 #mapAnalysisResults .ford-map-panel{
   display:block!important;
   visibility:visible!important;
@@ -483,7 +483,7 @@
 </style>
 
 <style>
-/* v0.0213 — analysis progress UI */
+/* v0.0227 — analysis progress UI */
 .map-analyze-running{
   margin-top:12px;padding:14px;border:1px solid #2a405d;border-radius:15px;
   background:#0b1727;display:grid;grid-template-columns:42px minmax(0,1fr);
@@ -571,9 +571,51 @@
 }
 </style>
 
+
+<style>
+.sim-equipment-card{
+  margin:0 0 12px;padding:12px;border:1px solid #263b55;border-radius:16px;
+  background:#091525
+}
+.sim-equipment-head{display:flex;gap:10px;align-items:center;justify-content:space-between}
+.sim-equipment-head b{display:block;font-size:18px;color:#f3f7fb}
+.sim-equipment-head span{display:block;margin-top:3px;font-size:12px;color:#93a4bb}
+#equipmentCheckBtn,#equipmentCheckOk{
+  border:0;border-radius:11px;background:#38bdf8;color:#06111e;font-weight:800;
+  padding:10px 15px;font-size:14px
+}
+.sim-equipment-items{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:10px}
+.sim-equipment-items span{
+  padding:8px 7px;border:1px solid #263b55;border-radius:10px;background:#0c1829;
+  font-size:12px;text-align:center;color:#c8d4e3
+}
+.sim-equipment-items .ok{border-color:#166534;color:#86efac}
+.sim-equipment-items .miss{border-color:#991b1b;color:#fca5a5}
+.sim-equipment-summary{margin-top:8px;font-size:12px;color:#93a4bb}
+.equipment-check-modal{
+  position:fixed;inset:0;z-index:100100;display:none;align-items:center;justify-content:center;
+  padding:18px;background:rgba(1,8,16,.72)
+}
+.equipment-check-modal.show{display:flex}
+.equipment-check-dialog{
+  position:relative;width:min(390px,92vw);padding:14px;border-radius:18px;
+  border:1px solid #34506d;background:#071525;box-shadow:0 18px 55px #000b;text-align:center
+}
+.equipment-check-dialog h3{margin:2px 34px 10px;font-size:20px}
+.equipment-check-dialog img{display:block;width:100%;max-height:245px;object-fit:cover;border-radius:13px}
+.equipment-check-result{margin:12px 0;font-size:15px;line-height:1.35}
+.equipment-check-result.good{color:#4ade80}.equipment-check-result.bad{color:#fbbf24}
+.equipment-check-close{position:absolute;right:9px;top:8px;border:0;background:transparent;color:#94a3b8;font-size:28px}
+@media(max-width:600px){
+  .sim-equipment-items{grid-template-columns:1fr 1fr}
+  .sim-equipment-head b{font-size:16px}
+  #equipmentCheckBtn{padding:9px 12px}
+}
+</style>
+
 </head>
 <body>
-<div class="app-version">v0.0213</div>
+<div class="app-version">v0.0227</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Прогноз и анализ трейловых гонок</div>
@@ -972,7 +1014,35 @@
       <div><span>ФИНИШНОЕ ВРЕМЯ</span><b id="simResultFinish">—</b><small id="simPenalty">Поправка: +0:00</small></div>
     </div>
 
-    <div class="sim-scene-card">
+    
+<div class="sim-equipment-card">
+  <div class="sim-equipment-head">
+    <div>
+      <b>Обязательная экипировка</b>
+      <span>Аптечка · вода · мембранка · фонарик</span>
+    </div>
+    <button id="equipmentCheckBtn" type="button">Проверить</button>
+  </div>
+  <div class="sim-equipment-items">
+    <span id="eqMedkit">🩹 Аптечка: ?</span>
+    <span id="eqWater">💧 Вода: ?</span>
+    <span id="eqMembrane">🧥 Мембранка: ?</span>
+    <span id="eqFlashlight">🔦 Фонарик: ?</span>
+  </div>
+  <div id="equipmentCheckSummary" class="sim-equipment-summary">Перед каждой новой гонкой нажмите «Проверить».</div>
+</div>
+
+<div id="equipmentCheckModal" class="equipment-check-modal" aria-hidden="true">
+  <div class="equipment-check-dialog">
+    <button id="equipmentCheckClose" class="equipment-check-close" type="button">×</button>
+    <h3>Проверка экипировки</h3>
+    <img src="equipment_check_fox_owl.png" alt="Лиса и сова проверяют снаряжение на столе">
+    <div id="equipmentCheckResult" class="equipment-check-result"></div>
+    <button id="equipmentCheckOk" type="button">Понятно</button>
+  </div>
+</div>
+
+<div class="sim-scene-card">
       <div class="sim-scene-title">СИМУЛЯЦИЯ ГОНКИ</div>
 <div id="simConditionBar" class="sim-condition-bar">
 <span id="simFatigueState">💪 без усталости</span>
@@ -1049,7 +1119,7 @@
     Модель является оценочной. Броды, погода, питание, состояние покрытия, самочувствие и другие факторы могут существенно повлиять на фактический результат. Расчёты носят исключительно информационно-ознакомительный характер, не являются гарантией результата или рекомендацией к действию. Автор не несёт ответственности за решения, принятые на основании расчётов приложения.
   </footer>
 
-  <script src="app.js?v=21310"></script>
+  <script src="app.js?v=227"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
