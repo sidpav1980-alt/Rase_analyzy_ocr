@@ -287,7 +287,7 @@ $('installBtn').addEventListener('click', async () => {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=088', {updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('./sw.js?v=089', {updateViaCache:'none'});
       await reg.update();
       let refreshing=false;
       navigator.serviceWorker.addEventListener('controllerchange',()=>{
@@ -372,7 +372,7 @@ function parseGPX(text){
   },120);
   document.getElementById('mishaStartSendoff')?.classList.remove('show');
   document.getElementById('mishaFinishWelcome')?.classList.remove('show');
-  // v0.88: a new GPX must never leave the previous route/map analysis on screen.
+  // v0.89: a new GPX must never leave the previous route/map analysis on screen.
   state.mapAnalysis=null;
   if(typeof fordLeafletMap!=='undefined' && fordLeafletMap){
     try{fordLeafletMap.remove()}catch(e){}
@@ -398,6 +398,14 @@ state.dist=total/1000;state.gain=gain;state.loss=loss;
   drawTrackProfiles();
   updateTraversalTimes();
   updateRaceForecastAvailability();
+  setTimeout(()=>{
+    try{
+      const box=$('mapAnalysisResults');
+      if(box) box.style.display='block';
+      ensureAnalysisTrackScheme();
+      drawFordScheme();
+    }catch(e){}
+  },120);
   // Repaint route even before OSM analysis: the red GPX line must always be visible.
   setTimeout(()=>{
     try{ renderSimFordMap(); }catch(e){ console.warn('simulation map redraw',e); }
@@ -1226,7 +1234,7 @@ async function analyzeMapOSM(){
 
   $('mapAnalyzeStatus').textContent='⏳ Отправляю запрос через серверный proxy…';
 
-  // v0.88: no second internal timer here.
+  // v0.89: no second internal timer here.
   // The map-analysis button owns the single hard 20 second timeout.
   let analysisTimedOut=false;
 
@@ -1849,23 +1857,30 @@ $('mapAnalyzeBtn')?.addEventListener('click',async ()=>{
   startMapAnalysisTimer();
 
   let timeoutId=null;
+  let slowTimer=null;
   let timedOut=false;
+
+  // v0.89:
+  // At 20 s we only warn the user; we no longer destroy the OSM request.
+  // Render and mobile networks can legitimately need a little longer.
+  slowTimer=setTimeout(()=>{
+    if($('mapAnalyzeStatus')){
+      $('mapAnalyzeStatus').textContent='⏳ Анализ занимает больше 20 секунд — продолжаю, чтобы не потерять результат…';
+    }
+  },20000);
 
   const timeoutPromise=new Promise((_,reject)=>{
     timeoutId=setTimeout(()=>{
       timedOut=true;
-
-      // invalidates the result of the running analyzeMapOSM()
-      mapAnalysisRunId++;
       try{
         if(mapAnalysisAbortController) mapAnalysisAbortController.abort();
       }catch(e){}
       mapAnalysisAbortController=null;
 
-      const e=new Error('MAP_HARD_TIMEOUT_20');
+      const e=new Error('MAP_HARD_TIMEOUT_45');
       e.name='TimeoutError';
       reject(e);
-    },20000);
+    },45000);
   });
 
   try{
@@ -1886,15 +1901,21 @@ $('mapAnalyzeBtn')?.addEventListener('click',async ()=>{
     setTimeout(()=>{p.style.display='none'},900);
   }catch(err){
     clearTimeout(timeoutId);
+    clearTimeout(slowTimer);
     stopMapAnalysisTimer();
     p.style.display='none';
     p.value=0;
 
-    if(timedOut || err?.name==='TimeoutError' || err?.message==='MAP_HARD_TIMEOUT_20'){
-      $('mapAnalyzeStatus').textContent='⚠️ Анализ остановлен: превышен лимит 20 секунд. Нажмите «Повторить анализ карты» или используйте прогноз без анализа.';
+    if(timedOut || err?.name==='TimeoutError' || err?.message==='MAP_HARD_TIMEOUT_45'){
+      $('mapAnalyzeStatus').textContent='⚠️ Анализ не успел завершиться за 45 секунд. Нажмите «Повторить анализ карты»; GPX и схема трека сохранены.';
       btn.disabled=false;
       btn.textContent='Повторить анализ карты';
       setActionState('mapAnalyzeBtn','ready');
+      try{
+        const box=$('mapAnalysisResults');
+        if(box) box.style.display='block';
+        forceDrawAnalysisScheme();
+      }catch(e){}
       restoreMapInfoNote();
       return;
     }
@@ -1908,6 +1929,7 @@ $('mapAnalyzeBtn')?.addEventListener('click',async ()=>{
     }
   }finally{
     clearTimeout(timeoutId);
+    clearTimeout(slowTimer);
     if(!timedOut){
       mapAnalysisAbortController=null;
       syncMapAnalyzeButton();
@@ -4122,7 +4144,7 @@ function setMovingTimeFieldFromOCR(value){
     if(m) seconds=Number(m[1])*60+Number(m[2]);
   }
 
-  // v0.88 lower field originally inherited a numeric "minutes" input.
+  // v0.89 lower field originally inherited a numeric "minutes" input.
   if(el.type==='number'){
     if(seconds!=null) el.value=(seconds/60).toFixed(2).replace(/\.00$/,'');
     else{
@@ -4361,7 +4383,7 @@ function initStartConditions(){
   simulationDNF=false;
   lastAidIndex=-1;
 
-  // v0.88: only one start state can appear, and only in 30% of simulations total.
+  // v0.89: only one start state can appear, and only in 30% of simulations total.
   if(Math.random()<0.30){
     const pick=Math.floor(Math.random()*3);
     if(pick===0){
@@ -4516,7 +4538,17 @@ function fire(idx){
   clearInterval(timer);timer=null;clearInterval(countTimer);countTimer=setInterval(()=>{left--;E('simPauseCountdown').textContent=Math.max(0,left);if(left<=0)clearInterval(countTimer)},1000);
   pauseTimer=setTimeout(()=>{E('simEventCard')?.classList.remove('show'); E('simEventChip')?.classList.remove('show');E('simPauseBadge').classList.remove('show');if(!simulationDNF){E('simStatus').textContent='Гонка продолжается';run()}},3000);
 }
+
+function syncSimulationPicture(){
+  const ph=E('simEmptyPicture');
+  if(!ph) return;
+  // Hide placeholder only when the real animated scene has enough data.
+  const ready=dist()>0 && Array.isArray(state?.track) && state.track.length>1;
+  ph.classList.toggle('hide',ready);
+}
+
 function draw(){
+  syncSimulationPicture();
   const c=E('simCourseCanvas');if(!c)return;
   const r=c.getBoundingClientRect(),dpr=window.devicePixelRatio||1,W=Math.max(320,r.width),H=Math.max(420,r.height||460);
   if(c.width!==Math.round(W*dpr)||c.height!==Math.round(H*dpr)){c.width=Math.round(W*dpr);c.height=Math.round(H*dpr)}
@@ -4973,16 +5005,6 @@ window.addEventListener('resize',()=>setTimeout(drawFordScheme,100));
 
 setInterval(()=>{if(document.getElementById('fordSchemeCanvas')) drawFordScheme();},2500);
 
-window.addEventListener('unhandledrejection',ev=>{
-  if(String(ev.reason?.message||ev.reason).includes('TIMEOUT_20S')){
-    ev.preventDefault();
-    const status=document.getElementById('mapAnalysisStatus')||document.querySelector('[data-map-status]');
-    if(status){status.textContent=mapAnalysisTimeoutMessage();status.style.color='#fbbf24';}
-    const btn=document.getElementById('analyzeMapBtn')||[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Анализ карты'));
-    if(btn){btn.disabled=false;btn.textContent='Повторить анализ карты';}
-  }
-});
-
 setInterval(()=>{if(document.querySelector('[data-tab="simulation"]')?.classList.contains('active')){}},250);
 
 document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{
@@ -5006,7 +5028,7 @@ document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{
 
 
 
-// v0.88 route map redraw
+// v0.89 route map redraw
 
 document.querySelectorAll('.tab').forEach(btn=>{
   btn.addEventListener('click',()=>{
