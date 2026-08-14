@@ -287,7 +287,7 @@ $('installBtn').addEventListener('click', async () => {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=101', {updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('./sw.js?v=104', {updateViaCache:'none'});
       await reg.update();
       let refreshing=false;
       navigator.serviceWorker.addEventListener('controllerchange',()=>{
@@ -410,20 +410,40 @@ function readFileIOS(file){
 }
 let selectedGPXFile=null;
 let mapAnalysisRunId=0;
+let currentMapAnalysisFetchController=null;
 
 function abortMapAnalysisForNewGpx(){
+  // Invalidate the old analysis result immediately.
   mapAnalysisRunId++;
-  // v1.01: analysis no longer uses AbortController. Do not reference the removed variable here.
+
+  // Abort the currently active network request right now instead of waiting
+  // for its per-source timeout.
+  try{
+    if(currentMapAnalysisFetchController){
+      currentMapAnalysisFetchController.abort();
+    }
+  }catch(e){}
+  currentMapAnalysisFetchController=null;
+
   stopMapAnalysisTimer();
+
   const p=$('mapAnalyzeProgress');
   if(p){ p.value=0; p.style.display='none'; }
+
+  const running=$('mapAnalyzeRunningCard');
+  if(running) running.style.display='none';
+
+  const retry=$('mapAnalyzeRetryText');
+  if(retry) retry.textContent='';
+
   const btn=$('mapAnalyzeBtn');
   if(btn){
     btn.disabled=true;
     setActionState('mapAnalyzeBtn','idle');
   }
+
   const status=$('mapAnalyzeStatus');
-  if(status) status.textContent='Анализ карты остановлен. Сначала обработайте новый GPX.';
+  if(status) status.textContent='⏹ Анализ карты остановлен: выбран новый GPX.';
 }
 
 
@@ -1223,70 +1243,143 @@ async function analyzeMapOSM(){
   if(!state.track || !state.track.length) throw new Error('Сначала обработайте GPX');
 
   const runId=++mapAnalysisRunId;
-const pts=sampleTrackPoints(220);
+  const pts=sampleTrackPoints(220);
   const query=buildOverpassQuery(pts);
 
-  $('mapAnalyzeStatus').textContent='⏳ Отправляю запрос через серверный proxy…';
+  const retryEl=document.getElementById('mapAnalyzeRetryText');
 
-  // v1.01: no hard timeout — analysis runs until the server responds.
-  let resp=null;
-  let data=null;
-  let attempt=0;
-
-  // No client timeout and no abort. If Render/proxy/Overpass has a temporary
-  // failure, keep retrying instead of terminating the analysis.
-  while(true){
-    attempt++;
-    const retryEl=document.getElementById('mapAnalyzeRetryText');
-    if(retryEl) retryEl.textContent=attempt>1 ? `Повторная попытка №${attempt}…` : '';
-
+  async function fetchWithLimit(url, options, ms=14000){
+    const controller=new AbortController();
+    currentMapAnalysisFetchController=controller;
+    const t=setTimeout(()=>controller.abort(),ms);
     try{
-      resp=await fetch('/api/osm',{
+      return await fetch(url,{...options,signal:controller.signal,cache:'no-store'});
+    }finally{
+      clearTimeout(t);
+      if(currentMapAnalysisFetchController===controller){
+        currentMapAnalysisFetchController=null;
+      }
+    }
+  }
+
+  let data=null;
+  const attempts=[
+    {
+      name:'серверный proxy',
+      url:'/api/osm',
+      options:{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({query}),
-        cache:'no-store'
-      });
+        body:JSON.stringify({query})
+      },
+      jsonBody:true
+    },
+    {
+      name:'Overpass 1',
+      url:'https://overpass-api.de/api/interpreter',
+      options:{
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},
+        body:'data='+encodeURIComponent(query)
+      }
+    },
+    {
+      name:'Overpass 2',
+      url:'https://overpass.kumi.systems/api/interpreter',
+      options:{
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},
+        body:'data='+encodeURIComponent(query)
+      }
+    }
+  ];
 
-      if(resp.ok){
-        data=await resp.json();
-        break;
+  for(let i=0;i<attempts.length;i++){
+    if(runId!==mapAnalysisRunId) throw new Error('Запущен новый анализ карты');
+
+    const a=attempts[i];
+    $('mapAnalyzeStatus').textContent=`⏳ Анализ карты: ${a.name}…`;
+    if(retryEl) retryEl.textContent=i ? `Резервный источник ${i}/${attempts.length-1}…` : '';
+
+    try{
+      const resp=await fetchWithLimit(a.url,a.options,14000);
+      if(!resp.ok){
+        let detail='';
+        try{
+          const er=await resp.clone().json();
+          detail=er.error||er.remark||'';
+        }catch(e){}
+        throw new Error(`HTTP ${resp.status}${detail?' · '+detail:''}`);
       }
 
-      let detail='';
-      try{
-        const er=await resp.clone().json();
-        detail=er.error||'';
-      }catch(e){}
-
-      $('mapAnalyzeStatus').textContent=
-        `⏳ Сервер временно ответил HTTP ${resp.status}${detail?' · '+detail:''}. Анализ не остановлен — повторяю…`;
+      data=await resp.json();
+      if(data && Array.isArray(data.elements)){
+        break;
+      }
+      throw new Error('Ответ не содержит OSM-данных');
     }catch(err){
-      $('mapAnalyzeStatus').textContent=
-        `⏳ Временная ошибка сети. Анализ не остановлен — повторяю…`;
-    }
+      // A new GPX was selected: terminate the old analysis quietly and immediately.
+      if(runId!==mapAnalysisRunId || err?.name==='AbortError' && currentMapAnalysisFetchController===null){
+        if(runId!==mapAnalysisRunId){
+          throw new Error('ANALYSIS_CANCELLED_BY_NEW_GPX');
+        }
+      }
 
-    await new Promise(r=>setTimeout(r,1800));
+      console.warn('OSM source failed:',a.name,err);
+      if(i<attempts.length-1){
+        $('mapAnalyzeStatus').textContent=`⏳ ${a.name} недоступен. Пробую резервный источник…`;
+        await new Promise(r=>setTimeout(r,500));
+      }
+    }
   }
-    normalizeFordData(data);
-    {
-      let rawFordKm=[];
-      if(Array.isArray(data.ford_kms)) rawFordKm=data.ford_kms;
-      else if(Array.isArray(data.fords)) rawFordKm=data.fords.map(f=>Number(f?.km)).filter(Number.isFinite);
 
-      const groupedFords=groupFordKmPoints(rawFordKm);
-      data.ford_groups=groupedFords;
-      data.ford_count=groupedFords.length;
-      data.ford_kms=groupedFords.map(g=>g.start);
-      data.ford_labels=groupedFords.map(g=>g.label);
-      const cEl=$('fordCount')||$('fordsCount')||$('ford-count');
-      if(cEl) cEl.textContent=String(data.ford_count);
-      const lEl=$('fordKms')||$('fordsKm')||$('fordKmList')||$('ford-kms');
-      if(lEl) lEl.textContent=data.ford_labels.length ? 'Броды на км: '+data.ford_labels.join(', ') : 'Броды на км: —';
-    }
+  // Do not hang forever. If all OSM sources are unavailable, complete the
+  // analysis with the GPX itself. Surface/ford values remain unknown rather
+  // than stopping the whole analysis.
+  if(!data){
+    const samples=pts.map(p=>({km:p.km,cls:'unknown'}));
+    const summary=summarizeSurfaceClasses(samples);
+    try{
+      localStorage.setItem('trailMapAnalysis',JSON.stringify({
+        routeDist:state.dist,
+        routeGain:state.gain,
+        savedAt:new Date().toISOString(),
+        samples,summary,
+        osmUnavailable:true
+      }));
+    }catch(e){}
+
+    return {
+      samples,
+      summary,
+      elements:[],
+      osmUnavailable:true
+    };
+  }
+
+  normalizeFordData(data);
+
+  {
+    let rawFordKm=[];
+    if(Array.isArray(data.ford_kms)) rawFordKm=data.ford_kms;
+    else if(Array.isArray(data.fords)) rawFordKm=data.fords.map(f=>Number(f?.km)).filter(Number.isFinite);
+
+    const groupedFords=groupFordKmPoints(rawFordKm);
+    data.ford_groups=groupedFords;
+    data.ford_count=groupedFords.length;
+    data.ford_kms=groupedFords.map(g=>g.start);
+    data.ford_labels=groupedFords.map(g=>g.label);
+
+    const cEl=$('fordCount')||$('fordsCount')||$('ford-count');
+    if(cEl) cEl.textContent=String(data.ford_count);
+
+    const lEl=$('fordKms')||$('fordsKm')||$('fordKmList')||$('ford-kms');
+    if(lEl) lEl.textContent=data.ford_labels.length
+      ? 'Броды на км: '+data.ford_labels.join(', ')
+      : 'Броды на км: —';
+  }
 
   const elements=data.elements||[];
-
   const samples=pts.map(p=>({km:p.km,cls:classifyPointFromOSM(p,elements)}));
   const summary=summarizeSurfaceClasses(samples);
 
@@ -1299,7 +1392,7 @@ const pts=sampleTrackPoints(220);
     }));
   }catch(e){}
 
-  return {samples,summary,elements};
+  return {samples,summary,elements,osmUnavailable:false};
 }
 
 let fordLeafletMap=null;
@@ -1449,7 +1542,9 @@ function renderMapAnalysis(result){
     ? 'Пересечение воды по мосту на км: '+bridgeKms.map(x=>x.toFixed(1)).join(', ')
     : 'По мосту: не обнаружено';
 
-  $('mapAnalysisNote').textContent=`OSM-классификация маршрута. Неизвестно: ${(100-summary.coverage).toFixed(0)}%. Данные зависят от полноты разметки OpenStreetMap.`;
+  $('mapAnalysisNote').textContent=result?.osmUnavailable
+    ? 'OSM-серверы временно недоступны. Профиль GPX сохранён; повторите анализ позже для покрытия и бродов.'
+    : `OSM-классификация маршрута. Неизвестно: ${(100-summary.coverage).toFixed(0)}%. Данные зависят от полноты разметки OpenStreetMap.`;
   drawSurfaceStrip(samples);
   requestAnimationFrame(()=>drawFordScheme());
 }
@@ -1848,7 +1943,7 @@ const btn=$('mapAnalyzeBtn'), p=$('mapAnalyzeProgress');
   const runningCard=$('mapAnalyzeRunningCard');
   if(runningCard) runningCard.style.display='grid';
   const rt=$('mapAnalyzeRunningTitle'); if(rt) rt.textContent='Анализ карты запущен…';
-  const rtxt=$('mapAnalyzeRunningText'); if(rtxt) rtxt.textContent='Пожалуйста, подождите. Идёт полный анализ профиля, покрытия, троп и бродов.';
+  const rtxt=$('mapAnalyzeRunningText'); if(rtxt) rtxt.textContent='Пожалуйста, подождите. Проверяю OSM и резервные источники; если они недоступны, GPX-анализ всё равно завершится.';
   const rr=$('mapAnalyzeRetryText'); if(rr) rr.textContent='';
   startMapAnalysisTimer();
 
@@ -1859,7 +1954,9 @@ const btn=$('mapAnalyzeBtn'), p=$('mapAnalyzeProgress');
     renderMapAnalysis(result); setTimeout(()=>{try{drawFordScheme();renderFordMap();}catch(e){}},120);
     p.value=100;
     stopMapAnalysisTimer();
-    $('mapAnalyzeStatus').textContent='✓ Анализ карты завершён.';
+    $('mapAnalyzeStatus').textContent=result?.osmUnavailable
+      ? '⚠️ GPX проанализирован. OSM сейчас недоступен — покрытие и броды не определены.'
+      : '✓ Анализ карты завершён.';
     if($('mapAnalyzeRunningCard')) $('mapAnalyzeRunningCard').style.display='none';
     setActionState('mapAnalyzeBtn','success');
     setTimeout(()=>{p.style.display='none'},900);
@@ -1867,7 +1964,12 @@ const btn=$('mapAnalyzeBtn'), p=$('mapAnalyzeProgress');
     stopMapAnalysisTimer();
     p.style.display='none';
     p.value=0;
-    $('mapAnalyzeStatus').textContent='✕ Ошибка анализа карты: '+(err.message||String(err));
+    if(err?.message==='ANALYSIS_CANCELLED_BY_NEW_GPX'){
+      $('mapAnalyzeStatus').textContent='⏹ Анализ карты остановлен: выбран новый GPX.';
+      setActionState('mapAnalyzeBtn','idle');
+    }else{
+      $('mapAnalyzeStatus').textContent='✕ Ошибка анализа карты: '+(err.message||String(err));
+    }
     if($('mapAnalyzeRunningCard')) $('mapAnalyzeRunningCard').style.display='none';
     setActionState('mapAnalyzeBtn','error');
   }finally{
@@ -4174,7 +4276,7 @@ const events=[
   ['🧃','Гель открылся в рюкзаке','Спасательная операция липких запасов.',105],
   ['🫠','Засосало в грязь','Кроссовок остался с вами, но не сразу.',150],
   ['🌬️','Попутный ветер','Несколько открытых километров прошли легче.',-75],
-  ['🦫','Бобр сделал плотину','Пришлось искать обход и разбираться с новой гидротехнической обстановкой.',1800],
+  ['🦫','Бобр сделал плотину','Пришлось искать обход и разбираться с новой гидротехнической обстановкой.',300],
   ['🧠','Идеально разложились','Не форсировали начало и отыграли на второй половине.',-120]
 ];
 
@@ -4267,26 +4369,31 @@ let aidStations=[],fatigueActive=false,luckActive=false,demotivationActive=false
 const activeEventCount=()=>{
   const hours=Math.max(0.1,baseSec()/3600);
 
-  // v0.66: за одну симуляцию используется только небольшая случайная часть пула.
-  // Чем дольше гонка, тем больше событий, но никогда не все.
-  let minEvents=0,maxEvents=1;
-  if(hours<1){minEvents=0;maxEvents=1;}
-  else if(hours<2){minEvents=1;maxEvents=1;}
-  else if(hours<4){minEvents=1;maxEvents=3;}
-  else if(hours<6){minEvents=2;maxEvents=4;}
-  else if(hours<10){minEvents=3;maxEvents=6;}
-  else if(hours<15){minEvents=5;maxEvents=8;}
-  else {minEvents=6;maxEvents=10;}
+  // v1.04:
+  // Short races stay sparse.
+  // From 2 hours onward use about 1.2 events/hour minimum,
+  // while NEVER exceeding 2 events/hour.
+  let minEvents=0;
+  let maxEvents=Math.floor(hours*2);
 
-  // Жёстко не чаще 2 событий в час и не больше 10 за всю гонку.
+  if(hours<1){
+    minEvents=0;
+    maxEvents=Math.min(1,maxEvents);
+  }else if(hours<2){
+    minEvents=1;
+    maxEvents=Math.max(1,maxEvents);
+  }else{
+    minEvents=Math.ceil(hours*1.2);
+  }
+
+  // Hard rule requested by user: maximum 2 random events per race hour.
   const hardCap=Math.max(0,Math.floor(hours*2));
-  maxEvents=Math.min(maxEvents,hardCap,10,Math.max(0,events.length-1));
+  maxEvents=Math.min(maxEvents,hardCap,Math.max(0,events.length-1));
   minEvents=Math.min(minEvents,maxEvents);
 
   if(maxEvents<=0) return 0;
   return minEvents + Math.floor(Math.random()*(maxEvents-minEvents+1));
 };
-
 function dist(){return Number(state?.dist||0)}
 function gain(){return Number(state?.gain||0)}
 function baseSec(){return Number(state?.raceForecast?.totalSec||0)}
@@ -4427,7 +4534,7 @@ function makeSchedule(){
   const positives=shuffled(events.filter(e=>e!==misha && e[3]<0));
   const neutral=shuffled(events.filter(e=>e!==misha && e[3]===0));
 
-  // v1.01: balance the selected event pool as close to 50/50 as possible.
+  // v1.04: balance the selected event pool as close to 50/50 as possible.
   // For an odd number of events, the extra event is assigned randomly.
   let negNeed=Math.floor(n/2);
   let posNeed=Math.floor(n/2);
@@ -4823,7 +4930,7 @@ E('simStart').addEventListener('click',()=>{
     return;
   }
 
-  // v1.01: start animation is always a real 3-second start gate.
+  // v1.04: start animation is always a real 3-second start gate.
   // Simulation speed (including 4×) cannot skip or outrun Misha.
   if(startingFresh){
     showMishaStartDirect();
