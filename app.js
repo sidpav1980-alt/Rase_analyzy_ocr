@@ -287,7 +287,7 @@ $('installBtn').addEventListener('click', async () => {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=108', {updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('./sw.js?v=109', {updateViaCache:'none'});
       await reg.update();
       let refreshing=false;
       navigator.serviceWorker.addEventListener('controllerchange',()=>{
@@ -962,7 +962,7 @@ function buildOverpassQuery(points){
   const pts=(points||[]).filter(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lon));
   if(!pts.length) return '[out:json][timeout:90];();out;';
 
-  // v1.08: do NOT ask Overpass for one huge route bbox. On long/curvy tracks
+  // v1.09: do NOT ask Overpass for one huge route bbox. On long/curvy tracks
   // that query was too heavy and all endpoints could time out, producing 0%.
   // Build several small boxes along the GPX corridor instead.
   const boxes=[];
@@ -1188,12 +1188,12 @@ function analyzeWaterCrossings(samples,elements=[]){
   }
 
   // Second pass: merge duplicated representations of the same physical ford.
-  // Different OSM objects are only merged when they are very close (<=180 m).
+  // Different OSM objects are merged when their crossings are within 300 m.
   objectCrossings.sort((a,b)=>a.km-b.km);
   const physical=[];
   for(const c of objectCrossings){
     const prev=physical[physical.length-1];
-    if(prev && c.km-prev.km<=0.18){
+    if(prev && c.km-prev.km<=0.30){
       const n=prev.count||1;
       prev.km=(prev.km*n+c.km)/(n+1);
       prev.start=Math.min(prev.start,c.start);
@@ -1274,7 +1274,7 @@ function drawSurfaceStrip(samples){
 
 
 
-function groupFordKmPoints(kms, maxGapKm=0.15){
+function groupFordKmPoints(kms, maxGapKm=0.30){
   const pts=(Array.isArray(kms)?kms:[])
     .map(Number)
     .filter(Number.isFinite)
@@ -1289,7 +1289,7 @@ function groupFordKmPoints(kms, maxGapKm=0.15){
       continue;
     }
 
-    // v1.08: only nearby parts of the SAME water crossing are merged.
+    // v1.09: only nearby parts of the SAME water crossing are merged.
     // 150 m is enough for braided channels / GPS jitter, while separate
     // crossings 200+ m apart remain separate.
     if(km-current.end<=maxGapKm){
@@ -1323,7 +1323,7 @@ function removeBridgeCrossings(kms, bridgeKms, radiusKm=0.08){
 }
 
 function groupedFordStarts(kms, bridgeKms=[]){
-  return groupFordKmPoints(removeBridgeCrossings(kms,bridgeKms),0.15)
+  return groupFordKmPoints(removeBridgeCrossings(kms,bridgeKms),0.30)
     .map(g=>g.start);
 }
 function filterFordCandidatesClient(fords){
@@ -1337,7 +1337,7 @@ function filterFordCandidatesClient(fords){
     .filter(f=>Number.isFinite(Number(f?.km)))
     .sort((a,b)=>Number(a.km)-Number(b.km));
 
-  const groups=groupFordKmPoints(arr.map(f=>Number(f.km)),0.15);
+  const groups=groupFordKmPoints(arr.map(f=>Number(f.km)),0.30);
 
   return groups.map(g=>({
     km:g.start,
@@ -1466,7 +1466,7 @@ async function analyzeMapOSM(){
   // analysis with the GPX itself. Surface/ford values remain unknown rather
   // than stopping the whole analysis.
   if(!data){
-    // v1.08: if OSM is temporarily down, reuse ONLY a cache matching this GPX.
+    // v1.09: if OSM is temporarily down, reuse ONLY a cache matching this GPX.
     try{
       const c=JSON.parse(localStorage.getItem('trailOSMElementsCache')||'null');
       const first=state.track?.[0], last=state.track?.[state.track.length-1];
@@ -1507,7 +1507,7 @@ async function analyzeMapOSM(){
     if(Array.isArray(data.ford_kms)) rawFordKm=data.ford_kms;
     else if(Array.isArray(data.fords)) rawFordKm=data.fords.map(f=>Number(f?.km)).filter(Number.isFinite);
 
-    const groupedFords=groupFordKmPoints(rawFordKm,0.15);
+    const groupedFords=groupFordKmPoints(rawFordKm,0.30);
     data.ford_groups=groupedFords;
     data.ford_count=groupedFords.length;
     data.ford_kms=groupedFords.map(g=>g.start);
@@ -1624,7 +1624,7 @@ function renderMapAnalysis(result){
   const {samples,summary,elements=[]}=result;
   const crossings=analyzeWaterCrossings(samples,elements);
 
-  // v1.08: analyzeWaterCrossings already groups by OSM water object first,
+  // v1.09: analyzeWaterCrossings already groups by OSM water object first,
   // then deduplicates only near-identical physical crossings.
   const bridgeKms=(crossings.bridges||[]).slice();
   const confirmedFordKms=(crossings.confirmed||[]).slice();
@@ -1688,7 +1688,7 @@ function renderMapAnalysis(result){
 
   $('mapAnalysisNote').textContent=result?.osmUnavailable
     ? 'OSM-серверы временно недоступны. Профиль GPX сохранён; повторите анализ позже для покрытия и бродов.'
-    : `OSM-классификация маршрута. Броды группируются по одному OSM-водному объекту; рукава одной реки объединяются, мосты исключаются. Неизвестно: ${(100-summary.coverage).toFixed(0)}%.`;
+    : `OSM-классификация маршрута. Броды в пределах 300 м объединяются в один; рукава одной реки также объединяются, мосты исключаются. Неизвестно: ${(100-summary.coverage).toFixed(0)}%.`;
   drawSurfaceStrip(samples);
   requestAnimationFrame(()=>drawFordScheme());
 }
@@ -4513,7 +4513,7 @@ let aidStations=[],fatigueActive=false,luckActive=false,demotivationActive=false
 const activeEventCount=()=>{
   const hours=Math.max(0.1,baseSec()/3600);
 
-  // v1.08:
+  // v1.09:
   // Short races stay sparse.
   // From 2 hours onward use about 1.2 events/hour minimum,
   // while NEVER exceeding 2 events/hour.
@@ -4678,7 +4678,7 @@ function makeSchedule(){
   const positives=shuffled(events.filter(e=>e!==misha && e[3]<0));
   const neutral=shuffled(events.filter(e=>e!==misha && e[3]===0));
 
-  // v1.08: balance the selected event pool as close to 50/50 as possible.
+  // v1.09: balance the selected event pool as close to 50/50 as possible.
   // For an odd number of events, the extra event is assigned randomly.
   let negNeed=Math.floor(n/2);
   let posNeed=Math.floor(n/2);
@@ -5074,7 +5074,7 @@ E('simStart').addEventListener('click',()=>{
     return;
   }
 
-  // v1.08: start animation is always a real 3-second start gate.
+  // v1.09: start animation is always a real 3-second start gate.
   // Simulation speed (including 4×) cannot skip or outrun Misha.
   if(startingFresh){
     showMishaStartDirect();
