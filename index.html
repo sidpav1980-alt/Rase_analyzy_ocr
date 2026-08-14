@@ -8,9 +8,10 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Trail Analyzer">
   <title>Прогноз и анализ трейловых гонок</title>
-  <link rel="manifest" href="manifest.webmanifest?v=063">
+  <link rel="manifest" href="manifest.webmanifest?v=069">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=063">
+  <link rel="stylesheet" href="styles.css?v=069">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynBv0TtP4JpC5dQF3Vqv2tLIbV0w=" crossorigin="">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
 <style>
@@ -59,9 +60,119 @@
 #simCourseCanvas{height:460px!important;min-height:460px}
 @media(max-width:640px){#simCourseCanvas{height:500px!important;min-height:500px}}
 </style>
+<style>
+.ford-map-layout{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(280px,42%);
+  gap:14px;
+  align-items:start;
+  margin-top:12px;
+}
+.ford-map-panel{
+  border:1px solid #334155;
+  border-radius:14px;
+  padding:10px;
+  background:#0b1423;
+}
+.ford-map-title{
+  font-weight:700;
+  margin-bottom:8px;
+}
+.ford-leaflet-map{
+  width:100%;
+  height:340px;
+  border-radius:10px;
+  overflow:hidden;
+  background:#0f172a;
+}
+.ford-map-caption{margin-top:8px;line-height:1.4}
+@media(max-width:800px){
+  .ford-map-layout{grid-template-columns:1fr}
+  .ford-leaflet-map{height:300px}
+}
+</style>
+
+<style>
+.sim-reference-shell{display:grid;gap:14px}
+.sim-top-metrics{
+  display:grid;grid-template-columns:repeat(6,minmax(0,1fr));
+  border:1px solid #263650;border-radius:16px;overflow:hidden;background:#091422
+}
+.sim-top-metrics>div{padding:14px 16px;border-right:1px solid #1e2c40}
+.sim-top-metrics>div:last-child{border-right:0}
+.sim-top-metrics span,.sim-top-metrics small{display:block;color:#94a3b8;font-size:12px}
+.sim-top-metrics b{display:block;font-size:24px;margin-top:4px;color:#f8fafc}
+.sim-top-metrics>div:nth-child(1) b,.sim-top-metrics>div:nth-child(2) b,.sim-top-metrics>div:nth-child(4) b{color:#4ade80}
+.sim-top-metrics>div:nth-child(6) b,.sim-top-metrics>div:nth-child(6) small{color:#fbbf24}
+
+.sim-profile-card,.sim-events-card,.sim-fords-card,.sim-scene-card,.sim-result-box,.sim-reset-box{
+  border:1px solid #263650;border-radius:16px;background:#091422;overflow:hidden
+}
+#simProfileCanvas{display:block;width:100%;height:260px}
+.sim-mid-grid{display:grid;grid-template-columns:1fr 1.15fr;gap:14px}
+.sim-events-card{padding:16px}
+.sim-events-card h3,.sim-fords-info h3,.sim-result-box h3{margin:0 0 12px}
+.sim-log{display:grid;gap:0}
+.sim-log>div{display:grid;grid-template-columns:90px 1fr 70px;gap:10px;padding:10px 0;border-bottom:1px solid #1e2c40;align-items:center}
+.sim-log>div.current{border:1px solid #f59e0b;border-radius:10px;padding:10px;margin:3px 0}
+.sim-log b.plus,.sim-log b.negative{color:#f87171}
+.sim-log b.minus,.sim-log b.positive{color:#4ade80}
+.sim-events-note{margin-top:12px;line-height:1.5}
+
+.sim-fords-card{display:grid;grid-template-columns:.8fr 1.25fr;min-height:330px}
+.sim-fords-info{padding:16px}
+.sim-ford-lines{display:grid;gap:8px;color:#cbd5e1;font-size:14px}
+.sim-ford-summary{margin:18px 0;line-height:1.5}
+.sim-ford-map{min-height:330px;background:#0f172a}
+.sim-ford-map .leaflet-container{width:100%;height:100%}
+
+.sim-scene-card{position:relative}
+.sim-scene-title{position:absolute;left:16px;top:12px;z-index:3;font-weight:800;color:#f8fafc}
+#simCourseCanvas{display:block;width:100%;height:430px!important;min-height:430px!important}
+.event-card{
+  position:absolute;left:31%;top:38px;z-index:5;width:min(360px,44%);
+  padding:16px 18px;border:1px solid #f59e0b;border-radius:14px;background:rgba(5,12,22,.94);
+  opacity:0;pointer-events:none;transform:translateY(-8px);transition:.18s
+}
+.event-card.show{opacity:1;transform:translateY(0)}
+.event-card b,.event-card span,.event-card strong{display:block}
+.event-card b{font-size:18px}.event-card span{margin:8px 0;color:#cbd5e1}.event-card strong{color:#f59e0b}
+.sim-pause-badge{
+  position:absolute;right:16px;top:16px;z-index:6;background:rgba(2,6,23,.9);
+  border:1px solid #475569;border-radius:999px;padding:7px 10px;color:#f8fafc;display:none
+}
+.sim-pause-badge.show{display:block}
+.sim-scene-controls{
+  display:grid;grid-template-columns:58px 1fr auto;gap:14px;align-items:center;
+  padding:12px 14px;border-top:1px solid #263650;background:#08111d
+}
+.sim-icon-btn{width:48px;height:48px;border-radius:10px;border:1px solid #334155;background:#0f172a;color:#f8fafc;font-size:20px}
+.sim-control-center{display:grid;gap:8px}
+.sim-progress{height:8px;background:#1e293b;border-radius:999px;overflow:hidden}
+.sim-progress i{display:block;height:100%;width:0;background:#38bdf8}
+.sim-speed-wrap{display:flex;align-items:center;gap:10px}
+.sim-speed-wrap select{min-width:90px}
+
+.sim-bottom-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.sim-result-box{padding:16px}
+.sim-result-box>div{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1e2c40}
+.sim-result-total b{color:#fbbf24}
+.sim-reset-box{padding:16px;display:flex;align-items:center;justify-content:flex-end}
+
+@media(max-width:900px){
+  .sim-top-metrics{grid-template-columns:repeat(2,1fr)}
+  .sim-top-metrics>div{border-bottom:1px solid #1e2c40}
+  .sim-mid-grid{grid-template-columns:1fr}
+  .sim-fords-card{grid-template-columns:1fr}
+  .sim-ford-map{height:320px}
+  .sim-bottom-grid{grid-template-columns:1fr}
+  .event-card{left:18px;right:18px;width:auto;top:44px}
+}
+</style>
+
 </head>
 <body>
-<div class="app-version">v0.63</div>
+<div class="app-version">v0.69</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Прогноз и анализ трейловых гонок</div>
@@ -139,8 +250,17 @@
             <div><span>Грунт</span><b id="dirtMetric">—</b></div>
             <div><span>Асфальт</span><b id="pavedMetric">—</b></div>
           </div>
-          <div class="muted" id="mapAnalysisNote">—</div>
-          <canvas id="surfaceStripCanvas" height="90"></canvas>
+          <div class="ford-map-layout">
+  <div class="ford-map-info">
+    <div class="muted" id="mapAnalysisNote">—</div>
+    <canvas id="surfaceStripCanvas" height="90"></canvas>
+  </div>
+  <div class="ford-map-panel">
+    <div class="ford-map-title">Карта бродов</div>
+    <div id="fordLeafletMap" class="ford-leaflet-map"></div>
+    <div class="muted ford-map-caption">Красная линия — трек гонки. 🌊 — вероятный брод, ✅ — подтверждённый OSM, 🌉 — пересечение по мосту.</div>
+  </div>
+</div>
           <div class="surface-legend" aria-label="Легенда покрытия">
             <div><span class="surface-swatch sw-wetland"></span><span>Болото / wetland</span></div>
             <div><span class="surface-swatch sw-water"></span><span>Вода / река</span></div>
@@ -427,62 +547,98 @@
       </div>
     </section>
 
-    <section id="simulation" class="tabpanel">
-      <div class="card sim-card">
-        <h2>Симуляция гонки</h2>
-        <p class="muted">Виртуальное прохождение загруженной трассы по реальному профилю GPX. Базовое время берётся из «Прогноза гонки», а случайные события могут как добавить, так и отнять время.</p>
-        <p class="sim-requirement"><b>⚠️ Для запуска симуляции сначала рассчитайте «Прогноз гонки» в разделе 2.</b></p>
+    
+<section id="simulation" class="tabpanel">
+  <div class="sim-reference-shell">
+    <div class="sim-top-metrics">
+      <div><span>Дистанция</span><b id="simDistance">—</b></div>
+      <div><span>Набор высоты</span><b id="simGain">—</b></div>
+      <div><span>Время (прогноз)</span><b id="simTime">—</b><small id="simBaseTime"></small></div>
+      <div><span>Темп (средний)</span><b id="simAvgPace">—</b></div>
+      <div><span>События (этой симуляции)</span><b id="simEventsCount">0 / 0</b></div>
+      <div><span>Виртуальное время</span><b id="simResultFinish">—</b><small id="simPenalty">+0:00</small></div>
+    </div>
 
-        <div class="sim-metrics">
-          <div><span>Дистанция</span><b id="simDistance">0.0 км</b></div>
-          <div><span>Набор высоты</span><b id="simGain">—</b></div>
-          <div><span>Время</span><b id="simTime">—</b><small id="simBaseTime" class="muted"></small></div>
-          <div><span>События</span><b id="simEventsCount">0 / 30</b></div>
-          <div><span>Поправка</span><b id="simPenalty">+0:00</b></div>
-        </div>
+    <div class="sim-profile-card">
+      <canvas id="simProfileCanvas" aria-label="Профиль трассы и текущее положение"></canvas>
+    </div>
 
-        <div class="sim-course-wrap">
-          <canvas id="simCourseCanvas"></canvas>
-          <div class="sim-pause-badge" id="simPauseBadge">😲 Событие! Пауза <b id="simPauseCountdown">3</b> сек.</div>
-          <div class="event-card" id="simEventCard">
-            <b id="simEventTitle"></b>
-            <span id="simEventText"></span>
-            <strong id="simEventDelta"></strong>
+    <div class="sim-mid-grid">
+      <div class="sim-events-card">
+        <h3>Случайные события <span class="muted">(этой симуляции)</span></h3>
+        <div id="simLog" class="sim-log"></div>
+        <div class="muted sim-events-note">События выбираются случайно из общего пула. Чем дольше гонка — тем их больше, но не чаще двух раз за час.</div>
+      </div>
+
+      <div class="sim-fords-card">
+        <div class="sim-fords-info">
+          <h3>Профиль трассы</h3>
+          <div class="sim-ford-lines">
+            <div>🌊 Подтверждённый брод (OSM)</div>
+            <div>💦 Вероятный брод (по пересечению)</div>
+            <div>🌉 Пересечение по мосту</div>
           </div>
+          <div class="sim-ford-summary" id="simFordSummary">Броды на трассе: —</div>
+          <div class="muted">Нажмите на маркер, чтобы увидеть километраж.</div>
         </div>
+        <div id="simFordMap" class="sim-ford-map"></div>
+      </div>
+    </div>
 
-        <div class="sim-controls">
-          <button id="simStart" class="primary">▶ Симуляция гонки</button>
-          <button id="simReset" class="secondary">↻ Сбросить</button>
-          <label class="sim-speed-label">Скорость
-            <select id="simSpeed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select>
-          </label>
+    <div class="sim-scene-card">
+      <div class="sim-scene-title">СИМУЛЯЦИЯ ГОНКИ</div>
+      <canvas id="simCourseCanvas"></canvas>
+
+      <div id="simEventCard" class="event-card">
+        <b id="simEventTitle"></b>
+        <span id="simEventText"></span>
+        <strong id="simEventDelta"></strong>
+      </div>
+
+      <div id="simPauseBadge" class="sim-pause-badge">
+        😲 Событие! Пауза <b id="simPauseCountdown">3</b> сек.
+      </div>
+
+      <div class="sim-scene-controls">
+        <button id="simStart" class="sim-icon-btn">▶</button>
+        <div class="sim-control-center">
+          <div id="simStatus">⚠️ Для запуска сначала рассчитайте «Прогноз гонки» в разделе 2.</div>
+          <div class="sim-progress"><i id="simProgress"></i></div>
         </div>
-        <div class="sim-progress"><i id="simProgress"></i></div>
-        <p id="simStatus" class="muted">Сначала рассчитайте «Прогноз гонки» в разделе 2.</p>
-
-        <div class="sim-summary-grid">
-          <div>
-            <h3>Случайные события</h3>
-            <div id="simLog" class="sim-log"></div>
-          </div>
-          <div class="sim-result-box">
-            <h3>Итоги симуляции</h3>
-            <div><span>Базовый прогноз</span><b id="simResultBase">—</b></div>
-            <div><span>Поправка событий</span><b id="simResultDelta">+0:00</b></div>
-            <div><span>Пройдено</span><b id="simResultProgress">0%</b></div>
-            <div class="sim-result-total"><span>Виртуальное время</span><b id="simResultFinish">—</b></div>
-          </div>
+        <div class="sim-speed-wrap">
+          <span>Скорость</span>
+          <select id="simSpeed">
+            <option value="1">1×</option>
+            <option value="2">2×</option>
+            <option value="4">4×</option>
+          </select>
         </div>
       </div>
-    </section>
+    </div>
+
+    <div class="sim-bottom-grid">
+      <div class="sim-result-box">
+        <h3>Итоги симуляции</h3>
+        <div><span>Базовый прогноз</span><b id="simResultBase">—</b></div>
+        <div><span>Поправка событий</span><b id="simResultDelta">+0:00</b></div>
+        <div><span>Пройдено</span><b id="simResultProgress">0%</b></div>
+        <div class="sim-result-total"><span>Виртуальное время</span><b id="simResultFinishMirror">—</b></div>
+      </div>
+      <div class="sim-reset-box">
+        <button id="simReset" class="secondary">↻ Сбросить симуляцию</button>
+      </div>
+    </div>
+  </div>
+</section>
+
   </main>
 
   <footer>
     Модель является оценочной. Броды, погода, питание, состояние покрытия, самочувствие и другие факторы могут существенно повлиять на фактический результат. Расчёты носят исключительно информационно-ознакомительный характер, не являются гарантией результата или рекомендацией к действию. Автор не несёт ответственности за решения, принятые на основании расчётов приложения.
   </footer>
 
-  <script src="app.js?v=063"></script>
+  <script src="app.js?v=069"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 </body>
 </html>
