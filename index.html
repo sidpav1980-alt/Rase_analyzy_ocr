@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Trail Analyzer">
   <title>Прогноз и анализ трейловых гонок</title>
-  <link rel="manifest" href="manifest.webmanifest?v=075">
+  <link rel="manifest" href="manifest.webmanifest?v=088">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=075">
+  <link rel="stylesheet" href="styles.css?v=088">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynBv0TtP4JpC5dQF3Vqv2tLIbV0w=" crossorigin="">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
@@ -172,7 +172,7 @@
 
 
 <style>
-/* v0.87 — compact phone simulation */
+/* v0.88 — compact phone simulation */
 .sim-profile-card{display:none!important}
 .sim-reference-shell{gap:10px!important}
 .sim-scene-title{
@@ -291,7 +291,7 @@
 </style>
 
 <style>
-/* v0.87 — small event notification above the track profile */
+/* v0.88 — small event notification above the track profile */
 #simEventCard{display:none!important}
 .sim-event-chip{
   position:absolute;
@@ -369,7 +369,7 @@
 </style>
 
 <style>
-/* v0.87 — static route map, no zoom/pan */
+/* v0.88 — static route map, no zoom/pan */
 .ford-leaflet-map,
 .sim-ford-map{
   touch-action:none!important;
@@ -384,7 +384,7 @@
 </style>
 
 <style>
-/* v0.87: compact controls, nothing overlaps on iPhone */
+/* v0.88: compact controls, nothing overlaps on iPhone */
 .sim-scene-controls{
   position:static!important;
   display:grid!important;
@@ -428,13 +428,13 @@
 </style>
 
 <style>
-/* v0.87 */
+/* v0.88 */
 .sim-fords-card{display:none!important}
 .sim-mid-grid{grid-template-columns:1fr!important}
 </style>
 
 <style>
-/* v0.87 — map is shown in route analysis, hidden only in simulation */
+/* v0.88 — map is shown in route analysis, hidden only in simulation */
 #route .ford-map-panel,
 [data-tabpanel="route"] .ford-map-panel,
 #tab-route .ford-map-panel{
@@ -454,7 +454,7 @@
 </style>
 
 <style>
-/* v0.87 — guaranteed GPX scheme in Analysis map block */
+/* v0.88 — guaranteed GPX scheme in Analysis map block */
 #mapAnalysisResults .ford-map-panel{
   display:block!important;
   visibility:visible!important;
@@ -483,7 +483,7 @@
 </style>
 
 <style>
-/* v0.87 */
+/* v0.88 */
 .sim-scene-controls{
   grid-template-columns:44px 44px minmax(0,1fr) 76px!important;
 }
@@ -496,7 +496,7 @@
 </style>
 
 <style>
-/* v0.87 — Misha is a simulation start/finish mascot, not an event card */
+/* v0.88 — Misha is a simulation start/finish mascot, not an event card */
 .misha-direct{
   position:absolute; inset:0; z-index:45; display:none;
   align-items:center; justify-content:center; pointer-events:none;
@@ -519,9 +519,79 @@
  .misha-direct-title{font-size:29px}
 }
 </style>
+
+<style>
+/* v0.88 — definitive mobile simulation controls */
+.sim-scene-controls{
+  position:static!important;
+  display:grid!important;
+  grid-template-columns:48px 48px minmax(0,1fr) 72px!important;
+  grid-template-areas:"play reset status speed"!important;
+  gap:8px!important;
+  align-items:center!important;
+  padding:10px!important;
+  min-height:62px!important;
+}
+#simStart{grid-area:play!important}
+#simResetTop{grid-area:reset!important}
+.sim-control-center{grid-area:status!important;min-width:0!important}
+.sim-speed-wrap{grid-area:speed!important;min-width:0!important}
+#simStatus{
+  font-size:12px!important;line-height:1.3!important;
+  white-space:normal!important;word-break:normal!important;overflow-wrap:break-word!important;
+}
+.sim-icon-btn{
+  width:44px!important;height:44px!important;min-width:44px!important;
+  padding:0!important;font-size:20px!important;line-height:1!important;
+}
+.sim-speed-wrap span{display:none!important}
+.sim-speed-wrap select{width:100%!important;min-width:0!important;padding:6px!important}
+@media(max-width:600px){
+  .sim-scene-controls{
+    grid-template-columns:44px 44px minmax(0,1fr)!important;
+    grid-template-areas:
+      "play reset status"
+      "speed speed speed"!important;
+  }
+  .sim-speed-wrap{
+    display:grid!important;grid-template-columns:1fr!important;
+  }
+}
+</style>
+
+<style>
+/* v0.88 — route-analysis GPX scheme must be visible on phone */
+#mapAnalysisResults .ford-map-layout{
+  display:grid!important;
+  grid-template-columns:1fr!important;
+  gap:10px!important;
+}
+#mapAnalysisResults .ford-map-panel{
+  display:block!important;
+  width:100%!important;
+  min-height:300px!important;
+  padding:8px!important;
+  border:1px solid #2a3a54!important;
+  border-radius:14px!important;
+  background:#081321!important;
+}
+#mapAnalysisResults #fordSchemeCanvas{
+  display:block!important;
+  width:100%!important;
+  height:300px!important;
+  min-height:300px!important;
+  background:#081321!important;
+}
+#mapAnalysisResults #fordLeafletMap{display:none!important}
+#mapAnalysisResults .ford-map-title{
+  display:block!important;
+  margin-bottom:7px!important;
+  font-weight:700!important;
+}
+</style>
 </head>
 <body>
-<div class="app-version">v0.87</div>
+<div class="app-version">v0.88</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Прогноз и анализ трейловых гонок</div>
@@ -981,7 +1051,7 @@
     Модель является оценочной. Броды, погода, питание, состояние покрытия, самочувствие и другие факторы могут существенно повлиять на фактический результат. Расчёты носят исключительно информационно-ознакомительный характер, не являются гарантией результата или рекомендацией к действию. Автор не несёт ответственности за решения, принятые на основании расчётов приложения.
   </footer>
 
-  <script src="app.js?v=075"></script>
+  <script src="app.js?v=088"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
