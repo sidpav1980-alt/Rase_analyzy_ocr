@@ -287,7 +287,7 @@ $('installBtn').addEventListener('click', async () => {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=075', {updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('./sw.js?v=101', {updateViaCache:'none'});
       await reg.update();
       let refreshing=false;
       navigator.serviceWorker.addEventListener('controllerchange',()=>{
@@ -372,7 +372,7 @@ function parseGPX(text){
   },120);
   document.getElementById('mishaStartSendoff')?.classList.remove('show');
   document.getElementById('mishaFinishWelcome')?.classList.remove('show');
-  // v0.85: a new GPX must never leave the previous route/map analysis on screen.
+  // v0.97: a new GPX must never leave the previous route/map analysis on screen.
   state.mapAnalysis=null;
   if(typeof fordLeafletMap!=='undefined' && fordLeafletMap){
     try{fordLeafletMap.remove()}catch(e){}
@@ -409,15 +409,11 @@ function readFileIOS(file){
   });
 }
 let selectedGPXFile=null;
-let mapAnalysisAbortController=null;
 let mapAnalysisRunId=0;
 
 function abortMapAnalysisForNewGpx(){
   mapAnalysisRunId++;
-  if(mapAnalysisAbortController){
-    try{ mapAnalysisAbortController.abort(); }catch(e){}
-    mapAnalysisAbortController=null;
-  }
+  // v1.01: analysis no longer uses AbortController. Do not reference the removed variable here.
   stopMapAnalysisTimer();
   const p=$('mapAnalyzeProgress');
   if(p){ p.value=0; p.style.display='none'; }
@@ -434,7 +430,7 @@ function abortMapAnalysisForNewGpx(){
 $('basePace').addEventListener('change',()=>{ if(state.track&&state.track.length) drawTrackProfiles(); });
 window.addEventListener('resize',()=>{ if(state.track&&state.track.length) drawTrackProfiles(); });
 
-$('gpxFile').addEventListener('change', e=>{
+function handleGpxFileSelected(e){
   abortMapAnalysisForNewGpx();
   invalidateRaceForecast();
   state.hasElevation=false;
@@ -445,7 +441,7 @@ $('gpxFile').addEventListener('change', e=>{
   if($('raceForecastRange')) $('raceForecastRange').textContent='—';
 
   clearResultForecast();
-  selectedGPXFile=e.currentTarget.files&&e.currentTarget.files[0] ? e.currentTarget.files[0] : null;
+  selectedGPXFile=(e?.target?.files&&e.target.files[0]) || (e?.currentTarget?.files&&e.currentTarget.files[0]) || null;
   state.mapAnalysis=null;
   state.mapAnalysisReadyForCurrentGpx=false;
   resetMapAnalysisForNewGPX();
@@ -464,7 +460,18 @@ $('gpxFile').addEventListener('change', e=>{
   $('gpxLoadBtn').textContent='⏳ Загрузка GPX…';
   setActionState('gpxLoadBtn','working');
   setTimeout(()=>$('gpxLoadBtn').click(),0);
-});
+}
+
+let __lastGpxSelectionSig='';
+function dispatchGpxSelection(e){
+  const f=e?.target?.files?.[0] || e?.currentTarget?.files?.[0] || null;
+  const sig=f ? `${f.name}|${f.size}|${f.lastModified}` : '';
+  if(sig && sig===__lastGpxSelectionSig) return;
+  __lastGpxSelectionSig=sig;
+  handleGpxFileSelected(e);
+}
+$('gpxFile').addEventListener('change',dispatchGpxSelection);
+$('gpxFile').addEventListener('input',dispatchGpxSelection);
 
 $('gpxLoadBtn').addEventListener('click',async ()=>{
   abortMapAnalysisForNewGpx();
@@ -490,6 +497,7 @@ $('gpxLoadBtn').addEventListener('click',async ()=>{
       : '⚠ GPX обработан: '+state.dist.toFixed(1)+' км. В файле нет данных высоты — профиль высоты, набор и сброс не рассчитываются.';
     syncMapAnalyzeButton(); restoreMapInfoNote();
     btn.textContent='✓ GPX загружен';
+    $('gpxName').innerHTML='<span id="gpxCheck" class="file-check selected">✓</span> Загружен: '+selectedGPXFile.name;
     setActionState('gpxLoadBtn','success');
     setTimeout(()=>{prog.style.display='none';},1200);
   }catch(err){
@@ -934,7 +942,7 @@ function buildOverpassQuery(points){
   const lats=points.map(p=>p.lat), lons=points.map(p=>p.lon);
   const pad=0.01;
   const s=Math.min(...lats)-pad, n=Math.max(...lats)+pad, w=Math.min(...lons)-pad, e=Math.max(...lons)+pad;
-  return `[out:json][timeout:30];
+  return `[out:json][timeout:120];
 (
   way["natural"="wetland"](${s},${w},${n},${e});
   way["natural"="water"](${s},${w},${n},${e});
@@ -1215,55 +1223,51 @@ async function analyzeMapOSM(){
   if(!state.track || !state.track.length) throw new Error('Сначала обработайте GPX');
 
   const runId=++mapAnalysisRunId;
-  if(mapAnalysisAbortController){
-    try{ mapAnalysisAbortController.abort(); }catch(e){}
-  }
-  mapAnalysisAbortController=new AbortController();
-  const controller=mapAnalysisAbortController;
-
-  const pts=sampleTrackPoints(220);
+const pts=sampleTrackPoints(220);
   const query=buildOverpassQuery(pts);
 
   $('mapAnalyzeStatus').textContent='⏳ Отправляю запрос через серверный proxy…';
 
-  // v0.85: no second internal timer here.
-  // The map-analysis button owns the single hard 20 second timeout.
-  let analysisTimedOut=false;
+  // v1.01: no hard timeout — analysis runs until the server responds.
+  let resp=null;
+  let data=null;
+  let attempt=0;
 
-  const resp=await fetch('/api/osm',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({query}),
-    signal:controller.signal,
-    cache:'no-store'
-  });
+  // No client timeout and no abort. If Render/proxy/Overpass has a temporary
+  // failure, keep retrying instead of terminating the analysis.
+  while(true){
+    attempt++;
+    const retryEl=document.getElementById('mapAnalyzeRetryText');
+    if(retryEl) retryEl.textContent=attempt>1 ? `Повторная попытка №${attempt}…` : '';
 
-  if(runId!==mapAnalysisRunId || controller.signal.aborted){
-    const err=new Error(analysisTimedOut
-      ? 'Анализ карты остановлен: превышено 20 секунд'
-      : 'Анализ карты остановлен');
-    err.name=analysisTimedOut?'TimeoutError':'AbortError';
-    throw err;
-  }
-
-  if(!resp.ok){
-    let detail='';
     try{
-      const e=await resp.json();
-      detail=e.error||'';
-    }catch(e){}
-    throw new Error('Proxy HTTP '+resp.status+(detail?' · '+detail:''));
-  }
+      resp=await fetch('/api/osm',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({query}),
+        cache:'no-store'
+      });
 
-  const data=await resp.json();
-  if(runId!==mapAnalysisRunId || controller.signal.aborted){
-    const err=new Error(analysisTimedOut
-      ? 'Анализ карты остановлен: превышено 20 секунд'
-      : 'Анализ карты остановлен');
-    err.name=analysisTimedOut?'TimeoutError':'AbortError';
-    throw err;
+      if(resp.ok){
+        data=await resp.json();
+        break;
+      }
+
+      let detail='';
+      try{
+        const er=await resp.clone().json();
+        detail=er.error||'';
+      }catch(e){}
+
+      $('mapAnalyzeStatus').textContent=
+        `⏳ Сервер временно ответил HTTP ${resp.status}${detail?' · '+detail:''}. Анализ не остановлен — повторяю…`;
+    }catch(err){
+      $('mapAnalyzeStatus').textContent=
+        `⏳ Временная ошибка сети. Анализ не остановлен — повторяю…`;
+    }
+
+    await new Promise(r=>setTimeout(r,1800));
   }
-  mapAnalysisAbortController=null;
     normalizeFordData(data);
     {
       let rawFordKm=[];
@@ -1829,12 +1833,7 @@ function threat(delta){
 }
 
 $('mapAnalyzeBtn')?.addEventListener('click',async ()=>{
-  if(navigator.onLine===false){
-    $('mapAnalyzeStatus').textContent='Офлайн: анализ карты требует интернет.';
-    return;
-  }
-
-  const btn=$('mapAnalyzeBtn'), p=$('mapAnalyzeProgress');
+const btn=$('mapAnalyzeBtn'), p=$('mapAnalyzeProgress');
   if(!state.track || !state.track.length){
     $('mapAnalyzeStatus').textContent='✕ Сначала обработайте GPX.';
     setActionState('mapAnalyzeBtn','error');
@@ -1845,74 +1844,35 @@ $('mapAnalyzeBtn')?.addEventListener('click',async ()=>{
   setActionState('mapAnalyzeBtn','working');
   p.style.display='block';
   p.value=15;
-  $('mapAnalyzeStatus').textContent='⏳ Анализ карты… лимит 20 секунд.';
+  $('mapAnalyzeStatus').textContent='⏳ Анализ карты… дождитесь полного завершения.';
+  const runningCard=$('mapAnalyzeRunningCard');
+  if(runningCard) runningCard.style.display='grid';
+  const rt=$('mapAnalyzeRunningTitle'); if(rt) rt.textContent='Анализ карты запущен…';
+  const rtxt=$('mapAnalyzeRunningText'); if(rtxt) rtxt.textContent='Пожалуйста, подождите. Идёт полный анализ профиля, покрытия, троп и бродов.';
+  const rr=$('mapAnalyzeRetryText'); if(rr) rr.textContent='';
   startMapAnalysisTimer();
 
-  let timeoutId=null;
-  let timedOut=false;
-
-  const timeoutPromise=new Promise((_,reject)=>{
-    timeoutId=setTimeout(()=>{
-      timedOut=true;
-
-      // invalidates the result of the running analyzeMapOSM()
-      mapAnalysisRunId++;
-      try{
-        if(mapAnalysisAbortController) mapAnalysisAbortController.abort();
-      }catch(e){}
-      mapAnalysisAbortController=null;
-
-      const e=new Error('MAP_HARD_TIMEOUT_20');
-      e.name='TimeoutError';
-      reject(e);
-    },20000);
-  });
 
   try{
-    const result=await Promise.race([
-      analyzeMapOSM(),
-      timeoutPromise
-    ]);
-
-    if(timedOut) return;
-
-    clearTimeout(timeoutId);
+    const result=await analyzeMapOSM();
     p.value=85;
     renderMapAnalysis(result); setTimeout(()=>{try{drawFordScheme();renderFordMap();}catch(e){}},120);
     p.value=100;
     stopMapAnalysisTimer();
     $('mapAnalyzeStatus').textContent='✓ Анализ карты завершён.';
+    if($('mapAnalyzeRunningCard')) $('mapAnalyzeRunningCard').style.display='none';
     setActionState('mapAnalyzeBtn','success');
     setTimeout(()=>{p.style.display='none'},900);
   }catch(err){
-    clearTimeout(timeoutId);
     stopMapAnalysisTimer();
     p.style.display='none';
     p.value=0;
-
-    if(timedOut || err?.name==='TimeoutError' || err?.message==='MAP_HARD_TIMEOUT_20'){
-      $('mapAnalyzeStatus').textContent='⚠️ Анализ остановлен: превышен лимит 20 секунд. Нажмите «Повторить анализ карты» или используйте прогноз без анализа.';
-      btn.disabled=false;
-      btn.textContent='Повторить анализ карты';
-      setActionState('mapAnalyzeBtn','ready');
-      restoreMapInfoNote();
-      return;
-    }
-
-    if(err?.name==='AbortError'){
-      $('mapAnalyzeStatus').textContent='Анализ карты остановлен.';
-      setActionState('mapAnalyzeBtn','idle');
-    }else{
-      $('mapAnalyzeStatus').textContent='✕ Ошибка анализа карты: '+(err.message||String(err));
-      setActionState('mapAnalyzeBtn','error');
-    }
+    $('mapAnalyzeStatus').textContent='✕ Ошибка анализа карты: '+(err.message||String(err));
+    if($('mapAnalyzeRunningCard')) $('mapAnalyzeRunningCard').style.display='none';
+    setActionState('mapAnalyzeBtn','error');
   }finally{
-    clearTimeout(timeoutId);
-    if(!timedOut){
-      mapAnalysisAbortController=null;
       syncMapAnalyzeButton();
-      restoreMapInfoNote();
-    }
+    restoreMapInfoNote();
   }
 });
 
@@ -4122,7 +4082,7 @@ function setMovingTimeFieldFromOCR(value){
     if(m) seconds=Number(m[1])*60+Number(m[2]);
   }
 
-  // v0.85 lower field originally inherited a numeric "minutes" input.
+  // v0.97 lower field originally inherited a numeric "minutes" input.
   if(el.type==='number'){
     if(seconds!=null) el.value=(seconds/60).toFixed(2).replace(/\.00$/,'');
     else{
@@ -4335,15 +4295,49 @@ function delta(s){const sign=s>=0?'+':'−',a=Math.abs(Math.round(s));return `${
 function shuffled(a){return a.slice().sort(()=>Math.random()-.5)}
 
 function chooseAidStations(){
-  const d=dist(); if(!d){aidStations=[];return}
-  const maxCount=Math.min(5,Math.max(1,Math.round(d/18)));
-  const count=Math.max(1,Math.floor(Math.random()*maxCount)+1);
-  const pts=[];let tries=0;
-  while(pts.length<count&&tries++<300){
-    const km=d*(0.12+Math.random()*.76);
-    if(pts.every(x=>Math.abs(x-km)>=Math.max(2,d*.06)))pts.push(km);
+  const d=dist();
+  if(!d){aidStations=[];return}
+
+  // Минимум 5 ПП на 90 км и длиннее.
+  let minCount=Math.max(1,Math.ceil(d/18));
+  if(d>=90) minCount=Math.max(5,minCount);
+
+  // В текущей логике максимум 5 ПП.
+  const count=Math.min(5,minCount);
+
+  // ПП не ближе 10 км друг от друга.
+  const minGap=10;
+  const firstMin=Math.min(8,Math.max(3,d*.08));
+  const lastMax=d-3;
+  const usable=Math.max(0,lastMax-firstMin);
+  const baseGap=count>1?usable/(count-1):0;
+
+  aidStations=[];
+
+  for(let i=0;i<count;i++){
+    let km=count===1 ? d*.5 : firstMin+i*baseGap;
+
+    // Небольшой рандом только когда хватает места сверх минимальных 10 км.
+    if(i>0 && i<count-1){
+      const room=Math.max(0,baseGap-minGap);
+      km += (Math.random()-.5)*Math.min(4,room*.7);
+    }
+
+    if(i>0) km=Math.max(km,aidStations[i-1]+minGap);
+    km=Math.min(km,lastMax-(count-1-i)*minGap);
+    aidStations.push(Math.max(1,km));
   }
-  aidStations=pts.sort((a,b)=>a-b);
+
+  // Контрольный проход.
+  for(let i=1;i<aidStations.length;i++){
+    if(aidStations[i]-aidStations[i-1]<minGap){
+      aidStations[i]=aidStations[i-1]+minGap;
+    }
+  }
+
+  aidStations=aidStations.filter((km,i,arr)=>
+    km<d && (i===0 || km-arr[i-1]>=minGap-0.01)
+  );
 }
 function renderSimConditions(){
   const f=E('simFatigueState'),l=E('simLuckState'),m=E('simMotivationState');
@@ -4365,14 +4359,16 @@ function initStartConditions(){
   simulationDNF=false;
   lastAidIndex=-1;
 
-  // v0.85: only one start state can appear, and only in 30% of simulations total.
+  // v0.97: only one start state can appear, and only in 30% of simulations total.
   if(Math.random()<0.30){
     const pick=Math.floor(Math.random()*3);
     if(pick===0){
       fatigueActive=true;
       fatigueApplied=true;
+      fatigueStartVirtualSec=0;
+      fatiguePenaltyAppliedSec=1800;
       penalty+=1800;
-      setTimeout(()=>showConditionChip('🥱','Усталость на старте','+30:00 до ближайшего ПП'),250);
+      setTimeout(()=>showConditionChip('🥱','Усталость на старте','до +30:00, пока не доберёшься до ПП'),250);
     }else if(pick===1){
       luckActive=true;
       setTimeout(()=>showConditionChip('🍀','Редкая удача','+20% к положительным событиям'),250);
@@ -4385,11 +4381,35 @@ function initStartConditions(){
   renderSimConditions();
 }
 function checkAidStation(km){
+  if(!aidStations.length)return;
+
   for(let i=lastAidIndex+1;i<aidStations.length;i++){
-    if(km<aidStations[i])break;
-    lastAidIndex=i;
-    if(fatigueActive){fatigueActive=false;renderSimConditions();conditionChip('🍊',`ПП ${i+1}: усталость отпустила`,'')}
-    else conditionChip('🍊',`ПП ${i+1}`,'подкрепились');
+    if(km>=aidStations[i]){
+      lastAidIndex=i;
+
+      if(fatigueActive){
+        fatigueActive=false;
+
+        // Усталость может стоить максимум 30 минут.
+        // Если ПП встретился раньше, возвращаем неиспользованную часть штрафа.
+        const elapsedRaceSec=Math.max(0,baseSec()*progress);
+        const fatigueElapsedSec=Math.max(0,elapsedRaceSec-fatigueStartVirtualSec);
+        const actualFatigueCost=Math.min(1800,fatigueElapsedSec);
+        const refund=Math.max(0,fatiguePenaltyAppliedSec-actualFatigueCost);
+
+        if(refund>0){
+          penalty-=refund;
+          showConditionChip('🍊',`ПП ${i+1}: усталость прошла`,`-${fmt(refund)}`);
+        }else{
+          showConditionChip('🍊',`ПП ${i+1}: усталость прошла`,'');
+        }
+
+        fatiguePenaltyAppliedSec=actualFatigueCost;
+        renderSimConditions();
+      }else{
+        showConditionChip('🍊',`ПП ${i+1}`,'подкрепились');
+      }
+    }else break;
   }
 }
 function endSimulationDNF(){
@@ -4401,25 +4421,66 @@ function endSimulationDNF(){
 function makeSchedule(){
   const n=activeEventCount();
   const misha=events.find(e=>e[1]==='Встреча с Мишей с топором');
-  const normal=events.filter(e=>e!==misha);
-  let pool=[...normal];
-  if(luckActive){
-    const positives=normal.filter(e=>e[3]<0);
-    pool.push(...shuffled(positives).slice(0,Math.max(1,Math.round(positives.length*.20))));
+
+  // Negative event = adds time. Positive event = saves time.
+  const negatives=shuffled(events.filter(e=>e!==misha && e[3]>0));
+  const positives=shuffled(events.filter(e=>e!==misha && e[3]<0));
+  const neutral=shuffled(events.filter(e=>e!==misha && e[3]===0));
+
+  // v1.01: balance the selected event pool as close to 50/50 as possible.
+  // For an odd number of events, the extra event is assigned randomly.
+  let negNeed=Math.floor(n/2);
+  let posNeed=Math.floor(n/2);
+  if(n%2){
+    if(Math.random()<.5) negNeed++; else posNeed++;
   }
+
+  // Luck remains meaningful, but no longer allows a run to become overwhelmingly negative.
+  // With luck, the odd extra slot prefers a positive event.
+  if(luckActive && n%2){
+    posNeed=Math.ceil(n/2);
+    negNeed=Math.floor(n/2);
+  }
+
   const selected=[];
-  while(selected.length<n&&pool.length){
-    const pick=pool[Math.floor(Math.random()*pool.length)];
-    if(!selected.includes(pick))selected.push(pick);
-    else pool=pool.filter(x=>x!==pick);
+  selected.push(...negatives.slice(0,negNeed));
+  selected.push(...positives.slice(0,posNeed));
+
+  // If one category is too small, fill from the other categories.
+  let remaining=n-selected.length;
+  if(remaining>0){
+    const rest=shuffled([
+      ...negatives.slice(negNeed),
+      ...positives.slice(posNeed),
+      ...neutral
+    ]).filter(e=>!selected.includes(e));
+    selected.push(...rest.slice(0,remaining));
   }
-  if(misha&&n>0&&Math.random()<.08)selected[Math.floor(Math.random()*selected.length)]=misha;
-  const total=Math.max(1,baseSec()),minGapSec=1800,times=[];let attempts=0;
-  while(times.length<n&&attempts++<2000){
+
+  // Misha remains rare. If he appears, replace a positive slot so the
+  // positive/negative balance is not shifted toward more negative events.
+  if(misha && selected.length && Math.random()<.08){
+    const positiveIndexes=selected
+      .map((e,i)=>e[3]<0?i:-1)
+      .filter(i=>i>=0);
+    const idx=positiveIndexes.length
+      ? positiveIndexes[Math.floor(Math.random()*positiveIndexes.length)]
+      : Math.floor(Math.random()*selected.length);
+    selected[idx]=misha;
+  }
+
+  // Shuffle event identities after balancing.
+  const balanced=shuffled(selected);
+
+  const total=Math.max(1,baseSec()),minGapSec=1800,times=[];
+  let attempts=0;
+  while(times.length<balanced.length&&attempts++<2000){
     const t=total*(.06+Math.random()*.88);
     if(times.every(x=>Math.abs(x-t)>=minGapSec))times.push(t);
   }
-  times.sort((a,b)=>a-b);schedule=times.map((t,i)=>({at:t/total,e:selected[i]}));
+
+  times.sort((a,b)=>a-b);
+  schedule=times.map((t,i)=>({at:t/total,e:balanced[i]}));
 }
 function firstTrackDate(){
   const p=(state?.track||[]).find(x=>x?.time);
@@ -4734,22 +4795,51 @@ function tick(){
 }
 function run(){clearInterval(timer);timer=setInterval(tick,120);E('simStart').textContent='⏸';E('simStatus').textContent='Симуляция идёт по профилю загруженного трека.'}
 function stop(msg){clearInterval(timer);clearTimeout(pauseTimer);clearInterval(countTimer);timer=null;if(msg)E('simStatus').textContent=msg;E('simStart').textContent='▶'}
-function reset(){stop();progress=0;penalty=0;fired.clear();particles=[];lastFordPauseKm=null;fordPauseActive=false;simStartDate=firstTrackDate();E('simDnfBanner')?.classList.remove('show');chooseAidStations();initStartConditions();makeSchedule();E('simProgress').style.width='0';E('simDistance').textContent=dist()?`0.0 / ${dist().toFixed(1)} км`:'—';E('simGain').textContent=gain()?`${Math.round(gain())} м`:'—';E('simEventsCount').textContent=`0 / ${schedule.length}`;E('simPenalty').textContent='+0:00';E('simLog').innerHTML='<div><span>—</span><span>События появятся случайно по ходу гонки</span><b>31 событие в пуле</b></div>';E('simEventCard')?.classList.remove('show'); E('simEventChip')?.classList.remove('show');E('simPauseBadge').classList.remove('show');E('simStart').textContent='▶';E('simStart').setAttribute('aria-label','Старт');E('simStart').title='Старт';E('simStart').disabled=!(baseSec()&&dist());updateResults();E('simStatus').textContent=baseSec()&&dist()?'Готово: профиль и время взяты из текущего прогноза.':'Сначала рассчитайте «Прогноз гонки» в разделе 2.';draw()}
+function reset(){clearTimeout(window.__simStartGateTimer);stop();progress=0;penalty=0;fired.clear();particles=[];lastFordPauseKm=null;fordPauseActive=false;fatigueStartVirtualSec=0;fatiguePenaltyAppliedSec=0;simStartDate=firstTrackDate();E('simDnfBanner')?.classList.remove('show');chooseAidStations();initStartConditions();makeSchedule();E('simProgress').style.width='0';E('simDistance').textContent=dist()?`0.0 / ${dist().toFixed(1)} км`:'—';E('simGain').textContent=gain()?`${Math.round(gain())} м`:'—';E('simEventsCount').textContent=`0 / ${schedule.length}`;E('simPenalty').textContent='+0:00';E('simLog').innerHTML='<div><span>—</span><span>События появятся случайно по ходу гонки</span><b>31 событие в пуле</b></div>';E('simEventCard')?.classList.remove('show'); E('simEventChip')?.classList.remove('show');E('simPauseBadge').classList.remove('show');E('simStart').textContent='▶';E('simStart').setAttribute('aria-label','Старт');E('simStart').title='Старт';E('simStart').disabled=!(baseSec()&&dist());updateResults();E('simStatus').textContent=baseSec()&&dist()?'Готово: профиль и время взяты из текущего прогноза.':'Сначала рассчитайте «Прогноз гонки» в разделе 2.';draw()}
 
-setInterval(()=>{const b=E('simStart');if(b&&!timer)b.disabled=!(baseSec()&&dist());},500);
+setInterval(()=>{
+  const b=E('simStart');
+  if(!b||timer) return;
+  if(window.__simStartGateTimer){
+    b.disabled=true;
+  }else{
+    b.disabled=!(baseSec()&&dist());
+  }
+},500);
 setInterval(()=>{if(document.querySelector('[data-tab="simulation"]')?.classList.contains('active')) draw();},120);
 E('simStart').addEventListener('click',()=>{
   const startingFresh=(progress<=0);
+
   if(progress>=1) reset();
   if(!baseSec()||!dist()){reset();return}
+
   if(timer){
-    clearInterval(timer);timer=null;
+    clearInterval(timer);
+    timer=null;
     E('simStart').textContent='▶';
     E('simStart').setAttribute('aria-label','Продолжить');
     E('simStart').title='Продолжить';
     E('simStatus').textContent='Пауза';
+    return;
+  }
+
+  // v1.01: start animation is always a real 3-second start gate.
+  // Simulation speed (including 4×) cannot skip or outrun Misha.
+  if(startingFresh){
+    showMishaStartDirect();
+    E('simStart').disabled=true;
+    E('simStatus').textContent='🐻 Миша с топором провожает тебя со старта…';
+    clearTimeout(window.__simStartGateTimer);
+    window.__simStartGateTimer=setTimeout(()=>{
+      window.__simStartGateTimer=null;
+      if(progress<=0 && !timer && baseSec() && dist()){
+        E('simStart').disabled=false;
+        run();
+        E('simStart').setAttribute('aria-label','Пауза');
+        E('simStart').title='Пауза';
+      }
+    },3000);
   }else{
-    if(startingFresh) showMishaStartDirect();
     run();
     E('simStart').setAttribute('aria-label','Пауза');
     E('simStart').title='Пауза';
@@ -4773,7 +4863,7 @@ document.querySelectorAll('.tab').forEach(btn=>{
 
 
 function mapAnalysisTimeoutMessage(){
-  return '⚠️ Анализ остановлен: превышен лимит 20 секунд. Полученные данные сохранены. Часть информации о покрытии и бродах могла не успеть загрузиться. Попробуйте анализ ещё раз.';
+  return '⏳ Анализ карты выполняется до полного завершения.';
 }
 
 function ensureAnalysisTrackScheme(){
@@ -4932,15 +5022,6 @@ window.addEventListener('resize',()=>setTimeout(drawFordScheme,100));
 
 setInterval(()=>{if(document.getElementById('fordSchemeCanvas')) drawFordScheme();},2500);
 
-window.addEventListener('unhandledrejection',ev=>{
-  if(String(ev.reason?.message||ev.reason).includes('TIMEOUT_20S')){
-    ev.preventDefault();
-    const status=document.getElementById('mapAnalysisStatus')||document.querySelector('[data-map-status]');
-    if(status){status.textContent=mapAnalysisTimeoutMessage();status.style.color='#fbbf24';}
-    const btn=document.getElementById('analyzeMapBtn')||[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Анализ карты'));
-    if(btn){btn.disabled=false;btn.textContent='Повторить анализ карты';}
-  }
-});
 
 setInterval(()=>{if(document.querySelector('[data-tab="simulation"]')?.classList.contains('active')){}},250);
 
@@ -4965,7 +5046,7 @@ document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{
 
 
 
-// v0.85 route map redraw
+// v0.97 route map redraw
 
 document.querySelectorAll('.tab').forEach(btn=>{
   btn.addEventListener('click',()=>{
