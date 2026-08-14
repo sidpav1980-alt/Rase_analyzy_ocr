@@ -1,6 +1,8 @@
-
-const CACHE='trail-analyzer-online-v043';
-const CORE=['./','./index.html','./styles.css','./app.js','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
+const CACHE='trail-analyzer-nodocker-v055';
+const CORE=[
+  './','./index.html','./styles.css','./app.js','./manifest.webmanifest',
+  './icon-192.png','./icon-512.png'
+];
 
 self.addEventListener('install',event=>{
   self.skipWaiting();
@@ -16,15 +18,22 @@ self.addEventListener('activate',event=>{
 });
 
 self.addEventListener('fetch',event=>{
-  const url=new URL(event.request.url);
-  if(url.pathname.startsWith('/api/')) return;
   if(event.request.method!=='GET') return;
+  const url=new URL(event.request.url);
+
+  // API endpoints are online-only.
+  if(url.pathname.startsWith('/api/') || url.pathname==='/health'){
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then(cached=>{
       if(cached) return cached;
       return fetch(event.request).then(resp=>{
-        const copy=resp.clone();
-        caches.open(CACHE).then(c=>c.put(event.request,copy));
+        if(resp && resp.ok){
+          const copy=resp.clone();
+          caches.open(CACHE).then(c=>c.put(event.request,copy));
+        }
         return resp;
       }).catch(()=>caches.match('./index.html'));
     })

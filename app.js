@@ -213,7 +213,21 @@ function syncMapAnalyzeButton(){
   const btn=$('mapAnalyzeBtn');
   if(!btn) return;
   const ready=!!(state.track && state.track.length>1 && state.dist>0);
-  btn.disabled=!ready;
+  const online=navigator.onLine!==false;
+
+  btn.disabled=!(ready&&online);
+
+  if(!online){
+    setActionState('mapAnalyzeBtn','idle');
+    const cached=state.mapAnalysis || (()=>{try{return JSON.parse(localStorage.getItem('trailMapAnalysis')||'null')}catch(e){return null}})();
+    if($('mapAnalyzeStatus')){
+      $('mapAnalyzeStatus').textContent=cached
+        ? 'Офлайн: новый анализ карты недоступен. Сохранённый анализ можно использовать в прогнозе.'
+        : 'Офлайн: анализ карты требует интернет. Обычный прогноз по GPX доступен.';
+    }
+    return;
+  }
+
   if(ready){
     setActionState('mapAnalyzeBtn','ready');
     if($('mapAnalyzeStatus') && !$('mapAnalyzeStatus').textContent.includes('✓')){
@@ -223,6 +237,21 @@ function syncMapAnalyzeButton(){
     setActionState('mapAnalyzeBtn','idle');
   }
 }
+
+function updateOfflineUi(){
+  const el=$('offlineState');
+  const online=navigator.onLine!==false;
+  if(el){
+    el.textContent=online?'ONLINE / OFFLINE READY':'OFFLINE';
+    el.className='app-offline-state '+(online?'online':'offline');
+  }
+  syncMapAnalyzeButton();
+}
+
+window.addEventListener('online',updateOfflineUi);
+window.addEventListener('offline',updateOfflineUi);
+setTimeout(updateOfflineUi,0);
+
 
 
 
@@ -1055,7 +1084,7 @@ async function analyzeMapOSM(){
   const pts=sampleTrackPoints(220);
   const query=buildOverpassQuery(pts);
 
-  $('mapAnalyzeStatus').textContent='⏳ Отправляю запрос через Render proxy…';
+  $('mapAnalyzeStatus').textContent='⏳ Отправляю запрос через серверный proxy…';
 
   let analysisTimedOut=false;
   const timer=setTimeout(()=>{
@@ -1567,6 +1596,11 @@ function threat(delta){
 }
 
 $('mapAnalyzeBtn')?.addEventListener('click',async ()=>{
+  if(navigator.onLine===false){
+    $('mapAnalyzeStatus').textContent='Офлайн: анализ карты требует интернет. Используйте обычный прогноз или ранее сохранённый анализ.';
+    return;
+  }
+
   const btn=$('mapAnalyzeBtn'), p=$('mapAnalyzeProgress');
   if(!state.track || !state.track.length){
     $('mapAnalyzeStatus').textContent='✕ Сначала обработайте GPX.';
@@ -1620,6 +1654,11 @@ function getManualOpenRouterKey(){
 async function refreshOpenRouterStatus(){
   const el=$('openRouterStatus');
   if(!el) return;
+  if(navigator.onLine===false){
+    el.textContent='офлайн';
+    el.className='or-status or-bad';
+    return;
+  }
   el.textContent='проверка…';
   el.className='or-status or-checking';
   try{
@@ -1630,7 +1669,7 @@ async function refreshOpenRouterStatus(){
       el.textContent='ключ на iPhone ✓';
       el.className='or-status or-ok';
     }else if(h.itra_enabled){
-      el.textContent='Render подключён ✓';
+      el.textContent='сервер подключён ✓';
       el.className='or-status or-ok';
     }else{
       el.textContent='ключ не настроен ✕';

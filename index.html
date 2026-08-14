@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Trail Analyzer">
-  <title>Trail Race Analyzer</title>
+  <title>Прогноз и анализ трейловых гонок</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="stylesheet" href="styles.css">
@@ -34,12 +34,22 @@
   margin-top: 0 !important;
 }
 </style>
+<style>
+.app-offline-state{
+ position:fixed; top:58px; right:18px; z-index:9999;
+ padding:5px 10px; border:1px solid #334155; border-radius:999px;
+ background:#0f172a; color:#94a3b8; font-size:12px; font-weight:700;
+}
+.app-offline-state.online{color:#22c55e}
+.app-offline-state.offline{color:#f59e0b}
+</style>
 </head>
 <body>
-<div class="app-version">v0.53 ONLINE FULL</div>
+<div class="app-version">v0.55 NO DOCKER</div>
+<div id="offlineState" class="app-offline-state">OFFLINE READY</div>
   <header class="app-header">
     <div>
-      <div class="eyebrow">Trail Race Analyzer</div>
+      <div class="eyebrow">Прогноз и анализ трейловых гонок</div>
       <h1>Гонка → ПЛАН → ФИНИШ</h1>
     </div>
     <button id="installBtn" class="ghost" hidden>Установить</button>
@@ -53,9 +63,9 @@
 
     <nav class="tabs">
       <button class="tab active" data-tab="route">1. Трек гонки</button>
-      <button class="tab" data-tab="forecast">2. Прогноз</button>
+      <button class="tab" data-tab="forecast">2. Прогноз гонки</button>
       <button class="tab" data-tab="roster">3. Стартовый список и баллы ITRA</button>
-      <button class="tab" data-tab="result">4. Итог</button>
+      <button class="tab" data-tab="result">4. Прогноз места в TOP-100</button>
     </nav>
 
     <section id="route" class="tabpanel active">
@@ -88,7 +98,7 @@
         <div class="field">
           <span>Анализ карты</span>
           <button id="mapAnalyzeBtn" type="button" class="primary action-idle" disabled>Анализ карты</button>
-        <div id="mapTimingNote" class="muted">Среднее время анализа карты — 15 секунд. Максимум — 25 секунд. Максимум — 25 секунд. Если анализ длится больше 15 секунд — повторите снова.</div>
+        <div id="mapTimingNote" class="muted">Анализ карты использует OSM и требует интернет. После выполненного онлайн-анализа его результат сохраняется локально и может использоваться офлайн.</div>
           <div id="mapAnalyzeStatus" class="muted">Сначала загрузите и обработайте GPX.</div>
           <progress id="mapAnalyzeProgress" value="0" max="100" style="width:100%;display:none"></progress>
         </div>
@@ -302,7 +312,7 @@
         <div class="key-actions">
           <button id="clearOpenAiKeyBtn" type="button" class="secondary">Очистить ключ</button>
         </div>
-        <p class="muted">Ключ не сохраняется в localStorage и действует только до закрытия вкладки. Для постоянного и более безопасного варианта задайте OPENAI_API_KEY на сервере Render.</p>
+        <p class="muted">Ключ не сохраняется в localStorage и действует только до закрытия вкладки. Для постоянного и более безопасного варианта задайте OPENAI_API_KEY на сервере.</p>
         <div>
         <h2>Стартовый список</h2>
         <div class="upload">
@@ -403,6 +413,6 @@
   </footer>
 
   <script src="app.js"></script>
-<footer class="app-footer">Sidorenko Pavel (c) 2026</footer>
+<footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 </body>
 </html>
