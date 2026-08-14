@@ -287,7 +287,7 @@ $('installBtn').addEventListener('click', async () => {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=206', {updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('./sw.js?v=208', {updateViaCache:'none'});
       await reg.update();
       let refreshing=false;
       navigator.serviceWorker.addEventListener('controllerchange',()=>{
@@ -962,7 +962,7 @@ function buildOverpassQuery(points){
   const pts=(points||[]).filter(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lon));
   if(!pts.length) return '[out:json][timeout:90];();out;';
 
-  // v0.0206: do NOT ask Overpass for one huge route bbox. On long/curvy tracks
+  // v0.0208: do NOT ask Overpass for one huge route bbox. On long/curvy tracks
   // that query was too heavy and all endpoints could time out, producing 0%.
   // Build several small boxes along the GPX corridor instead.
   const boxes=[];
@@ -1289,7 +1289,7 @@ function groupFordKmPoints(kms, maxGapKm=0.35){
       continue;
     }
 
-    // v0.0206: only nearby parts of the SAME water crossing are merged.
+    // v0.0208: only nearby parts of the SAME water crossing are merged.
     // 150 m is enough for braided channels / GPS jitter, while separate
     // crossings 200+ m apart remain separate.
     if(km-current.end<=maxGapKm){
@@ -1466,7 +1466,7 @@ async function analyzeMapOSM(){
   // analysis with the GPX itself. Surface/ford values remain unknown rather
   // than stopping the whole analysis.
   if(!data){
-    // v0.0206: if OSM is temporarily down, reuse ONLY a cache matching this GPX.
+    // v0.0208: if OSM is temporarily down, reuse ONLY a cache matching this GPX.
     try{
       const c=JSON.parse(localStorage.getItem('trailOSMElementsCache')||'null');
       const first=state.track?.[0], last=state.track?.[state.track.length-1];
@@ -1624,7 +1624,7 @@ function renderMapAnalysis(result){
   const {samples,summary,elements=[]}=result;
   const crossings=analyzeWaterCrossings(samples,elements);
 
-  // v0.0206: analyzeWaterCrossings already groups by OSM water object first,
+  // v0.0208: analyzeWaterCrossings already groups by OSM water object first,
   // then deduplicates only near-identical physical crossings.
   const bridgeKms=(crossings.bridges||[]).slice();
   const confirmedFordKms=(crossings.confirmed||[]).slice();
@@ -4506,15 +4506,50 @@ function showMishaFinishDirect(){
   window.__mishaFinishTimer=setTimeout(()=>el.classList.remove('show'),3000);
 }
 
+function hideFirstPlaceOverlay(){
+  const el=document.getElementById('simFirstPlaceOverlay');
+  if(el) el.classList.remove('show');
+  clearTimeout(window.__firstPlaceTimer);
+  clearTimeout(window.__firstPlaceDelayTimer);
+}
+function showFirstPlaceOverlay(){
+  const el=document.getElementById('simFirstPlaceOverlay');
+  if(!el) return;
+  const finish=Math.max(0,baseSec()+penalty);
+  const gain=Math.max(0,baseSec()-finish);
+  const text=document.getElementById('simFirstPlaceText');
+  if(text){
+    text.textContent=`Ты финишировал на ${fmt(gain)} быстрее исходного прогноза благодаря случайным событиям`;
+  }
+  el.classList.add('show');
+  clearTimeout(window.__firstPlaceTimer);
+  window.__firstPlaceTimer=setTimeout(()=>el.classList.remove('show'),4200);
+}
+function maybeShowFirstPlaceAtFinish(){
+  const b=baseSec();
+  const finish=b+penalty;
+  // Exactly the requested rule:
+  // final time must be faster than the ORIGINAL forecast,
+  // and the net contribution of random events must be beneficial.
+  if(b>0 && finish<b && randomEventAdjustmentSec<0){
+    clearTimeout(window.__firstPlaceDelayTimer);
+    // Misha meets the runner first; then the 1st-place picture appears.
+    window.__firstPlaceDelayTimer=setTimeout(showFirstPlaceOverlay,3100);
+    return true;
+  }
+  return false;
+}
+
 if(!E('simStart')) return;
 let timer=null,pauseTimer=null,countTimer=null,progress=0,penalty=0,fired=new Set(),schedule=[],particles=[],simStartDate=null;
 let aidStations=[],fatigueActive=false,luckActive=false,demotivationActive=false,negativeStreak=0,simulationDNF=false,lastAidIndex=-1;
+let randomEventAdjustmentSec=0;
 
 
 const activeEventCount=()=>{
   const hours=Math.max(0.1,baseSec()/3600);
 
-  // v0.0206 — event count by forecast duration:
+  // v0.0208 — event count by forecast duration:
   // ~1 h  -> exactly 3
   // ~2 h  -> 4–6
   // ~3 h  -> 5–7
@@ -4688,7 +4723,7 @@ function makeSchedule(){
   const positives=shuffled(events.filter(e=>e!==misha && e[3]<0));
   const neutral=shuffled(events.filter(e=>e!==misha && e[3]===0));
 
-  // v0.0206: balance the selected event pool as close to 50/50 as possible.
+  // v0.0208: balance the selected event pool as close to 50/50 as possible.
   // For an odd number of events, the extra event is assigned randomly.
   let negNeed=Math.floor(n/2);
   let posNeed=Math.floor(n/2);
@@ -4789,6 +4824,7 @@ function fire(idx){
   // positive event -> negative adjustment -> time is SUBTRACTED;
   // negative event -> positive adjustment -> time is ADDED.
   penalty+=timeAdjustmentSec;
+  randomEventAdjustmentSec+=timeAdjustmentSec;
   addParticles(e[0]);
   if(timeAdjustmentSec>0)negativeStreak++;else negativeStreak=0;
   if(demotivationActive&&negativeStreak>=3){
@@ -5080,11 +5116,12 @@ function tick(){
     E('simStatus').textContent=`🏁 Финишное время: ${fmt(baseSec()+penalty)} · исходный прогноз ${fmt(baseSec())} · поправка ${delta(penalty)}`;
     updateResults();draw();renderSimFordMap();
     showMishaFinishDirect();
+    maybeShowFirstPlaceAtFinish();
   }
 }
 function run(){clearInterval(timer);timer=setInterval(tick,120);E('simStart').textContent='⏸';E('simStatus').textContent='Симуляция идёт по профилю загруженного трека.'}
 function stop(msg){clearInterval(timer);clearTimeout(pauseTimer);clearInterval(countTimer);timer=null;if(msg)E('simStatus').textContent=msg;E('simStart').textContent='▶'}
-function reset(){clearTimeout(window.__simStartGateTimer);stop();progress=0;penalty=0;fired.clear();particles=[];lastFordPauseKm=null;fordPauseActive=false;fatigueStartVirtualSec=0;fatiguePenaltyAppliedSec=0;simStartDate=firstTrackDate();E('simDnfBanner')?.classList.remove('show');chooseAidStations();initStartConditions();makeSchedule();E('simProgress').style.width='0';E('simDistance').textContent=dist()?`0.0 / ${dist().toFixed(1)} км`:'—';E('simGain').textContent=gain()?`${Math.round(gain())} м`:'—';E('simEventsCount').textContent=`0 / ${schedule.length}`;E('simPenalty').textContent='+0:00';E('simLog').innerHTML='<div><span>—</span><span>События появятся случайно по ходу гонки</span><b>31 событие в пуле</b></div>';E('simEventCard')?.classList.remove('show'); E('simEventChip')?.classList.remove('show');E('simPauseBadge').classList.remove('show');E('simStart').textContent='▶';E('simStart').setAttribute('aria-label','Старт');E('simStart').title='Старт';E('simStart').disabled=!(baseSec()&&dist());updateResults();E('simStatus').textContent=baseSec()&&dist()?'Готово: профиль и время взяты из текущего прогноза.':'Сначала рассчитайте «Прогноз гонки» в разделе 2.';draw()}
+function reset(){clearTimeout(window.__simStartGateTimer);stop();hideFirstPlaceOverlay();progress=0;penalty=0;randomEventAdjustmentSec=0;fired.clear();particles=[];lastFordPauseKm=null;fordPauseActive=false;fatigueStartVirtualSec=0;fatiguePenaltyAppliedSec=0;simStartDate=firstTrackDate();E('simDnfBanner')?.classList.remove('show');chooseAidStations();initStartConditions();makeSchedule();E('simProgress').style.width='0';E('simDistance').textContent=dist()?`0.0 / ${dist().toFixed(1)} км`:'—';E('simGain').textContent=gain()?`${Math.round(gain())} м`:'—';E('simEventsCount').textContent=`0 / ${schedule.length}`;E('simPenalty').textContent='+0:00';E('simLog').innerHTML='<div><span>—</span><span>События появятся случайно по ходу гонки</span><b>31 событие в пуле</b></div>';E('simEventCard')?.classList.remove('show'); E('simEventChip')?.classList.remove('show');E('simPauseBadge').classList.remove('show');E('simStart').textContent='▶';E('simStart').setAttribute('aria-label','Старт');E('simStart').title='Старт';E('simStart').disabled=!(baseSec()&&dist());updateResults();E('simStatus').textContent=baseSec()&&dist()?'Готово: профиль и время взяты из текущего прогноза.':'Сначала рассчитайте «Прогноз гонки» в разделе 2.';draw()}
 
 setInterval(()=>{
   const b=E('simStart');
@@ -5112,7 +5149,7 @@ E('simStart').addEventListener('click',()=>{
     return;
   }
 
-  // v0.0206: start animation is always a real 3-second start gate.
+  // v0.0208: start animation is always a real 3-second start gate.
   // Simulation speed (including 4×) cannot skip or outrun Misha.
   if(startingFresh){
     showMishaStartDirect();

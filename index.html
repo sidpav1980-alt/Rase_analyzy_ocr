@@ -10,7 +10,7 @@
   <title>Прогноз и анализ трейловых гонок</title>
   <link rel="manifest" href="manifest.webmanifest?v=075">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=206">
+  <link rel="stylesheet" href="styles.css?v=208">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynBv0TtP4JpC5dQF3Vqv2tLIbV0w=" crossorigin="">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
@@ -172,7 +172,7 @@
 
 
 <style>
-/* v0.0207 — compact phone simulation */
+/* v0.0208 — compact phone simulation */
 .sim-profile-card{display:none!important}
 .sim-reference-shell{gap:10px!important}
 .sim-scene-title{
@@ -291,7 +291,7 @@
 </style>
 
 <style>
-/* v0.0207 — small event notification above the track profile */
+/* v0.0208 — small event notification above the track profile */
 #simEventCard{display:none!important}
 .sim-event-chip{
   position:absolute;
@@ -369,7 +369,7 @@
 </style>
 
 <style>
-/* v0.0207 — static route map, no zoom/pan */
+/* v0.0208 — static route map, no zoom/pan */
 .ford-leaflet-map,
 .sim-ford-map{
   touch-action:none!important;
@@ -384,7 +384,7 @@
 </style>
 
 <style>
-/* v0.0207: compact controls, nothing overlaps on iPhone */
+/* v0.0208: compact controls, nothing overlaps on iPhone */
 .sim-scene-controls{
   position:static!important;
   display:grid!important;
@@ -428,13 +428,13 @@
 </style>
 
 <style>
-/* v0.0207 */
+/* v0.0208 */
 .sim-fords-card{display:none!important}
 .sim-mid-grid{grid-template-columns:1fr!important}
 </style>
 
 <style>
-/* v0.0207 — map is shown in route analysis, hidden only in simulation */
+/* v0.0208 — map is shown in route analysis, hidden only in simulation */
 #route .ford-map-panel,
 [data-tabpanel="route"] .ford-map-panel,
 #tab-route .ford-map-panel{
@@ -454,7 +454,7 @@
 </style>
 
 <style>
-/* v0.0207 — guaranteed GPX scheme in Analysis map block */
+/* v0.0208 — guaranteed GPX scheme in Analysis map block */
 #mapAnalysisResults .ford-map-panel{
   display:block!important;
   visibility:visible!important;
@@ -483,7 +483,7 @@
 </style>
 
 <style>
-/* v0.0207 — analysis progress UI */
+/* v0.0208 — analysis progress UI */
 .map-analyze-running{
   margin-top:12px;padding:14px;border:1px solid #2a405d;border-radius:15px;
   background:#0b1727;display:grid;grid-template-columns:42px minmax(0,1fr);
@@ -512,13 +512,41 @@
 }
 </style>
 
-<style>
-.sim-scene-card{position:relative}
 
+
+<style>
+.sim-first-place-overlay{
+  position:fixed;inset:0;z-index:100050;display:none;
+  align-items:center;justify-content:center;
+  background:rgba(2,9,18,.48);pointer-events:none
+}
+.sim-first-place-overlay.show{display:flex}
+.sim-first-place-card{
+  position:relative;overflow:hidden;
+  width:min(340px,84vw);min-height:300px;padding:24px 18px 22px;
+  border-radius:24px;text-align:center;
+  background:linear-gradient(180deg,#17243a 0%,#091321 72%);
+  border:2px solid #fbbf24;
+  box-shadow:0 18px 60px #000b,0 0 30px #f59e0b55;
+  animation:firstPlacePop .45s cubic-bezier(.2,.9,.3,1.25) both
+}
+.sim-first-place-rays{
+  position:absolute;inset:-70px;
+  background:repeating-conic-gradient(from 0deg,#fbbf2422 0 8deg,transparent 8deg 18deg);
+  animation:firstPlaceSpin 9s linear infinite
+}
+.sim-first-place-medal,.sim-first-place-title,.sim-first-place-runner,.sim-first-place-text{position:relative;z-index:2}
+.sim-first-place-medal{font-size:76px;line-height:1;margin-top:4px;filter:drop-shadow(0 5px 10px #0008)}
+.sim-first-place-title{font-size:38px;font-weight:900;letter-spacing:.04em;color:#fde68a;text-shadow:0 2px 12px #f59e0b88;margin-top:6px}
+.sim-first-place-runner{font-size:55px;margin:12px 0 8px}
+.sim-first-place-text{font-size:16px;line-height:1.35;color:#e5edf7}
+@keyframes firstPlacePop{0%{opacity:0;transform:scale(.65) translateY(25px)}100%{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes firstPlaceSpin{to{transform:rotate(360deg)}}
 </style>
+
 </head>
 <body>
-<div class="app-version">v0.0207</div>
+<div class="app-version">v0.0208</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Прогноз и анализ трейловых гонок</div>
@@ -928,8 +956,7 @@
   <span id="simEventChipIcon">😲</span>
   <b id="simEventChipTitle"></b>
   <strong id="simEventChipDelta"></strong>
-</div>
-<canvas id="simCourseCanvas"></canvas>
+</div><canvas id="simCourseCanvas"></canvas>
 
       <div id="simEventCard" class="event-card">
         <b id="simEventTitle"></b>
@@ -988,7 +1015,7 @@
     Модель является оценочной. Броды, погода, питание, состояние покрытия, самочувствие и другие факторы могут существенно повлиять на фактический результат. Расчёты носят исключительно информационно-ознакомительный характер, не являются гарантией результата или рекомендацией к действию. Автор не несёт ответственности за решения, принятые на основании расчётов приложения.
   </footer>
 
-  <script src="app.js?v=206"></script>
+  <script src="app.js?v=208"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
@@ -1014,5 +1041,16 @@
     <div><b>🏁 Миша с топором встречает тебя на финише!</b><span>Финиш! 🐻🪓</span></div>
   </div>
 </div>
+
+<div id="simFirstPlaceOverlay" class="sim-first-place-overlay" aria-hidden="true">
+  <div class="sim-first-place-card">
+    <div class="sim-first-place-rays"></div>
+    <div class="sim-first-place-medal">🥇</div>
+    <div class="sim-first-place-title">1 МЕСТО!</div>
+    <div class="sim-first-place-runner">🏃‍♂️🏆</div>
+    <div id="simFirstPlaceText" class="sim-first-place-text">Финиш быстрее исходного прогноза</div>
+  </div>
+</div>
+
 </body>
 </html>
