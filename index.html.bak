@@ -194,7 +194,7 @@
 
 
 <style>
-/* v0.0252 — compact phone simulation */
+/* v0.0245 — compact phone simulation */
 .sim-profile-card{display:none!important}
 .sim-reference-shell{gap:10px!important}
 .sim-scene-title{
@@ -313,7 +313,7 @@
 </style>
 
 <style>
-/* v0.0252 — small event notification above the track profile */
+/* v0.0245 — small event notification above the track profile */
 #simEventCard{display:none!important}
 .sim-event-chip{
   position:absolute;
@@ -391,7 +391,7 @@
 </style>
 
 <style>
-/* v0.0252 — static route map, no zoom/pan */
+/* v0.0245 — static route map, no zoom/pan */
 .ford-leaflet-map,
 .sim-ford-map{
   touch-action:none!important;
@@ -406,7 +406,7 @@
 </style>
 
 <style>
-/* v0.0252: compact controls, nothing overlaps on iPhone */
+/* v0.0245: compact controls, nothing overlaps on iPhone */
 .sim-scene-controls{
   position:static!important;
   display:grid!important;
@@ -450,13 +450,13 @@
 </style>
 
 <style>
-/* v0.0252 */
+/* v0.0245 */
 .sim-fords-card{display:none!important}
 .sim-mid-grid{grid-template-columns:1fr!important}
 </style>
 
 <style>
-/* v0.0252 — map is shown in route analysis, hidden only in simulation */
+/* v0.0245 — map is shown in route analysis, hidden only in simulation */
 #route .ford-map-panel,
 [data-tabpanel="route"] .ford-map-panel,
 #tab-route .ford-map-panel{
@@ -476,7 +476,7 @@
 </style>
 
 <style>
-/* v0.0252 — guaranteed GPX scheme in Analysis map block */
+/* v0.0245 — guaranteed GPX scheme in Analysis map block */
 #mapAnalysisResults .ford-map-panel{
   display:block!important;
   visibility:visible!important;
@@ -505,7 +505,7 @@
 </style>
 
 <style>
-/* v0.0252 — analysis progress UI */
+/* v0.0245 — analysis progress UI */
 .map-analyze-running{
   margin-top:12px;padding:14px;border:1px solid #2a405d;border-radius:15px;
   background:#0b1727;display:grid;grid-template-columns:42px minmax(0,1fr);
@@ -637,7 +637,7 @@
 
 </head>
 <body>
-<div class="app-version">v0.0252</div>
+<div class="app-version">v0.0245</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Прогноз и анализ трейловых гонок</div>
@@ -834,7 +834,7 @@
 
           <div class="upload">
             <strong>3. Скоростная плоская GPX — минимум 5 км</strong>
-            <div class="muted">Минимальная длина файла — 5 км. Например, быстрая плоская десятка. Даёт базовый темп и скорость без большого влияния рельефа. Если файл заметно медленнее консервативной оценки по VO₂max, скоростной якорь автоматически частично корректируется по VO₂max. Плоская гоночная GPX становится главным скоростным эталоном: её реальное время масштабируется на дистанцию гонки, а затем применяются рельеф, покрытие, броды и физиологические ограничения. Для короткой гонки, близкой по длине к скоростному GPX, используется фактически показанный темп этого файла без искусственного ускорения по быстрым отрезкам или VO₂max.</div>
+            <div class="muted">Минимальная длина файла — 5 км. Например, быстрая плоская десятка. Даёт базовый темп и скорость без большого влияния рельефа. Если файл заметно медленнее консервативной оценки по VO₂max, скоростной якорь автоматически частично корректируется по VO₂max. Плоская гоночная GPX становится главным скоростным эталоном: её реальное время масштабируется на дистанцию гонки, а затем применяются рельеф, покрытие, броды и физиологические ограничения.</div>
             <input id="flatRaceActivityFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml,*/*">
             <span id="flatRaceActivityName"><span class="file-check">○</span> Файл не выбран</span>
             <div class="forecast-action-separator" aria-hidden="true"></div>
@@ -875,7 +875,7 @@
         <div class="metrics big">
           <div><span>Прогноз движения</span><b id="raceForecastTime">—</b></div>
           <div><span>Средний темп</span><b id="raceForecastPace">—</b></div>
-          <div><span>Реалистичный диапазон</span><b id="raceForecastRange">—</b></div>
+          <div><span>Диапазон ±10%</span><b id="raceForecastRange">—</b></div>
           <div><span>Калибровка</span><b id="raceModelSource">нужно 3 GPX + VO₂max</b></div>
         </div>
 
@@ -1172,7 +1172,7 @@
     Модель является оценочной. Броды, погода, питание, состояние покрытия, самочувствие и другие факторы могут существенно повлиять на фактический результат. Расчёты носят исключительно информационно-ознакомительный характер, не являются гарантией результата или рекомендацией к действию. Автор не несёт ответственности за решения, принятые на основании расчётов приложения.
   </footer>
 
-  <script src="app.js?v=252asphaltanalysis"></script>
+  <script src="app.js?v=245equipmenttext"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 

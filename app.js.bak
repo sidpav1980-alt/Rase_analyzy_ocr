@@ -1669,21 +1669,8 @@ function renderMapAnalysis(result){
   // then deduplicates only near-identical physical crossings.
   const bridgeKms=(crossings.bridges||[]).slice();
   const confirmedFordKms=(crossings.confirmed||[]).slice();
-
-  // v0.0252: on city/road races, an early generic water intersection is
-  // usually a false ford (stream/culvert/road drainage). Do not count
-  // probable fords in the first 1 km on predominantly paved routes.
-  // Explicit OSM ford tags remain untouched.
-  const urbanLike=Number(summary?.paved||0)>=70
-    && (Number(summary?.trail||0)+Number(summary?.dirt||0))<=20;
-  const urbanStartIgnoreKm=Math.min(1.0, Math.max(0.2, Number(state.dist||0)*0.10));
-  const likelyFordKms=(crossings.likely||[]).slice().filter(k=>
-    !(urbanLike && Number(k)<urbanStartIgnoreKm)
-  );
-  const fordKms=[...confirmedFordKms,...likelyFordKms]
-    .filter(Number.isFinite)
-    .sort((a,b)=>a-b)
-    .filter((v,i,a)=>i===0 || Math.abs(v-a[i-1])>0.05);
+  const likelyFordKms=(crossings.likely||[]).slice();
+  const fordKms=(crossings.fords||[]).slice();
   state.mapAnalysis={
     result,
     samples:[...samples],
@@ -1742,7 +1729,7 @@ function renderMapAnalysis(result){
 
   $('mapAnalysisNote').textContent=result?.osmUnavailable
     ? 'OSM-серверы временно недоступны. Профиль GPX сохранён; повторите анализ позже для покрытия и бродов.'
-    : `OSM-классификация маршрута. Броды в пределах 400 м объединяются в один; рукава одной реки также объединяются, мосты исключаются.${urbanLike ? ' На преимущественно асфальтовом городском маршруте вероятные броды в первом километре не учитываются.' : ''} Неизвестно: ${(100-summary.coverage).toFixed(0)}%.`;
+    : `OSM-классификация маршрута. Броды в пределах 400 м объединяются в один; рукава одной реки также объединяются, мосты исключаются. Неизвестно: ${(100-summary.coverage).toFixed(0)}%.`;
   drawSurfaceStrip(samples);
   requestAnimationFrame(()=>drawFordScheme());
 }
@@ -2787,27 +2774,9 @@ function flatRaceAnchorForTarget(){
   const vo2=Number($('vo2max')?.value||52);
 
   const speedCal=vo2AdjustedFlatCalibration(ref,vo2);
+  const calibrationSpeed=Math.max(0.5,speedCal.speed);
 
-  // v0.0252: for short races the real flat/speed GPX is the primary anchor.
-  // If the target is essentially the same distance as the speed reference,
-  // use the actually recorded pace directly instead of allowing q75/q85 or
-  // VO2max to make the forecast faster than the reference performance.
-  const rawSpeed=Math.max(0.5,Number(ref.avgSpeed||0));
   const refKm=Math.max(5,Math.min(ref.dist,15));
-  const distanceRatio=targetKm/Math.max(0.1,refKm);
-  const sameShortDistance=targetKm<=15 && distanceRatio>=0.90 && distanceRatio<=1.10;
-
-  let calibrationSpeed=Math.max(0.5,speedCal.speed);
-  let shortAnchorMode='normal';
-  if(sameShortDistance){
-    calibrationSpeed=rawSpeed;
-    shortAnchorMode='raw-speed-file';
-  }else if(targetKm<=15){
-    // Nearby short distances still stay strongly tied to the real speed file.
-    calibrationSpeed=rawSpeed*0.80+calibrationSpeed*0.20;
-    shortAnchorMode='80%-raw-speed-file';
-  }
-
   const refSec=(refKm*1000)/calibrationSpeed;
   const targetSec=refSec*Math.pow(targetKm/refKm,exponent);
   const targetPaceSec=targetSec/Math.max(0.001,targetKm);
@@ -2820,8 +2789,7 @@ function flatRaceAnchorForTarget(){
     rawFilePaceSec:ref.elapsedSec/ref.dist,
     refPaceSec:refSec/refKm,
     exponent,targetKm,targetSec,targetPaceSec,targetSpeed,calibrationSpeed,
-    speedCalibration:speedCal,
-    shortAnchorMode
+    speedCalibration:speedCal
   };
 }
 function gradeOnlyFactor(grade){
@@ -3317,15 +3285,11 @@ function calculateRaceForecast(){
 
   const physiology=racePhysiologyFactors(totalSec);
 
-  const shortRace=state.dist<=15;
-  const realisticLowFactor=shortRace ? 0.938 : 0.95;
-  const realisticHighFactor=shortRace ? 1.045 : 1.05;
-
   return {
     totalSec,
     avgPaceSec:totalSec/state.dist,
-    lowSec:totalSec*realisticLowFactor,
-    highSec:totalSec*realisticHighFactor,
+    lowSec:totalSec*0.95,
+    highSec:totalSec*1.05,
     effort,
     groupKm,
     segmentMode,
@@ -3351,11 +3315,6 @@ function raceFormulaText(){
       + `доля VO₂max ${(sc.vo2Weight*100).toFixed(0)}%. `;
   }else{
     speedText=`Скоростная плоская GPX используется напрямую как скоростной якорь. `;
-  }
-  if(anchor.shortAnchorMode==='raw-speed-file'){
-    speedText+=`Для короткой дистанции, близкой к скоростному эталону, прогноз жёстко привязан к реально показанному темпу этого GPX. `;
-  }else if(anchor.shortAnchorMode==='80%-raw-speed-file'){
-    speedText+=`Для короткой дистанции 80% скоростного якоря берётся из фактически показанной скорости GPX и только 20% — из корректирующей модели. `;
   }
 
   return `Калибровка считается по фактическим данным трёх загруженных GPX. `
@@ -3412,15 +3371,6 @@ function renderRaceForecast(options={}){
     let totalDirtKm=0;
     let totalUnknownKm=0;
 
-    // v0.0252: detect a predominantly paved/asphalt route from the OSM samples.
-    // On such routes tiny OSM gaps / water polygons / short path fragments must
-    // not turn a road race into a 6:30/km trail forecast.
-    const pavedKmAll=trailSamples.length
-      ? surfaceDistanceInRange(trailSamples,0,Math.max(0.001,state.dist),'paved')
-      : 0;
-    const pavedShareAll=state.dist>0 ? pavedKmAll/state.dist : 0;
-    const asphaltRaceAnalysis=pavedShareAll>=0.80;
-
     // Analysis-mode local penalties:
     // ford: +40 sec each;
     // trail: +60 sec per OSM trail km;
@@ -3436,20 +3386,20 @@ function renderRaceForecast(options={}){
         const fordCount=fordKms.filter(km=>km>=g.from-1e-9 && km<g.to+1e-9).length;
         const fordExtra=fordCount*fordPenaltyPer;
 
-        const trailKm=(!asphaltRaceAnalysis && trailPenaltyPerKmSec>0)
+        const trailKm=trailPenaltyPerKmSec>0
           ? surfaceDistanceInRange(trailSamples,g.from,g.to,'trail')
           : 0;
         const trailExtra=trailKm*trailPenaltyPerKmSec;
 
-        const dirtKm=(!asphaltRaceAnalysis && dirtPenaltyPerKmSec>0)
+        const dirtKm=dirtPenaltyPerKmSec>0
           ? surfaceDistanceInRange(trailSamples,g.from,g.to,'dirt')
           : 0;
         const dirtExtra=dirtKm*dirtPenaltyPerKmSec;
 
-        const unknownKm=(!asphaltRaceAnalysis && trailSamples.length)
+        const unknownKm=trailSamples.length
           ? surfaceDistanceInRange(trailSamples,g.from,g.to,'unknown')
           : 0;
-        const waterKm=(!asphaltRaceAnalysis && trailSamples.length)
+        const waterKm=trailSamples.length
           ? surfaceDistanceInRange(trailSamples,g.from,g.to,'water')
           : 0;
 
@@ -3503,13 +3453,8 @@ function renderRaceForecast(options={}){
 
       f.totalSec+=extraTotal;
       f.avgPaceSec=f.totalSec/state.dist;
-      if(state.dist<=15){
-        f.lowSec=f.totalSec*0.938;
-        f.highSec=f.totalSec*1.045;
-      }else{
-        f.lowSec=f.totalSec*0.95;
-        f.highSec=f.totalSec*1.05;
-      }
+      f.lowSec=f.totalSec*0.90;
+      f.highSec=f.totalSec*0.0200;
       f.physiology=racePhysiologyFactors(f.totalSec);
     }
     // v0.50: HR targets use the real HR DISTRIBUTION of the uploaded GPXs.
@@ -3606,9 +3551,6 @@ function renderRaceForecast(options={}){
         + ` → ${f.flatAnchor.targetKm.toFixed(1)} км: ${fmtPaceSecPerKm(f.flatAnchor.targetPaceSec)}`;
     }
     $('raceForecastRange').textContent=`${fmtClockSec(f.lowSec)}–${fmtClockSec(f.highSec)}`;
-    if(asphaltRaceAnalysis && $('raceForecastStatus')){
-      $('raceForecastStatus').textContent='✓ Асфальтовый режим анализа: OSM-разрывы, вода и короткие фрагменты тропы не замедляют дорожный прогноз. Реальные броды учитываются отдельно.';
-    }
     if($('raceDurationFactor')){
       const ec=f.enduranceCalibration;
       if(ec){
