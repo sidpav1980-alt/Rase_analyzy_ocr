@@ -95,6 +95,7 @@ const state = {
   forecastMode: null,
   mapAnalysis: null,
   mapAnalysisReadyForCurrentGpx: false,
+  syntheticFlatRoute: false,
   deferredPrompt: null
 };
 
@@ -214,6 +215,13 @@ function syncMapAnalyzeButton(){
   if(!btn) return;
   const ready=!!(state.track && state.track.length>1 && state.dist>0);
   const online=navigator.onLine!==false;
+
+  if(state.syntheticFlatRoute){
+    btn.disabled=true;
+    setActionState('mapAnalyzeBtn','success');
+    if($('mapAnalyzeStatus')) $('mapAnalyzeStatus').textContent='✓ Ровный асфальт задан вручную: анализ карты не требуется.';
+    return;
+  }
 
   btn.disabled=!(ready&&online);
 
@@ -403,6 +411,135 @@ state.dist=total/1000;state.gain=gain;state.loss=loss;
     try{ renderSimFordMap(); }catch(e){ console.warn('simulation map redraw',e); }
   },120);
 }
+function buildSyntheticFlatAsphaltRoute(km,gain){
+  const d=Math.max(0.1,Math.min(600,Number(km)||0));
+  const totalGain=Math.max(0,Math.min(50000,Number(gain)||0));
+  const step=Math.max(0.1,Math.min(1,d/400));
+  const count=Math.max(2,Math.ceil(d/step)+1);
+  const pts=[];
+  const samples=[];
+
+  // Smooth rolling asphalt profile whose total ascent is approximately totalGain.
+  // gain=0 stays perfectly flat.
+  const waves=totalGain>0 ? Math.max(1,Math.round(d/20)) : 0;
+  const amp=waves>0 ? totalGain/(2*waves) : 0;
+
+  for(let i=0;i<count;i++){
+    const x=i===count-1 ? d : Math.min(d,i*step);
+    const phase=d>0 ? x/d : 0;
+    const ele=waves>0 ? 100 + amp*(1-Math.cos(phase*Math.PI*2*waves)) : 100;
+    pts.push({
+      km:x,
+      lat:55.75 + x*0.00001,
+      lon:37.60 + x*0.00001,
+      ele,
+      time:null
+    });
+    samples.push({
+      km:x,
+      lat:55.75 + x*0.00001,
+      lon:37.60 + x*0.00001,
+      ele,
+      cls:'paved'
+    });
+  }
+
+  return {dist:d,gain:totalGain,track:pts,samples};
+}
+
+function activateFlatAsphaltRoute(){
+  const raw=Number($('flatRouteKm')?.value);
+  const rawGain=Number($('flatRouteGain')?.value||0);
+  if(!Number.isFinite(raw) || raw<0.1 || raw>600){
+    if($('flatRouteStatus')) $('flatRouteStatus').textContent='✕ Введите дистанцию от 0.1 до 600 км.';
+    return;
+  }
+  if(!Number.isFinite(rawGain) || rawGain<0 || rawGain>50000){
+    if($('flatRouteStatus')) $('flatRouteStatus').textContent='✕ Введите набор высоты от 0 до 50000 м.';
+    return;
+  }
+
+  if(typeof clearSimulationTrackChoice==='function') clearSimulationTrackChoice();
+  try{ document.getElementById('simReset')?.click(); }catch(_e){}
+  abortMapAnalysisForNewGpx();
+  invalidateRaceForecast();
+
+  selectedGPXFile=null;
+  if($('gpxFile')) $('gpxFile').value='';
+
+  const synthetic=buildSyntheticFlatAsphaltRoute(raw,rawGain);
+  state.track=synthetic.track;
+  state.dist=synthetic.dist;
+  state.gain=synthetic.gain;
+  state.loss=synthetic.gain;
+  state.hasElevation=true;
+  state.syntheticFlatRoute=true;
+
+  // Treat the manual route as a fully classified flat asphalt track.
+  state.mapAnalysis={
+    synthetic:true,
+    samples:synthetic.samples,
+    fordKms:[],
+    fordCount:0,
+    bridgeKms:[],
+    confirmedFordKms:[],
+    likelyFordKms:[],
+    summary:{coverage:100,wetland:0,water:0,trail:0,dirt:0,paved:100}
+  };
+  state.mapAnalysisReadyForCurrentGpx=true;
+
+  if($('gpxName')) $('gpxName').innerHTML='<span class="file-check selected">✓</span> Ровный асфальтовый трек';
+  if($('gpxStatus')) $('gpxStatus').textContent=`✓ Создан асфальтовый трек: ${state.dist.toFixed(1)} км · набор ${Math.round(state.gain)} м`;
+  if($('flatRouteStatus')) $('flatRouteStatus').textContent=`✓ Активен асфальтовый трек ${state.dist.toFixed(1)} км · набор ${Math.round(state.gain)} м без GPX.`;
+  if($('flatRouteBtn')){
+    $('flatRouteBtn').classList.add('flat-route-active');
+    $('flatRouteBtn').textContent='✓ Асфальтовый трек активен';
+  }
+  if($('gpxLoadBtn')){
+    $('gpxLoadBtn').disabled=true;
+    $('gpxLoadBtn').textContent='Загрузить и обработать GPX';
+    setActionState('gpxLoadBtn','idle');
+  }
+
+  if($('distMetric')) $('distMetric').textContent=state.dist.toFixed(1)+' км';
+  if($('gainMetric')) $('gainMetric').textContent=Math.round(state.gain)+' м';
+  if($('lossMetric')) $('lossMetric').textContent=Math.round(state.loss)+' м';
+  if($('movingTimeMetric')) $('movingTimeMetric').textContent='—';
+  if($('movingPaceMetric')) $('movingPaceMetric').textContent='— мин/км';
+  if($('elapsedTimeMetric')) $('elapsedTimeMetric').textContent='—';
+  if($('elapsedPaceMetric')) $('elapsedPaceMetric').textContent='— мин/км';
+
+  // No internet map analysis is necessary for a manually declared flat asphalt course.
+  if($('mapAnalyzeBtn')){
+    $('mapAnalyzeBtn').disabled=true;
+    setActionState('mapAnalyzeBtn','success');
+  }
+  if($('mapAnalyzeStatus')) $('mapAnalyzeStatus').textContent='✓ Ровный асфальт задан вручную: анализ карты не требуется.';
+
+  // Populate map-analysis metrics so "Прогноз с анализом GPX" can use the same flat route.
+  if($('mapAnalysisResults')) $('mapAnalysisResults').style.display='block';
+  if($('coverageMetric')) $('coverageMetric').textContent='100%';
+  if($('wetlandMetric')) $('wetlandMetric').textContent='0.0%';
+  if($('waterCrossMetric')) $('waterCrossMetric').textContent='0.0%';
+  if($('trailMetric')) $('trailMetric').textContent='0.0%';
+  if($('dirtMetric')) $('dirtMetric').textContent='0.0%';
+  if($('pavedMetric')) $('pavedMetric').textContent='100.0%';
+  if($('fordCountMetric')) $('fordCountMetric').textContent='0';
+  if($('fordKmList')) $('fordKmList').textContent='Броды: не обнаружены';
+  if($('bridgeFordKmList')) $('bridgeFordKmList').textContent='По мосту: не обнаружено';
+  if($('mapAnalysisNote')) $('mapAnalysisNote').textContent=`Ручной режим: 100% асфальт, набор ${Math.round(state.gain)} м, без грунта, троп, воды и бродов.`;
+
+  updateItraDifficulty();
+  updateTrailDifficulty();
+  drawTrackProfiles();
+  updateRaceForecastAvailability();
+  applyForecastModeColors();
+  updateFinalCalcAvailability();
+  resetOwnItraForNewGPX();
+
+  try{ renderSimFordMap(); }catch(e){}
+}
+
 function readFileIOS(file){
   return new Promise((resolve,reject)=>{
     const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=()=>reject(r.error);r.readAsText(file,'UTF-8');
@@ -451,6 +588,12 @@ $('basePace').addEventListener('change',()=>{ if(state.track&&state.track.length
 window.addEventListener('resize',()=>{ if(state.track&&state.track.length) drawTrackProfiles(); });
 
 function handleGpxFileSelected(e){
+  state.syntheticFlatRoute=false;
+  if($('flatRouteBtn')){
+    $('flatRouteBtn').classList.remove('flat-route-active');
+    $('flatRouteBtn').textContent='Асфальтовый трек';
+  }
+  if($('flatRouteStatus')) $('flatRouteStatus').textContent='Создаёт асфальтовый маршрут без GPX: 0.1–600 км, набор 0–50000 м.';
   // A new GPX invalidates the previous simulation source and run.
   if(typeof clearSimulationTrackChoice==='function') clearSimulationTrackChoice();
   try{ document.getElementById('simReset')?.click(); }catch(_e){}
@@ -460,6 +603,7 @@ function handleGpxFileSelected(e){
   state.raceForecast=null;
   if($('raceForecastTable')) $('raceForecastTable').querySelector('tbody').innerHTML='';
   if($('raceForecastTime')) $('raceForecastTime').textContent='—';
+  if($('raceForecastDistance')) $('raceForecastDistance').textContent=`${Number(state.dist||0).toFixed(Number(state.dist||0)%1?1:0)} км`;
   if($('raceForecastPace')) $('raceForecastPace').textContent='—';
   if($('raceForecastRange')) $('raceForecastRange').textContent='—';
 
@@ -495,6 +639,15 @@ function dispatchGpxSelection(e){
 }
 $('gpxFile').addEventListener('change',dispatchGpxSelection);
 $('gpxFile').addEventListener('input',dispatchGpxSelection);
+$('flatRouteBtn')?.addEventListener('click',activateFlatAsphaltRoute);
+['flatRouteKm','flatRouteGain'].forEach(id=>{
+  $(id)?.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){
+      e.preventDefault();
+      activateFlatAsphaltRoute();
+    }
+  });
+});
 
 $('gpxLoadBtn').addEventListener('click',async ()=>{
   abortMapAnalysisForNewGpx();
@@ -1670,7 +1823,7 @@ function renderMapAnalysis(result){
   const bridgeKms=(crossings.bridges||[]).slice();
   const confirmedFordKms=(crossings.confirmed||[]).slice();
 
-  // v0.0252: on city/road races, an early generic water intersection is
+  // v0.0257: on city/road races, an early generic water intersection is
   // usually a false ford (stream/culvert/road drainage). Do not count
   // probable fords in the first 1 km on predominantly paved routes.
   // Explicit OSM ford tags remain untouched.
@@ -2728,7 +2881,7 @@ function riegelExponentForDistance(targetKm,refKm){
   if(targetKm<=25) return 1.06;
   if(targetKm<=42.5) return 1.07;
   if(targetKm<=60) return 1.085;
-  if(targetKm<=100) return 0.0200;
+  if(targetKm<=100) return 1.105;
   return 1.12;
 }
 
@@ -2788,7 +2941,7 @@ function flatRaceAnchorForTarget(){
 
   const speedCal=vo2AdjustedFlatCalibration(ref,vo2);
 
-  // v0.0252: for short races the real flat/speed GPX is the primary anchor.
+  // v0.0257: for short races the real flat/speed GPX is the primary anchor.
   // If the target is essentially the same distance as the speed reference,
   // use the actually recorded pace directly instead of allowing q75/q85 or
   // VO2max to make the forecast faster than the reference performance.
@@ -3412,7 +3565,7 @@ function renderRaceForecast(options={}){
     let totalDirtKm=0;
     let totalUnknownKm=0;
 
-    // v0.0252: detect a predominantly paved/asphalt route from the OSM samples.
+    // v0.0257: detect a predominantly paved/asphalt route from the OSM samples.
     // On such routes tiny OSM gaps / water polygons / short path fragments must
     // not turn a road race into a 6:30/km trail forecast.
     const pavedKmAll=trailSamples.length
@@ -3593,6 +3746,7 @@ function renderRaceForecast(options={}){
         </tr>`);
     });
     $('raceForecastTime').textContent=fmtClockSec(f.totalSec);
+  if($('raceForecastDistance')) $('raceForecastDistance').textContent=`${Number(state.dist||0).toFixed(Number(state.dist||0)%1?1:0)} км`;
     $('raceForecastPace').textContent=fmtPaceSecPerKm(f.avgPaceSec);
     if($('raceCalibration') && f.flatAnchor){
       const sc=f.flatAnchor.speedCalibration;

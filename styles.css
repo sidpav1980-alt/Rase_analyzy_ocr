@@ -472,3 +472,45 @@ button.action-error:disabled {
   .virtual-campaign-head{align-items:flex-start;flex-direction:column}
   .virtual-levels{grid-template-columns:1fr}
 }
+
+.flat-route-builder{
+  margin-top:14px;
+  padding-top:14px;
+  border-top:1px solid var(--border, #263650);
+}
+.flat-route-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:10px;
+  align-items:end;
+  margin-top:8px;
+}
+.flat-route-row label{
+  display:grid;
+  gap:6px;
+}
+.flat-route-row input{
+  width:100%;
+}
+.flat-route-row button{
+  min-height:46px;
+  white-space:nowrap;
+}
+@media(max-width:640px){
+  .flat-route-row{grid-template-columns:1fr}
+  .flat-route-row button{width:100%}
+}
+
+/* v0.0255: selected manual asphalt route */
+#flatRouteBtn.flat-route-active{
+  background:#22c55e !important;
+  border-color:#22c55e !important;
+  color:#04130a !important;
+  opacity:1 !important;
+}
+
+#flatRouteBtn:not(.flat-route-active){background:#38bdf8!important;border-color:#38bdf8!important;color:#06131d!important;opacity:1!important}
+.forecast-distance{display:block;margin-top:7px;font-size:16px;line-height:1.2;font-weight:700;color:#94a3b8}
+
+.flat-route-inputs{display:grid;grid-template-columns:1fr;gap:10px}
+.flat-route-inputs label{display:grid;gap:6px}

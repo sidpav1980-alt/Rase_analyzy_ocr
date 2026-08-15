@@ -10,7 +10,7 @@
   <title>Прогноз и анализ трейловых гонок</title>
   <link rel="manifest" href="manifest.webmanifest?v=075">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=240levelsswitch">
+  <link rel="stylesheet" href="styles.css?v=257-flat-gain">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynBv0TtP4JpC5dQF3Vqv2tLIbV0w=" crossorigin="">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
@@ -194,7 +194,7 @@
 
 
 <style>
-/* v0.0252 — compact phone simulation */
+/* v0.0257 — compact phone simulation */
 .sim-profile-card{display:none!important}
 .sim-reference-shell{gap:10px!important}
 .sim-scene-title{
@@ -313,7 +313,7 @@
 </style>
 
 <style>
-/* v0.0252 — small event notification above the track profile */
+/* v0.0257 — small event notification above the track profile */
 #simEventCard{display:none!important}
 .sim-event-chip{
   position:absolute;
@@ -391,7 +391,7 @@
 </style>
 
 <style>
-/* v0.0252 — static route map, no zoom/pan */
+/* v0.0257 — static route map, no zoom/pan */
 .ford-leaflet-map,
 .sim-ford-map{
   touch-action:none!important;
@@ -406,7 +406,7 @@
 </style>
 
 <style>
-/* v0.0252: compact controls, nothing overlaps on iPhone */
+/* v0.0257: compact controls, nothing overlaps on iPhone */
 .sim-scene-controls{
   position:static!important;
   display:grid!important;
@@ -450,13 +450,13 @@
 </style>
 
 <style>
-/* v0.0252 */
+/* v0.0257 */
 .sim-fords-card{display:none!important}
 .sim-mid-grid{grid-template-columns:1fr!important}
 </style>
 
 <style>
-/* v0.0252 — map is shown in route analysis, hidden only in simulation */
+/* v0.0257 — map is shown in route analysis, hidden only in simulation */
 #route .ford-map-panel,
 [data-tabpanel="route"] .ford-map-panel,
 #tab-route .ford-map-panel{
@@ -476,7 +476,7 @@
 </style>
 
 <style>
-/* v0.0252 — guaranteed GPX scheme in Analysis map block */
+/* v0.0257 — guaranteed GPX scheme in Analysis map block */
 #mapAnalysisResults .ford-map-panel{
   display:block!important;
   visibility:visible!important;
@@ -505,7 +505,7 @@
 </style>
 
 <style>
-/* v0.0252 — analysis progress UI */
+/* v0.0257 — analysis progress UI */
 .map-analyze-running{
   margin-top:12px;padding:14px;border:1px solid #2a405d;border-radius:15px;
   background:#0b1727;display:grid;grid-template-columns:42px minmax(0,1fr);
@@ -637,7 +637,7 @@
 
 </head>
 <body>
-<div class="app-version">v0.0252</div>
+<div class="app-version">v0.0257</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Прогноз и анализ трейловых гонок</div>
@@ -671,6 +671,24 @@
           <button id="gpxLoadBtn" type="button" class="primary" disabled>Загрузить и обработать GPX</button>
           <span id="gpxStatus">1. Выберите файл GPX.</span>
           <progress id="gpxProgress" value="0" max="100" style="width:100%;display:none"></progress>
+
+          <div class="flat-route-builder">
+            <strong>Нет GPX трассы?</strong>
+            <div class="flat-route-row">
+              <div class="flat-route-inputs">
+                <label>
+                  <span>Километраж, км</span>
+                  <input id="flatRouteKm" type="number" inputmode="decimal" min="0.1" max="600" step="0.1" value="10">
+                </label>
+                <label>
+                  <span>Набор высоты, м</span>
+                  <input id="flatRouteGain" type="number" inputmode="numeric" min="0" max="50000" step="1" value="0">
+                </label>
+              </div>
+              <button id="flatRouteBtn" type="button" class="secondary">Асфальтовый трек</button>
+            </div>
+            <span id="flatRouteStatus" class="muted">Создаёт ровный асфальтовый маршрут без GPX, от 0.1 до 600 км.</span>
+          </div>
         </div></div>
   <div class="pace-inline-column"><label class="field">
             <span>Рассчитать время для темпа, мин/км</span>
@@ -873,7 +891,7 @@
         <div id="raceForecastStatus" class="muted">Сначала загрузите GPX трассы во вкладке «Трасса».</div>
 
         <div class="metrics big">
-          <div><span>Прогноз движения</span><b id="raceForecastTime">—</b></div>
+          <div><span>Прогноз движения</span><b id="raceForecastTime">—</b><small id="raceForecastDistance" class="forecast-distance">— км</small></div>
           <div><span>Средний темп</span><b id="raceForecastPace">—</b></div>
           <div><span>Реалистичный диапазон</span><b id="raceForecastRange">—</b></div>
           <div><span>Калибровка</span><b id="raceModelSource">нужно 3 GPX + VO₂max</b></div>
@@ -1172,7 +1190,7 @@
     Модель является оценочной. Броды, погода, питание, состояние покрытия, самочувствие и другие факторы могут существенно повлиять на фактический результат. Расчёты носят исключительно информационно-ознакомительный характер, не являются гарантией результата или рекомендацией к действию. Автор не несёт ответственности за решения, принятые на основании расчётов приложения.
   </footer>
 
-  <script src="app.js?v=252asphaltanalysis"></script>
+  <script src="app.js?v=257-flat-gain"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
