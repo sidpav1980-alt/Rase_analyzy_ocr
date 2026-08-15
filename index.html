@@ -194,7 +194,7 @@
 
 
 <style>
-/* v0.0246 — compact phone simulation */
+/* v0.0247 — compact phone simulation */
 .sim-profile-card{display:none!important}
 .sim-reference-shell{gap:10px!important}
 .sim-scene-title{
@@ -313,7 +313,7 @@
 </style>
 
 <style>
-/* v0.0246 — small event notification above the track profile */
+/* v0.0247 — small event notification above the track profile */
 #simEventCard{display:none!important}
 .sim-event-chip{
   position:absolute;
@@ -391,7 +391,7 @@
 </style>
 
 <style>
-/* v0.0246 — static route map, no zoom/pan */
+/* v0.0247 — static route map, no zoom/pan */
 .ford-leaflet-map,
 .sim-ford-map{
   touch-action:none!important;
@@ -406,7 +406,7 @@
 </style>
 
 <style>
-/* v0.0246: compact controls, nothing overlaps on iPhone */
+/* v0.0247: compact controls, nothing overlaps on iPhone */
 .sim-scene-controls{
   position:static!important;
   display:grid!important;
@@ -450,13 +450,13 @@
 </style>
 
 <style>
-/* v0.0246 */
+/* v0.0247 */
 .sim-fords-card{display:none!important}
 .sim-mid-grid{grid-template-columns:1fr!important}
 </style>
 
 <style>
-/* v0.0246 — map is shown in route analysis, hidden only in simulation */
+/* v0.0247 — map is shown in route analysis, hidden only in simulation */
 #route .ford-map-panel,
 [data-tabpanel="route"] .ford-map-panel,
 #tab-route .ford-map-panel{
@@ -476,7 +476,7 @@
 </style>
 
 <style>
-/* v0.0246 — guaranteed GPX scheme in Analysis map block */
+/* v0.0247 — guaranteed GPX scheme in Analysis map block */
 #mapAnalysisResults .ford-map-panel{
   display:block!important;
   visibility:visible!important;
@@ -505,7 +505,7 @@
 </style>
 
 <style>
-/* v0.0246 — analysis progress UI */
+/* v0.0247 — analysis progress UI */
 .map-analyze-running{
   margin-top:12px;padding:14px;border:1px solid #2a405d;border-radius:15px;
   background:#0b1727;display:grid;grid-template-columns:42px minmax(0,1fr);
@@ -637,7 +637,7 @@
 
 </head>
 <body>
-<div class="app-version">v0.0246</div>
+<div class="app-version">v0.0247</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Прогноз и анализ трейловых гонок</div>
@@ -1133,7 +1133,7 @@
         <div class="sim-speed-wrap">
           <span>Скорость</span>
           <span class="sim-speed-label">Ускорить гонку</span>
-<select id="simSpeed">
+<div class="sim-speed-label" style="font-weight:700;margin:10px 0 6px;">Скорость игры</div><select id="simSpeed">
             <option value="1">1×</option>
             <option value="2" selected>2×</option>
             <option value="4">4×</option>
@@ -1172,7 +1172,7 @@
     Модель является оценочной. Броды, погода, питание, состояние покрытия, самочувствие и другие факторы могут существенно повлиять на фактический результат. Расчёты носят исключительно информационно-ознакомительный характер, не являются гарантией результата или рекомендацией к действию. Автор не несёт ответственности за решения, принятые на основании расчётов приложения.
   </footer>
 
-  <script src="app.js?v=246equipmentrule"></script>
+  <script src="app.js?v=247speedlabel"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
