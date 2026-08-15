@@ -514,3 +514,18 @@ button.action-error:disabled {
 
 .flat-route-inputs{display:grid;grid-template-columns:1fr;gap:10px}
 .flat-route-inputs label{display:grid;gap:6px}
+
+.roster-intro{margin-top:-4px;margin-bottom:16px}
+.itra-online-box{display:grid;gap:10px}
+#saveItraRosterBtn{margin-top:4px}
+
+.itra-active-notice{
+  padding:12px 14px;
+  border:1px solid #22c55e;
+  border-radius:12px;
+  background:rgba(34,197,94,.10);
+  color:#86efac;
+  font-weight:700;
+}
+.mini-action{font-size:14px;padding:10px 12px}
+#rosterFile:disabled{opacity:.45}

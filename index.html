@@ -10,7 +10,7 @@
   <title>Прогноз и анализ трейловых гонок</title>
   <link rel="manifest" href="manifest.webmanifest?v=075">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=257-flat-gain">
+  <link rel="stylesheet" href="styles.css?v=261-itra-file-replace">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynBv0TtP4JpC5dQF3Vqv2tLIbV0w=" crossorigin="">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
@@ -194,7 +194,7 @@
 
 
 <style>
-/* v0.0257 — compact phone simulation */
+/* v0.0261 — compact phone simulation */
 .sim-profile-card{display:none!important}
 .sim-reference-shell{gap:10px!important}
 .sim-scene-title{
@@ -313,7 +313,7 @@
 </style>
 
 <style>
-/* v0.0257 — small event notification above the track profile */
+/* v0.0261 — small event notification above the track profile */
 #simEventCard{display:none!important}
 .sim-event-chip{
   position:absolute;
@@ -391,7 +391,7 @@
 </style>
 
 <style>
-/* v0.0257 — static route map, no zoom/pan */
+/* v0.0261 — static route map, no zoom/pan */
 .ford-leaflet-map,
 .sim-ford-map{
   touch-action:none!important;
@@ -406,7 +406,7 @@
 </style>
 
 <style>
-/* v0.0257: compact controls, nothing overlaps on iPhone */
+/* v0.0261: compact controls, nothing overlaps on iPhone */
 .sim-scene-controls{
   position:static!important;
   display:grid!important;
@@ -450,13 +450,13 @@
 </style>
 
 <style>
-/* v0.0257 */
+/* v0.0261 */
 .sim-fords-card{display:none!important}
 .sim-mid-grid{grid-template-columns:1fr!important}
 </style>
 
 <style>
-/* v0.0257 — map is shown in route analysis, hidden only in simulation */
+/* v0.0261 — map is shown in route analysis, hidden only in simulation */
 #route .ford-map-panel,
 [data-tabpanel="route"] .ford-map-panel,
 #tab-route .ford-map-panel{
@@ -476,7 +476,7 @@
 </style>
 
 <style>
-/* v0.0257 — guaranteed GPX scheme in Analysis map block */
+/* v0.0261 — guaranteed GPX scheme in Analysis map block */
 #mapAnalysisResults .ford-map-panel{
   display:block!important;
   visibility:visible!important;
@@ -505,7 +505,7 @@
 </style>
 
 <style>
-/* v0.0257 — analysis progress UI */
+/* v0.0261 — analysis progress UI */
 .map-analyze-running{
   margin-top:12px;padding:14px;border:1px solid #2a405d;border-radius:15px;
   background:#0b1727;display:grid;grid-template-columns:42px minmax(0,1fr);
@@ -637,7 +637,7 @@
 
 </head>
 <body>
-<div class="app-version">v0.0257</div>
+<div class="app-version">v0.0261</div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Прогноз и анализ трейловых гонок</div>
@@ -940,18 +940,11 @@
     <section id="roster" class="tabpanel">
       <div class="card">
         <h2>Стартовый список и баллы ITRA</h2>
-        <label class="field">
-          <span>ChatGPT / OpenAI API key</span>
-          <input id="openAiKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-…">
-        </label>
-        <div class="key-actions">
-          <button id="clearOpenAiKeyBtn" type="button" class="secondary">Очистить ключ</button>
-        </div>
-        <p class="muted">Ключ не сохраняется в localStorage и действует только до закрытия вкладки. Для постоянного и более безопасного варианта задайте OPENAI_API_KEY на сервере.</p>
+        <p class="muted roster-intro">Сначала можно загрузить обычный стартовый список. Если у вас есть отдельный XLSX / CSV с баллами ITRA, загрузите его ниже — он заменит обычный список для расчёта.</p>
         <div>
         <h2>Стартовый список</h2>
         <div class="upload">
-          <strong>Стартовый список XLSX / CSV</strong>
+          <strong>Стартовый список XLSX / CSV — можно уже с баллами ITRA</strong>
           <input id="rosterFile" type="file" accept=".xlsx,.xls,.csv,text/csv">
           <span id="rosterName"><span class="file-check">○</span> Файл не выбран</span>
           <button id="rosterLoadBtn" type="button" class="primary" disabled>Загрузить и обработать стартовый список</button>
@@ -962,9 +955,18 @@
           
 
         <div class="itra-online-box">
-          <button id="itraLookupBtn" type="button" class="secondary action-ready">Загрузить ITRA через AI</button>
-          <div id="itraLookupStatus" class="muted">После загрузки стартового списка нажмите кнопку для поиска ITRA PI участников.</div>
+          <input id="itraRosterFile" type="file" accept=".xlsx,.xls,.csv,text/csv" hidden>
+          <button id="itraLookupBtn" type="button" class="secondary action-ready">Загрузить список с баллами ITRA</button>
+          <div id="itraLookupStatus" class="muted">Отдельный список с ITRA заменит обычный стартовый список. После загрузки появится уведомление.</div>
+          <button id="resetItraRosterBtn" type="button" class="secondary mini-action" style="display:none">Вернуться к обычному списку</button>
+          <div id="itraRosterActiveNotice" class="itra-active-notice" style="display:none"></div>
+          <button id="saveItraRosterBtn" type="button" class="secondary action-idle" disabled>Рассчитать прогноз гонки по баллам ITRA</button>
+          <div id="saveItraRosterStatus" class="muted">Введите свой ITRA PI и рассчитайте прогноз относительно загруженного стартового списка.</div>
         </div>
+        <label class="field">
+          <span>Мой ITRA PI</span>
+          <input id="itraPi" type="number" min="0" max="1000" step="1" value="0" inputmode="numeric" placeholder="Например, 545">
+        </label>
         <label class="field">
             <span>Зачёт</span>
             <select id="genderFilter">
@@ -978,7 +980,7 @@
             <input id="sigma" type="number" min="5" max="45" value="20">
           </label>
         </div>
-        <p class="muted">XLSX и CSV читаются прямо на iPhone без внешних библиотек. Если PI нет в файле, его можно ввести вручную.</p>
+        <p class="muted">XLSX и CSV читаются прямо на iPhone. Для прогноза по ITRA загрузите список, где у участников уже заполнены баллы PI.</p>
         <div class="table-wrap">
           <table id="rosterTable">
             <thead><tr><th>Спортсмен</th><th>PI</th><th>Техника</th><th>Выносливость</th><th>Форма</th></tr></thead>
@@ -1190,7 +1192,7 @@
     Модель является оценочной. Броды, погода, питание, состояние покрытия, самочувствие и другие факторы могут существенно повлиять на фактический результат. Расчёты носят исключительно информационно-ознакомительный характер, не являются гарантией результата или рекомендацией к действию. Автор не несёт ответственности за решения, принятые на основании расчётов приложения.
   </footer>
 
-  <script src="app.js?v=257-flat-gain"></script>
+  <script src="app.js?v=261-itra-file-replace"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
