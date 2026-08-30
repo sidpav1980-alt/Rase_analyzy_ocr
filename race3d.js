@@ -46,6 +46,7 @@
   let container, currentLevel = 0, rainActive = false, ready = false;
   let dayPhase = 0.25; // 0..1 across a slow real-time day/night loop
   let snailsGroup, modelCache = new Map();
+  let pathGroup, pathCurve = null, focusT = 0.12;
 
   const SNAIL_COLORS = {
     player:  {shell:0xff5d5d, body:0xffd0c0},
@@ -105,10 +106,18 @@
     modelCache.forEach(s=>{ s.userData.seen=false; });
     list.forEach(item=>{
       const sp = getSnailModel(item.key, item.kind);
-      sp.userData.baseY = item.y!==undefined?item.y:1.1;
-      sp.position.set(item.x, sp.userData.baseY, item.z);
-      // face the direction of travel (toward more negative z = "ahead")
-      sp.rotation.y = Math.PI;
+      let px=item.x||0, py=item.y!==undefined?item.y:1.1, pz=item.z||0, facing=Math.PI;
+      if(pathCurve && item.t!==undefined){
+        const ct = clamp01(item.t);
+        const p = pathCurve.getPointAt(ct);
+        const tangent = pathCurve.getTangentAt(ct);
+        const side = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize().multiplyScalar(item.laneOffset||0);
+        px = p.x+side.x; pz = p.z+side.z; py = (item.y!==undefined?item.y:1.1)+p.y;
+        facing = Math.atan2(tangent.x, tangent.z) + Math.PI;
+      }
+      sp.userData.baseY = py;
+      sp.position.set(px, py, pz);
+      sp.rotation.y = facing;
       sp.visible = true;
     });
     modelCache.forEach((s,key)=>{
@@ -153,14 +162,9 @@
     ground.position.set(0, 0, -80);
     scene.add(ground);
 
-    // path strip down the middle
-    const path = new THREE.Mesh(
-      new THREE.PlaneGeometry(4.2, 260, 1, 1),
-      new THREE.MeshLambertMaterial({color:0xb89a6a})
-    );
-    path.rotation.x = -Math.PI/2;
-    path.position.set(0, 0.02, -80);
-    scene.add(path);
+    // path strip (rebuilt as a curved ribbon per level in buildLevel)
+    pathGroup = new THREE.Group();
+    scene.add(pathGroup);
 
     mountainsGroup = new THREE.Group(); scene.add(mountainsGroup);
     treesGroup = new THREE.Group(); scene.add(treesGroup);
@@ -207,6 +211,46 @@
 
   function clearGroup(g){ while(g.children.length){ g.remove(g.children[0]); } }
 
+  // a gently winding trail, seeded per level — mirrors the reference app's
+  // CatmullRomCurve3 + perpendicular-offset ribbon technique
+  function buildPathCurve(rnd){
+    const segCount = 22;
+    const pts = [];
+    let x = 0;
+    for(let i=0;i<=segCount;i++){
+      const tt = i/segCount;
+      const z = 12 - tt*160;
+      x += (rnd()-0.5)*6.5;
+      x = Math.max(-9, Math.min(9, x));
+      const y = Math.sin(tt*Math.PI*2.1)*0.5;
+      pts.push(new THREE.Vector3(x, Math.max(0,y), z));
+    }
+    const curve = new THREE.CatmullRomCurve3(pts);
+    curve.curveType = "catmullrom";
+    return curve;
+  }
+  function buildPathRibbon(curve, color){
+    const n = 90;
+    const ribbonPts = curve.getPoints(n);
+    const positions = [], idxArr = [];
+    for(let i=0;i<ribbonPts.length;i++){
+      const p = ribbonPts[i];
+      const next = ribbonPts[Math.min(i+1, ribbonPts.length-1)];
+      const dir = new THREE.Vector3().subVectors(next,p).normalize();
+      const side = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(2.1);
+      positions.push(p.x+side.x, p.y+0.02, p.z+side.z, p.x-side.x, p.y+0.02, p.z-side.z);
+    }
+    for(let i=0;i<ribbonPts.length-1;i++){
+      const i0=i*2,i1=i*2+1,i2=i*2+2,i3=i*2+3;
+      idxArr.push(i0,i2,i1, i1,i2,i3);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(positions,3));
+    geo.setIndex(idxArr);
+    geo.computeVertexNormals();
+    return new THREE.Mesh(geo, new THREE.MeshLambertMaterial({color}));
+  }
+
   function buildLevel(idx){
     currentLevel = idx;
     const t = THEME_3D[idx] || THEME_3D[0];
@@ -214,6 +258,10 @@
 
     ground.material.color.setHex(t.ground);
     scene.fog = new THREE.Fog(t.fog, 55, 210);
+
+    pathCurve = buildPathCurve(rnd);
+    clearGroup(pathGroup);
+    pathGroup.add(buildPathRibbon(pathCurve, t.sand ? 0xd8c48a : 0xb89a6a));
 
     clearGroup(mountainsGroup);
     for(let i=0;i<11;i++){
@@ -239,7 +287,7 @@
     const treeCount = Math.round(70*t.trees);
     for(let i=0;i<treeCount;i++){
       const side = rnd()<0.5?-1:1;
-      const x = side*(3 + rnd()*16);
+      const x = side*(11 + rnd()*14); // clear of the curve's ±9 wander
       const z = -8 - rnd()*95;
       const s = 0.6+rnd()*0.9;
       const grp = new THREE.Group();
@@ -294,6 +342,7 @@
     elapsedTotal += dt;
     updateDayNight(dt);
     animateSnails(elapsedTotal);
+    updateChaseCamera();
 
     if(rainPoints.visible){
       const pos = rainPoints.geometry.attributes.position;
@@ -305,6 +354,18 @@
       pos.needsUpdate = true;
     }
     renderer.render(scene, camera);
+  }
+
+  function updateChaseCamera(){
+    if(!pathCurve) return;
+    const camT = clamp01(focusT - 0.07);
+    const lookT = clamp01(focusT + 0.10);
+    const camP = pathCurve.getPointAt(camT);
+    const camTangent = pathCurve.getTangentAt(camT);
+    const camPos = camP.clone().addScaledVector(camTangent, -6).add(new THREE.Vector3(0, 5.4, 0));
+    camera.position.lerp(camPos, 0.06);
+    const lookP = pathCurve.getPointAt(lookT);
+    camera.lookAt(lookP.x, lookP.y+1.2, lookP.z);
   }
 
   function onResize(){
@@ -325,10 +386,10 @@
     if(rainPoints) rainPoints.visible = active;
   }
   function setProgress(pct){
-    // subtle forward dolly to sell a sense of movement along the trail
+    // maps real race completion onto a position along the curved trail (0.12..0.84),
+    // leaving headroom at both ends for leaders ahead / stragglers behind
     if(!ready) return;
-    const z = 13 - clamp01(pct/100)*3;
-    camera.position.z = z;
+    focusT = clamp01(0.12 + clamp01(pct/100)*0.72);
   }
 
   window.Race3D = { init, setLevel, setRainActive, setProgress, updateSnails, onResize };

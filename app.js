@@ -967,23 +967,30 @@ function renderSnailTrack(){
     ${RACE.field.filter(n=>n.dnf).length?`<span>🚫 сошли: ${RACE.field.filter(n=>n.dnf).length}</span>`:""}
   `;
 
-  // mirror the same clustering into the 3D scene: leaders further down the
-  // trail (deeper/smaller = "ahead"), main group around the player, stragglers
-  // closer to camera ("behind"). Not literally to-scale — spacing is by rank,
-  // same abstraction as the 2D lane above.
+  // mirror the same clustering into the 3D scene, but now grounded in real
+  // relative distance: each snail's position along the curved trail is driven
+  // by its actual km gap to the player (windowed so it stays legible even on
+  // a 700km race), not an arbitrary rank-based offset.
   if(window.Race3D){
-    const zPlayer = -25;
-    const items = [{key:"player", kind:"player", x:0, y:1.4, z:zPlayer}];
+    const pct3d = RACE.playerKm/RACE.distanceKm*100;
+    window.Race3D.setProgress(pct3d);
+    const focusT = clamp(0.12 + clamp(pct3d/100,0,1)*0.72, 0, 1); // mirrors race3d.js setProgress()
+    const windowKm = Math.max(distanceKm*0.02, 1.5);
+    const deltaT = (km)=>{
+      const d = clamp((km-RACE.playerKm)/windowKm, -1, 1);
+      return d*0.32;
+    };
+    const items = [{key:"player", kind:"player", t:focusT, laneOffset:0, y:1.3}];
     if(isBreakaway){
       leaderCluster.members.slice(0,4).forEach((n,i)=>{
-        items.push({key:"lead"+i, kind:"leader", x:(i%2===0?-1:1)*(1+i*0.4), y:1.3, z:zPlayer-8-i*3});
+        items.push({key:"lead"+i, kind:"leader", t:focusT+deltaT(n.liveKm), laneOffset:(i%2===0?-1:1)*(0.7+i*0.3), y:1.25});
       });
     }
     repMembers.forEach((n,i)=>{
-      items.push({key:"grp"+i, kind:"group", x:(i%2===0?-1:1)*(0.8+i*0.5), y:1.1, z:zPlayer + (i%3-1)*3});
+      items.push({key:"grp"+i, kind:"group", t:focusT+deltaT(n.liveKm), laneOffset:(i%2===0?-1:1)*(0.6+i*0.3), y:1.1});
     });
     clusters.filter(c=>c!==mainCluster && c!==leaderCluster).slice(0,2).forEach((c,i)=>{
-      items.push({key:"strag"+i, kind:"straggler", x:(i%2===0?-2:2), y:1.0, z:zPlayer+10+i*4});
+      items.push({key:"strag"+i, kind:"straggler", t:focusT+deltaT(c.maxKm), laneOffset:(i%2===0?-1.6:1.6), y:1.0});
     });
     window.Race3D.updateSnails(items);
   }
