@@ -254,6 +254,14 @@ function applyPrefs(){
   root.classList.toggle("reduce-motion", !!PREFS.reduceMotion);
   root.classList.toggle("high-contrast", !!PREFS.highContrast);
   if(window.Race3D && window.Race3D.onResize) setTimeout(()=>window.Race3D.onResize(), 50);
+  setTimeout(updateTopbarHeightVar, 50);
+}
+
+/* ---------------------------- STICKY OFFSET (keeps eq-tabs pinned under the topbar) */
+function updateTopbarHeightVar(){
+  const bar = document.querySelector(".topbar");
+  if(!bar) return;
+  document.documentElement.style.setProperty("--topbar-h", bar.offsetHeight+"px");
 }
 
 /* ---------------------------- PLAYER PACE CALC ------------------------------ */
@@ -1277,18 +1285,21 @@ function renderTraining(){
 function renderCoachView(){
   const el=document.getElementById("coachList");
   el.className = "eq-cards";
-  el.innerHTML = COACHES.map(c=>{
+  el.innerHTML = COACHES.map((c,i)=>{
     const afford = c.price===0 || S.money>=c.price;
     const active = S.coachId===c.id;
+    const stars = "★".repeat(i+1) + "☆".repeat(COACHES.length-1-i);
     let actionHtml;
     if(active) actionHtml = `<div class="eq-action eq-equipped">✅ активен</div>`;
     else if(afford) actionHtml = `<button class="eq-wear-btn" data-coach="${c.id}">${c.price?("Нанять · ₽ "+c.price.toLocaleString("ru-RU")):"Выбрать"}</button>`;
     else actionHtml = `<button class="eq-wear-btn btn-disabled" disabled>Не хватает ₽ ${c.price.toLocaleString("ru-RU")}</button>`;
     return `<div class="eq-card ${active?'eq-current':''}">
       <div class="eq-card-head"><b>${c.name}</b></div>
+      <div class="eq-card-row">Уровень подготовки: <b style="color:var(--gold)">${stars}</b></div>
       <div class="eq-card-row">Цена: <b>${c.price?("₽ "+c.price.toLocaleString("ru-RU")):"бесплатно"}</b></div>
-      <div class="eq-card-row">Тренированность до: <b>${c.cap}/100</b></div>
-      <div class="eq-card-row">Бонус темпа: <b>${Math.round(c.paceBonus*100)}%</b> · снижение травматизма: <b>${Math.round(c.injuryCut*100)}%</b></div>
+      <div class="eq-card-row">Максимум тренированности: <b>${c.cap}/100</b></div>
+      <div class="eq-card-row">Тренировка: <b>+1</b> к тренированности за раз, до потолка тренера</div>
+      <div class="eq-card-row">В гонке: <b>−${Math.round(c.paceBonus*100)}%</b> к базовому темпу · <b>−${Math.round(c.injuryCut*100)}%</b> риска травм/DNF</div>
       ${actionHtml}
     </div>`;
   }).join("");
@@ -1436,6 +1447,9 @@ function init(){
   wireUI();
   renderStatbar();
   showView("race");
+  updateTopbarHeightVar();
+  window.addEventListener("resize", updateTopbarHeightVar);
+  window.addEventListener("orientationchange", ()=>setTimeout(updateTopbarHeightVar,300));
   setInterval(tickTimers, 1000);
   saveGame();
   runSelfTests();
