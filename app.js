@@ -232,9 +232,9 @@ const PREFS_KEY = "trailArmageddonPrefs_v1";
 function loadPrefs(){
   try{
     const raw = localStorage.getItem(PREFS_KEY);
-    return Object.assign({textSize:"normal", reduceMotion:false, highContrast:false, scene3D:true},
+    return Object.assign({textSize:"normal", reduceMotion:false, highContrast:false},
       raw?JSON.parse(raw):{});
-  }catch(e){ return {textSize:"normal", reduceMotion:false, highContrast:false, scene3D:true}; }
+  }catch(e){ return {textSize:"normal", reduceMotion:false, highContrast:false}; }
 }
 function savePrefs(){ try{ localStorage.setItem(PREFS_KEY, JSON.stringify(PREFS)); }catch(e){} }
 let PREFS = loadPrefs();
@@ -243,8 +243,6 @@ function applyPrefs(){
   root.classList.toggle("text-large", PREFS.textSize==="large");
   root.classList.toggle("reduce-motion", !!PREFS.reduceMotion);
   root.classList.toggle("high-contrast", !!PREFS.highContrast);
-  const host = document.getElementById("scene3d");
-  if(host) host.style.display = PREFS.scene3D ? "" : "none";
   if(window.Race3D && window.Race3D.onResize) setTimeout(()=>window.Race3D.onResize(), 50);
 }
 
@@ -1259,7 +1257,6 @@ function wireUI(){
     document.getElementById("prefTextSize").value = PREFS.textSize;
     document.getElementById("prefReduceMotion").checked = !!PREFS.reduceMotion;
     document.getElementById("prefHighContrast").checked = !!PREFS.highContrast;
-    document.getElementById("prefScene3D").checked = PREFS.scene3D!==false;
     document.getElementById("settingsModal").classList.add("open");
   };
   document.getElementById("btnSettingsClose").onclick=()=>document.getElementById("settingsModal").classList.remove("open");
@@ -1267,7 +1264,6 @@ function wireUI(){
   document.getElementById("prefTextSize").onchange=(e)=>{ PREFS.textSize=e.target.value; savePrefs(); applyPrefs(); };
   document.getElementById("prefReduceMotion").onchange=(e)=>{ PREFS.reduceMotion=e.target.checked; savePrefs(); applyPrefs(); };
   document.getElementById("prefHighContrast").onchange=(e)=>{ PREFS.highContrast=e.target.checked; savePrefs(); applyPrefs(); };
-  document.getElementById("prefScene3D").onchange=(e)=>{ PREFS.scene3D=e.target.checked; savePrefs(); applyPrefs(); };
 
   document.getElementById("profileName").value = S.profile.name;
   document.getElementById("profileName").oninput = (e)=>{
