@@ -1,43 +1,42 @@
-const http = require("http");
-const fs = require("fs");
-const path = require("path");
+const http=require('http'),fs=require('fs'),path=require('path'),url=require('url');
+const ROOT=__dirname, PORT=process.env.PORT||3000;
 
-const PORT = process.env.PORT || 3000;
-const ROOT = __dirname;
-
-const MIME = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "application/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".png": "image/png",
-  ".json": "application/json",
-  ".ico": "image/x-icon"
+function send(res,status,obj,headers={}){
+  res.writeHead(status,{'Content-Type':'application/json; charset=utf-8',...headers});
+  res.end(JSON.stringify(obj));
+}
+async function api(req,res,p){
+  if(p==='/api/health') return send(res,200,{ok:true,version:'1.001-offline'});
+  return false;
+}
+const mime={
+  '.html':'text/html; charset=utf-8',
+  '.js':'text/javascript; charset=utf-8',
+  '.css':'text/css; charset=utf-8',
+  '.png':'image/png',
+  '.jpg':'image/jpeg',
+  '.svg':'image/svg+xml',
+  '.json':'application/json'
 };
-
-const server = http.createServer((req, res) => {
-  let reqPath = decodeURIComponent(req.url.split("?")[0]);
-  if (reqPath === "/") reqPath = "/index.html";
-  const filePath = path.join(ROOT, reqPath);
-
-  // prevent path traversal outside project root
-  if (!filePath.startsWith(ROOT)) {
-    res.writeHead(403);
-    res.end("Forbidden");
-    return;
+const server=http.createServer(async(req,res)=>{
+  const p=url.parse(req.url).pathname;
+  if(p.startsWith('/api/')){
+    const handled=await api(req,res,p);
+    if(handled!==false)return;
+    return send(res,404,{error:'Not found'});
   }
-
-  fs.readFile(filePath, (err, data) => {
-    if (err) {
-      res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
-      res.end("Не найдено");
-      return;
-    }
-    const ext = path.extname(filePath);
-    res.writeHead(200, { "Content-Type": MIME[ext] || "application/octet-stream" });
-    res.end(data);
-  });
+  let file=path.join(ROOT,p==='/'?'index.html':p);
+  if(!file.startsWith(ROOT))return send(res,403,{error:'Forbidden'});
+  if(!fs.existsSync(file)||fs.statSync(file).isDirectory())file=path.join(ROOT,'index.html');
+  try{
+    const ext=path.extname(file);
+    const headers={'Content-Type':mime[ext]||'application/octet-stream'};
+    // Force browsers/PWA shells to revalidate the app shell after deploys.
+    if(ext==='.html') headers['Cache-Control']='no-store, no-cache, must-revalidate, max-age=0';
+    else if(ext==='.js'||ext==='.css') headers['Cache-Control']='no-cache, must-revalidate';
+    else if(/chara_bg_102_20260822b\.png$/.test(file)) headers['Cache-Control']='public, max-age=31536000, immutable';
+    res.writeHead(200,headers);
+    fs.createReadStream(file).pipe(res);
+  }catch{send(res,500,{error:'Server error'});}
 });
-
-server.listen(PORT, () => {
-  console.log("Trail Runner: Armageddon running on http://localhost:" + PORT);
-});
+server.listen(PORT,()=>console.log(`Trail Runner Armageddon offline on ${PORT}`));
