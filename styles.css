@@ -52,9 +52,17 @@ button{cursor:pointer;font-family:inherit;}
 .top7{position:relative;z-index:2;display:flex;flex-direction:column;gap:2px;font-size:11px;margin-bottom:10px;}
 .top7 .row{display:flex;justify-content:space-between;background:rgba(5,12,24,.55);backdrop-filter:blur(2px);border-radius:6px;padding:3px 6px;border:1px solid rgba(255,255,255,.06);}
 .top7 .row.me{background:rgba(255,93,93,.35);font-weight:700;border-color:rgba(255,93,93,.5);}
-.track{position:relative;z-index:2;height:28px;background:rgba(5,12,24,.6);border-radius:14px;overflow:hidden;border:1px solid rgba(255,255,255,.12);}
-.track-fill{position:absolute;left:0;top:0;bottom:0;width:0%;background:linear-gradient(90deg,#1c3f66,#3d9bdc);transition:width .3s linear;}
-.player-dot{position:absolute;left:0%;top:3px;transform:translateX(-50%);font-size:18px;transition:left .3s linear;filter:drop-shadow(0 0 4px #000);}
+.track{position:relative;z-index:2;height:46px;background:rgba(5,12,24,.6);border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,.12);}
+.track-fill{position:absolute;left:0;top:0;bottom:0;width:0%;background:linear-gradient(90deg,#1c3f66,#3d9bdc);opacity:.35;transition:width .3s linear;}
+.group-band{position:absolute;top:6px;bottom:6px;left:0;width:0;border-radius:10px;background:rgba(120,200,140,.22);border:1px solid rgba(120,200,140,.4);transition:left .3s linear, width .3s linear;}
+.snail-layer{position:absolute;inset:0;}
+.snail{position:absolute;top:50%;transform:translate(-50%,-50%);font-size:13px;line-height:1;transition:left .3s linear;filter:drop-shadow(0 0 2px #000);}
+.snail.leader{font-size:15px;filter:drop-shadow(0 0 3px #ffd166);}
+.snail.straggler{opacity:.45;font-size:11px;}
+.snail-badge{position:absolute;top:-11px;left:50%;transform:translateX(-50%);font-size:8px;background:rgba(5,12,24,.85);border-radius:6px;padding:0 3px;white-space:nowrap;color:var(--muted);}
+.player-dot{position:absolute;left:0%;top:50%;transform:translate(-50%,-50%);font-size:20px;transition:left .3s linear;filter:hue-rotate(320deg) saturate(4) drop-shadow(0 0 4px var(--accent)) drop-shadow(0 0 2px #000);z-index:3;}
+.track-legend{display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:var(--muted);margin:6px 0 2px;}
+.track-legend span{display:inline-flex;align-items:center;gap:3px;}
 
 /* ---- per-level sky themes ---- */
 .t-park{background:linear-gradient(180deg,#bfe6a8 0%,#6fae5a 55%,#2f5e33 100%);}

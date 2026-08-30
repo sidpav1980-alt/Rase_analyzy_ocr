@@ -597,6 +597,12 @@ function finishRace(){
   if(nextIdx<LEVELS.length && !S.slotsOwned[nextIdx] && nextIdx<3) S.slotsOwned[nextIdx]=true;
   if(level.special==="armageddon" && S.completedLevels.length>=21) S.champion=true;
 
+  // advance to the next not-yet-completed level so the player isn't stuck re-selecting it manually
+  if(nextIdx<LEVELS.length){
+    const nextFrontier = Math.max(0, ...S.completedLevels.map(i=>i+1), 0);
+    S.currentLevel = Math.min(nextFrontier, LEVELS.length-1);
+  }
+
   saveGame();
   const top3 = ranked.slice(0,3);
   showFinishSummary({dnf:false, place, totalFinishers, reward, top3, ranked});
@@ -768,6 +774,9 @@ function renderRaceView(){
     document.getElementById("trackFill").style.width="0%";
     document.getElementById("playerDot").style.left="0%";
     document.getElementById("raceMetrics").innerHTML="";
+    document.getElementById("snailLayer").innerHTML="";
+    document.getElementById("groupBand").style.width="0";
+    document.getElementById("trackLegend").innerHTML="";
   }
 }
 function renderRaceUI(){
@@ -792,6 +801,7 @@ function renderRaceUI(){
     <div>Штрафы<b>+${fmtTime(RACE.playerPenaltySec)}</b></div>
   `;
   renderTop14();
+  renderSnailTrack();
   document.getElementById("guaranaCount").textContent = "· "+S.res.guarana+" шт. (в гонке "+RACE.guaranaUsesLeft+")";
   if(window.Race3D) window.Race3D.setProgress(pct);
 }
@@ -805,7 +815,71 @@ function renderTop14(){
   (RACE.field.filter(n=>n.dnf).length?`<p class="hint">🚫 Сошли: ${RACE.field.filter(n=>n.dnf).length}</p>`:"");
 }
 
-/* ---------------------------- RENDER: CARRY ------------------------------------ */
+/* ---------------------------- SNAIL TRACK (leaders / main group) --------------- */
+function computeClusters(sortedByKmDesc, distanceKm){
+  const gapThresh = Math.max(0.4, distanceKm*0.012);
+  const clusters=[];
+  let cur=null;
+  sortedByKmDesc.forEach(n=>{
+    if(!cur){ cur={members:[n], minKm:n.liveKm, maxKm:n.liveKm}; clusters.push(cur); return; }
+    const lastKm = cur.members[cur.members.length-1].liveKm;
+    if(lastKm - n.liveKm <= gapThresh){ cur.members.push(n); cur.minKm=Math.min(cur.minKm,n.liveKm); cur.maxKm=Math.max(cur.maxKm,n.liveKm); }
+    else { cur={members:[n], minKm:n.liveKm, maxKm:n.liveKm}; clusters.push(cur); }
+  });
+  return clusters;
+}
+function renderSnailTrack(){
+  const layer = document.getElementById("snailLayer");
+  const band = document.getElementById("groupBand");
+  const legend = document.getElementById("trackLegend");
+  if(!layer) return;
+  if(!RACE || !RACE.liveField || !RACE.liveField.length){
+    layer.innerHTML=""; band.style.width="0"; legend.innerHTML=""; return;
+  }
+  const distanceKm = RACE.distanceKm;
+  const others = RACE.liveField.filter(n=>!n.isPlayer && !n.dnf);
+  const sorted = others.slice().sort((a,b)=>b.liveKm-a.liveKm);
+  const clusters = computeClusters(sorted, distanceKm);
+  const mainCluster = clusters.reduce((a,b)=> (b.members.length>a.members.length?b:a), clusters[0]||{members:[],minKm:0,maxKm:0});
+  const leaderCluster = clusters[0] || {members:[]};
+
+  if(mainCluster.members.length>=3){
+    const left = clamp(mainCluster.minKm/distanceKm*100,0,100);
+    const right = clamp(mainCluster.maxKm/distanceKm*100,0,100);
+    band.style.left = left+"%";
+    band.style.width = Math.max(2,right-left)+"%";
+  } else { band.style.width="0"; }
+
+  let html = "";
+  const isBreakaway = leaderCluster!==mainCluster && leaderCluster.members.length && leaderCluster.members.length<=4;
+  if(isBreakaway){
+    leaderCluster.members.slice(0,4).forEach(n=>{
+      const pct = clamp(n.liveKm/distanceKm*100,0,100);
+      html += `<div class="snail leader" style="left:${pct}%" title="${n.name}">🐌</div>`;
+    });
+  }
+  // a handful of representative markers inside the main group for a "pack" feel
+  const repMembers = mainCluster.members.slice(0, isBreakaway?5:6);
+  repMembers.forEach((n,i)=>{
+    const pct = clamp(n.liveKm/distanceKm*100,0,100);
+    const jitter = (i%2===0? -1:1)* (2+i);
+    html += `<div class="snail" style="left:${pct}%;top:calc(50% + ${jitter}px)">🐌</div>`;
+  });
+  // dim stragglers behind the main group
+  clusters.filter(c=>c!==mainCluster && c!==leaderCluster).slice(0,2).forEach(c=>{
+    const pct = clamp(c.maxKm/distanceKm*100,0,100);
+    html += `<div class="snail straggler" style="left:${pct}%">🐌<span class="snail-badge">+${c.members.length}</span></div>`;
+  });
+  layer.innerHTML = html;
+
+  legend.innerHTML = `
+    <span>🔴🐌 Вы</span>
+    ${isBreakaway?`<span>🐌 <b style="color:var(--gold)">лидеры (${leaderCluster.members.length})</b></span>`:""}
+    ${mainCluster.members.length?`<span>🐌 основная группа (${mainCluster.members.length})</span>`:""}
+    ${RACE.field.filter(n=>n.dnf).length?`<span>🚫 сошли: ${RACE.field.filter(n=>n.dnf).length}</span>`:""}
+  `;
+}
+
 function renderCarry(){
   const level = LEVELS[S.currentLevel];
   const needWater = requiredWater(level.km, level.weather);
