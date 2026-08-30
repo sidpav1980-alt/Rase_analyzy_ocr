@@ -4,7 +4,7 @@
    Purely decorative/atmospheric — does not affect game logic or numbers.
    ========================================================================== */
 (function(){
-  if(typeof THREE === "undefined"){ window.Race3D = { init(){}, setLevel(){}, setRainActive(){}, setProgress(){}, updateSnails(){}, onResize(){} }; return; }
+  if(typeof THREE === "undefined"){ window.Race3D = { init(){}, setLevel(){}, setRainActive(){}, setProgress(){}, updateSnails(){}, onResize(){}, getFocusT(){return 0.12;} }; return; }
 
   // deterministic PRNG so a level's trees/mountains look the same every time
   function mulberry32(seed){
@@ -46,7 +46,7 @@
   let container, currentLevel = 0, rainActive = false, ready = false;
   let dayPhase = 0.25; // 0..1 across a slow real-time day/night loop
   let snailsGroup, modelCache = new Map();
-  let pathGroup, pathCurve = null, focusT = 0.12;
+  let pathGroup, pathCurve = null, focusT = 0.12, targetFocusT = 0.12;
 
   const SNAIL_COLORS = {
     player:  {shell:0xff5d5d, body:0xffd0c0},
@@ -480,6 +480,15 @@
     const dt = Math.min(0.1, clock.getDelta());
     elapsedTotal += dt;
     updateDayNight(dt);
+
+    // rate-limited visual catch-up: the real race can jump focusT by a huge
+    // amount in one game tick at high speeds, but the camera/scene should
+    // never visually "teleport" — cap how fast the on-screen progress can move
+    const maxStep = dt * 0.35; // full-course sweep takes ~3s minimum, even from a huge jump
+    let diff = targetFocusT - focusT;
+    if(Math.abs(diff) > maxStep) diff = diff>0 ? maxStep : -maxStep;
+    focusT += diff;
+
     animateSnails(elapsedTotal, dt);
     updateChaseCamera();
 
@@ -531,11 +540,16 @@
     if(rainPoints) rainPoints.visible = active;
   }
   function setProgress(pct){
-    // maps real race completion onto a position along the curved trail (0.12..0.84),
-    // leaving headroom at both ends for leaders ahead / stragglers behind
+    // this is the "true" race progress, which can jump hugely between game
+    // ticks at high sim speeds (e.g. 600x can finish a race in a few real
+    // seconds) — animate() eases the visual camera/scene toward it at a
+    // capped rate instead of snapping straight to it, so the 3D view sweeps
+    // smoothly forward instead of visibly teleporting
     if(!ready) return;
-    focusT = clamp01(0.12 + clamp01(pct/100)*0.72);
+    targetFocusT = clamp01(0.12 + clamp01(pct/100)*0.72);
   }
 
-  window.Race3D = { init, setLevel, setRainActive, setProgress, updateSnails, onResize };
+  function getFocusT(){ return focusT; }
+
+  window.Race3D = { init, setLevel, setRainActive, setProgress, updateSnails, onResize, getFocusT };
 })();

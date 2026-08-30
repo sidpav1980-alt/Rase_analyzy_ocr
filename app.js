@@ -1235,7 +1235,9 @@ function renderSnailTrack(){
   if(window.Race3D){
     const pct3d = RACE.playerKm/RACE.distanceKm*100;
     window.Race3D.setProgress(pct3d);
-    const focusT = clamp(0.12 + clamp(pct3d/100,0,1)*0.72, 0, 1); // mirrors race3d.js setProgress()
+    // use the 3D layer's own smoothed value (not a fresh raw computation) so
+    // snail positions never get ahead of where the camera has actually eased to
+    const focusT = window.Race3D.getFocusT ? window.Race3D.getFocusT() : clamp(0.12 + clamp(pct3d/100,0,1)*0.72, 0, 1);
     const windowKm = Math.max(distanceKm*0.02, 1.5);
     const deltaT = (km)=>{
       const d = clamp((km-RACE.playerKm)/windowKm, -1, 1);
