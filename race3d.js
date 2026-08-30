@@ -78,6 +78,7 @@
     const foot = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 10), bodyMat);
     foot.scale.set(0.82, 0.58, 2.05);
     foot.position.set(0, 0.14, 0.02);
+    foot.castShadow = true;
     grp.add(foot);
 
     // tail point, tapering off behind the shell
@@ -90,6 +91,7 @@
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.165, 14, 10), bodyMat);
     head.scale.set(1, 0.92, 1.05);
     head.position.set(0, 0.2, 0.52);
+    head.castShadow = true;
     grp.add(head);
     // small snout tip so the front reads even more clearly
     const snout = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 8), bodyMat);
@@ -103,6 +105,7 @@
     );
     shell.scale.set(1, 0.95, 1.15);
     shell.position.set(0, 0.4, -0.12);
+    shell.castShadow = true;
     grp.add(shell);
 
     // cartoon-style dark outline for silhouette clarity at a distance
@@ -134,6 +137,7 @@
     grp.userData.phase = Math.random()*10;
     grp.userData.kind = kind;
     grp.userData.facing = new THREE.Vector3(0,0,1);
+    grp.userData.placed = false;
     return grp;
   }
   function getSnailModel(key, kind){
@@ -158,34 +162,67 @@
         facing = Math.atan2(tangent.x, tangent.z) + Math.PI;
         facingVec = tangent.clone().normalize();
       }
+      // these are TARGETS the render loop eases toward each frame — updateSnails
+      // itself only runs a few times a second (tied to the game tick), so
+      // snapping straight to these would look jerky; animateSnails smooths it
       sp.userData.baseY = py;
       sp.userData.baseX = px;
       sp.userData.baseZ = pz;
+      sp.userData.targetRot = facing;
       sp.userData.facing = facingVec;
-      sp.position.set(px, py, pz);
-      sp.rotation.y = facing;
+      if(!sp.userData.placed){
+        sp.position.set(px, py, pz);
+        sp.rotation.y = facing;
+        sp.userData.placed = true;
+      }
       sp.visible = true;
     });
     modelCache.forEach((s,key)=>{
       if(!s.userData.seen){ snailsGroup.remove(s); modelCache.delete(key); }
     });
   }
-  function animateSnails(elapsed){
+  function animateSnails(elapsed, dt){
     if(!snailsGroup) return;
+    const followK = 1 - Math.pow(0.0008, Math.min(dt,0.1)); // frame-rate-independent easing
     modelCache.forEach(s=>{
       const speed = s.userData.kind==="straggler"?2.6:3.6;
       const amp = s.userData.kind==="player"?0.09:0.065;
       const wob = Math.sin(elapsed*speed + s.userData.phase);
-      s.position.y = (s.userData.baseY||1.1) + Math.abs(wob)*amp;
-      // visible "inching" crawl: small forward/back creep along the facing direction
       const inch = Math.sin(elapsed*speed*0.5 + s.userData.phase) * 0.22;
       const f = s.userData.facing || {x:0,z:1};
-      s.position.x = (s.userData.baseX||s.position.x) + f.x*inch;
-      s.position.z = (s.userData.baseZ||s.position.z) + f.z*inch;
+      const targetX = (s.userData.baseX||0) + f.x*inch;
+      const targetY = (s.userData.baseY||1.1) + Math.abs(wob)*amp;
+      const targetZ = (s.userData.baseZ||0) + f.z*inch;
+      s.position.x += (targetX - s.position.x)*followK;
+      s.position.y += (targetY - s.position.y)*followK;
+      s.position.z += (targetZ - s.position.z)*followK;
+
+      let dRot = (s.userData.targetRot||0) - s.rotation.y;
+      dRot = Math.atan2(Math.sin(dRot), Math.cos(dRot)); // shortest angular path
+      s.rotation.y += dRot*followK;
+
       const squash = 1 + wob*0.06;
       const baseScale = (s.userData.kind==="player"?1.5:(s.userData.kind==="leader"?1.2:(s.userData.kind==="straggler"?0.7:1.0))) * 2.1;
       s.scale.set(baseScale*(1-wob*0.03), baseScale*squash, baseScale*(1-wob*0.03));
     });
+  }
+
+  // small reusable speckle-noise textures — multiplied by each level's themed
+  // color (map × material.color in MeshStandardMaterial), so we don't need to
+  // regenerate a tinted texture per level
+  let grassTex, dirtTex;
+  function makeNoiseTexture(baseGray, variance, size){
+    const c = document.createElement("canvas"); c.width=c.height=size;
+    const ctx = c.getContext("2d");
+    const img = ctx.createImageData(size,size);
+    for(let i=0;i<size*size;i++){
+      const v = Math.max(0, Math.min(255, baseGray + (Math.random()-0.5)*variance));
+      img.data[i*4]=v; img.data[i*4+1]=v; img.data[i*4+2]=v; img.data[i*4+3]=255;
+    }
+    ctx.putImageData(img,0,0);
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    return tex;
   }
 
   function init(containerEl){
@@ -197,20 +234,35 @@
 
     renderer = new THREE.WebGLRenderer({antialias:true});
     renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
 
     hemi = new THREE.HemisphereLight(0xffffff, 0x223322, 0.9);
     scene.add(hemi);
     sun = new THREE.DirectionalLight(0xffffff, 1.0);
     sun.position.set(10, 20, 10);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024,1024);
+    sun.shadow.camera.left = -40; sun.shadow.camera.right = 40;
+    sun.shadow.camera.top = 40; sun.shadow.camera.bottom = -40;
+    sun.shadow.camera.near = 1; sun.shadow.camera.far = 120;
+    sun.shadow.bias = -0.002;
     scene.add(sun);
+    scene.add(sun.target);
+
+    grassTex = makeNoiseTexture(185, 60, 128);
+    grassTex.repeat.set(20, 44);
+    dirtTex = makeNoiseTexture(205, 75, 96);
+    dirtTex.repeat.set(2, 46);
 
     ground = new THREE.Mesh(
       new THREE.PlaneGeometry(120, 260, 1, 1),
-      new THREE.MeshLambertMaterial({color:0x4f8a3d})
+      new THREE.MeshStandardMaterial({color:0x4f8a3d, map:grassTex, roughness:1, metalness:0})
     );
     ground.rotation.x = -Math.PI/2;
     ground.position.set(0, 0, -80);
+    ground.receiveShadow = true;
     scene.add(ground);
 
     // path strip (rebuilt as a curved ribbon per level in buildLevel)
@@ -283,13 +335,15 @@
   function buildPathRibbon(curve, color){
     const n = 90;
     const ribbonPts = curve.getPoints(n);
-    const positions = [], idxArr = [];
+    const positions = [], idxArr = [], uvs = [];
     for(let i=0;i<ribbonPts.length;i++){
       const p = ribbonPts[i];
       const next = ribbonPts[Math.min(i+1, ribbonPts.length-1)];
       const dir = new THREE.Vector3().subVectors(next,p).normalize();
       const side = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(2.1);
       positions.push(p.x+side.x, p.y+0.02, p.z+side.z, p.x-side.x, p.y+0.02, p.z-side.z);
+      const v = i/(ribbonPts.length-1);
+      uvs.push(0,v, 1,v);
     }
     for(let i=0;i<ribbonPts.length-1;i++){
       const i0=i*2,i1=i*2+1,i2=i*2+2,i3=i*2+3;
@@ -297,9 +351,12 @@
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.Float32BufferAttribute(positions,3));
+    geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs,2));
     geo.setIndex(idxArr);
     geo.computeVertexNormals();
-    return new THREE.Mesh(geo, new THREE.MeshLambertMaterial({color}));
+    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({color, map:dirtTex, roughness:0.95, metalness:0}));
+    mesh.receiveShadow = true;
+    return mesh;
   }
 
   function buildLevel(idx){
@@ -319,15 +376,16 @@
       const w = 12+rnd()*16, h = 10+rnd()*20;
       const cone = new THREE.Mesh(
         new THREE.ConeGeometry(w, h, 5),
-        new THREE.MeshLambertMaterial({color:t.mtn})
+        new THREE.MeshStandardMaterial({color:t.mtn, roughness:0.95, metalness:0})
       );
       cone.position.set((i-5)*13 + (rnd()-0.5)*8, h/2-1, -80 - rnd()*22);
       cone.rotation.y = rnd()*Math.PI;
+      cone.receiveShadow = true;
       mountainsGroup.add(cone);
       if(t.snow){
         const cap = new THREE.Mesh(
           new THREE.ConeGeometry(w*0.4, h*0.32, 5),
-          new THREE.MeshLambertMaterial({color:0xffffff})
+          new THREE.MeshStandardMaterial({color:0xffffff, roughness:0.7, metalness:0})
         );
         cap.position.set(cone.position.x, h - h*0.16, cone.position.z);
         mountainsGroup.add(cap);
@@ -342,10 +400,12 @@
       const z = -8 - rnd()*95;
       const s = 0.6+rnd()*0.9;
       const grp = new THREE.Group();
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12*s,0.16*s,1.1*s,5), new THREE.MeshLambertMaterial({color:0x4a3323}));
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12*s,0.16*s,1.1*s,5), new THREE.MeshStandardMaterial({color:0x4a3323, roughness:0.9, metalness:0}));
       trunk.position.y = 0.55*s;
-      const canopy = new THREE.Mesh(new THREE.ConeGeometry(0.75*s,1.8*s,6), new THREE.MeshLambertMaterial({color:t.treeColor}));
+      trunk.castShadow = true;
+      const canopy = new THREE.Mesh(new THREE.ConeGeometry(0.75*s,1.8*s,6), new THREE.MeshStandardMaterial({color:t.treeColor, roughness:0.85, metalness:0}));
       canopy.position.y = 1.5*s;
+      canopy.castShadow = true;
       grp.add(trunk, canopy);
       grp.position.set(x, 0, z);
       treesGroup.add(grp);
@@ -404,7 +464,7 @@
     const dt = Math.min(0.1, clock.getDelta());
     elapsedTotal += dt;
     updateDayNight(dt);
-    animateSnails(elapsedTotal);
+    animateSnails(elapsedTotal, dt);
     updateChaseCamera();
 
     if(rainPoints.visible){
@@ -429,6 +489,12 @@
     camera.position.lerp(camPos, 0.06);
     const lookP = pathCurve.getPointAt(lookT);
     camera.lookAt(lookP.x, lookP.y+1.2, lookP.z);
+
+    // keep the shadow-casting sun aimed at the action so shadows stay sharp
+    // near the runner instead of a fixed origin frustum
+    sun.position.set(camP.x+10, 20, camP.z+10);
+    sun.target.position.set(camP.x, camP.y, camP.z);
+    sun.target.updateMatrixWorld();
   }
 
   function onResize(){
