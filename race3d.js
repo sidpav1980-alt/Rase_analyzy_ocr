@@ -344,22 +344,34 @@
   }
 
   function updateDayNight(dt){
+    const t = THEME_3D[currentLevel] || THEME_3D[0];
     const cycle = 100; // seconds for a full day/night loop
     dayPhase = (dayPhase + dt/cycle) % 1;
     const angle = dayPhase*Math.PI*2;
-    const sunY = Math.sin(angle)*40;
-    const sunX = Math.cos(angle)*40;
+
+    let light, sunY, sunX;
+    if(t.night){
+      // a level explicitly themed as a night race stays dark throughout —
+      // only a small moonlit shimmer, never swings back to daylight
+      sunY = -30; sunX = Math.cos(angle)*10;
+      light = 0.06 + Math.max(0, Math.sin(angle))*0.05;
+    } else {
+      // any other level stays in daylight the whole race — only a gentle
+      // sun-arc wobble for atmosphere, never dips into night darkness
+      sunY = 18 + Math.sin(angle)*10;
+      sunX = Math.cos(angle)*40;
+      light = clamp01((sunY+10)/34);
+      light = 0.72 + light*0.28; // keep it firmly in daytime range
+    }
     sunMesh.position.set(sunX, sunY+5, -70);
     moonMesh.position.set(-sunX, -sunY+5, -70);
-    sunMesh.visible = sunY > -6;
-    moonMesh.visible = sunY <= -6;
+    sunMesh.visible = !t.night;
+    moonMesh.visible = !!t.night;
 
-    const light = clamp01((sunY+10)/34); // 0 at deep night, 1 at midday
     sun.intensity = 0.25 + light*1.1;
     sun.color.setHSL(0.12, 0.5, 0.55+light*0.3);
     hemi.intensity = 0.35 + light*0.7;
 
-    const t = THEME_3D[currentLevel] || THEME_3D[0];
     const dayFog = new THREE.Color(t.fog);
     const nightFog = new THREE.Color(t.fog).multiplyScalar(0.18).lerp(new THREE.Color(0x05070f), 0.55);
     const skyColor = nightFog.clone().lerp(dayFog, light);

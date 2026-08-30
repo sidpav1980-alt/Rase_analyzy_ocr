@@ -636,7 +636,7 @@ function handlePlayerDNF(ev){
   }
   saveGame();
   renderRaceUI();
-  showFinishSummary({dnf:true, reason:ev.name, dnfKm});
+  showFinishSummary({dnf:true, reason:ev.name, dnfKm, fracture:!!ev.fracture});
 }
 
 function finishRace(){
@@ -665,6 +665,13 @@ function finishRace(){
   S.reputation += place===1?4:(place<=3?2:1);
   if(place===1) S.wins++;
 
+  // fatigue accumulates after every race, scaled by distance and weather —
+  // this was previously only applied on DNF, so it never grew after a
+  // normal finish
+  const weatherFatigue = (level.weather==="severe"?8:(level.weather==="heat"||level.weather==="cold"?4:0));
+  const fatigueGain = clamp(Math.round(4 + level.km*0.12 + weatherFatigue), 4, 45);
+  S.fatigue = clamp(S.fatigue+fatigueGain, 0, 100);
+
   Object.keys(S.gear).forEach(slot=>{
     const tier=GEAR[slot][S.gear[slot]];
     S.durability[slot]=Math.max(0, S.durability[slot]-tier.durabilityMax*(0.08+level.km/2000));
@@ -692,7 +699,10 @@ function showFinishSummary(data){
   const host = document.getElementById("raceOverlayHost");
   let html = "";
   if(data.dnf){
-    html += `<div class="overlay"><b>⛔ DNF</b><br>Причина: ${data.reason}<br>Сошёл на ${data.dnfKm} км.<br>💰 За DNF награда: ₽ 0</div>`;
+    const treatNote = data.fracture
+      ? `<br><b>Перелом ноги требует лечения в больнице 5 минут перед новой попыткой.</b>`
+      : "";
+    html += `<div class="overlay"><b>⛔ DNF</b><br>Причина: ${data.reason}<br>Сошёл на ${data.dnfKm} км.${treatNote}<br>💰 За DNF награда: ₽ 0</div>`;
   } else {
     const r = data.rw;
     html += `<div class="overlay"><b>🏁 Финиш</b><br>Место: ${data.place} / ${data.totalFinishers}<br>`;
