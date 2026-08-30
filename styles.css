@@ -57,16 +57,21 @@ button{cursor:pointer;font-family:inherit;}
 #btnGuarana{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 10px;}
 #btnGuarana.glow{box-shadow:0 0 0 3px var(--gold);}
 
-.race-map{position:relative;border-radius:14px;padding:14px 10px 10px;margin-bottom:10px;min-height:200px;
+.race-map{position:relative;border-radius:14px;padding:14px 10px 10px;margin-bottom:10px;min-height:340px;
+  display:flex;flex-direction:column;
   overflow:hidden;background-size:cover;background-position:center;box-shadow:inset 0 0 40px rgba(0,0,0,.35);
   transition:background .4s;}
 .scene3d{position:absolute;inset:0;z-index:0;overflow:hidden;background:#0a1a30;}
 .scene3d canvas{display:block;width:100%;height:100%;}
 .map-fade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(3,8,16,.05) 0%,rgba(3,8,16,.35) 70%,rgba(3,8,16,.75) 100%);z-index:1;pointer-events:none;}
 .map-decor{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden;}
-.top7{position:relative;z-index:2;display:flex;flex-direction:column;gap:2px;font-size:11px;margin-bottom:10px;}
-.top7 .row{display:flex;justify-content:space-between;background:rgba(5,12,24,.55);backdrop-filter:blur(2px);border-radius:6px;padding:3px 6px;border:1px solid rgba(255,255,255,.06);}
-.top7 .row.me{background:rgba(255,93,93,.35);font-weight:700;border-color:rgba(255,93,93,.5);}
+.top7{position:relative;z-index:2;display:flex;flex-wrap:wrap;gap:4px;font-size:10px;margin-bottom:0;}
+.top7 .row{display:flex;align-items:center;gap:4px;background:rgba(5,12,24,.6);backdrop-filter:blur(2px);border-radius:20px;padding:3px 8px;border:1px solid rgba(255,255,255,.08);}
+.top7 .row.me{background:rgba(255,93,93,.4);font-weight:700;border-color:rgba(255,93,93,.6);}
+.top7 .row span{color:var(--muted);font-weight:400;font-size:9px;}
+.top7 .row.me span{color:#fff;}
+.race-map-spacer{flex:1;min-height:70px;}
+.track-wrap{margin-top:auto;}
 .track{position:relative;z-index:2;height:46px;background:rgba(5,12,24,.6);border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,.12);}
 .track-fill{position:absolute;left:0;top:0;bottom:0;width:0%;background:linear-gradient(90deg,#1c3f66,#3d9bdc);opacity:.35;transition:width .3s linear;}
 .group-band{position:absolute;top:6px;bottom:6px;left:0;width:0;border-radius:10px;background:rgba(120,200,140,.22);border:1px solid rgba(120,200,140,.4);transition:left .3s linear, width .3s linear;}

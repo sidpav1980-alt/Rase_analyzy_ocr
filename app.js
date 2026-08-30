@@ -873,9 +873,10 @@ function renderRaceUI(){
   document.getElementById("playerDot").style.left = pct+"%";
   document.getElementById("gelInRace").textContent = "🍯 Гели в гонке: "+RACE.gelsUsedInRace+" / "+RACE.gelsCarried;
 
-  const top7 = (RACE.liveField||[]).slice(0,7);
+  const top7 = (RACE.liveField||[]).slice(0,5);
+  const shortName = (name)=>{ const parts=name.split(" "); return (parts[parts.length-1]||name).slice(0,12); };
   document.getElementById("top7").innerHTML = top7.map(n=>
-    `<div class="row ${n.isPlayer?'me':''}">${n.liveRank}. ${n.isPlayer?"🔴 "+n.name:n.country+" "+n.name}<span>${n.liveKm.toFixed(1)} км</span></div>`
+    `<div class="row ${n.isPlayer?'me':''}">${n.liveRank}.${n.isPlayer?"🔴":n.country} ${shortName(n.name)}<span>${n.liveKm.toFixed(1)}км</span></div>`
   ).join("");
 
   const paceFactor = RACE.guaranaBoostKmLeft>0?0.8:(RACE.guaranaRollbackKmLeft>0?1.4:1);
