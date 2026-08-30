@@ -1036,28 +1036,29 @@ function renderCarry(){
     ? `<button data-buy="${id}">${label}</button>`
     : `<button disabled class="btn-disabled">${label} — не хватает ₽</button>`;
   const el = document.getElementById("carryList");
+  el.className = "carry-grid";
   el.innerHTML = `
     <div class="shop-item ${missGels<=0?'ready':''}">
-      <h3>🍯 Гели «УГЛИ»</h3>
-      <p>Есть: ${S.res.gels} · на эту гонку нужно ≈ ${needGels}</p>
-      ${missGels>0 ? btnOrDisabled("gel-tonorm", `Докупить ${missGels} шт. · ₽ ${priceGels.toLocaleString("ru-RU")}`, priceGels) : `<p class="hint">✅ Норма набрана</p>`}
+      <h3>🍯 Гели</h3>
+      <p>${S.res.gels}/${needGels}</p>
+      ${missGels>0 ? btnOrDisabled("gel-tonorm", `+${missGels} · ₽${priceGels.toLocaleString("ru-RU")}`, priceGels) : `<p class="hint">✅ норма</p>`}
     </div>
     <div class="shop-item ${missMedkit<=0?'ready':''}">
       <h3>🩹 Аптечка</h3>
-      <p>${S.res.medkit}/${needMedkit} · бинт, марля, перекись, пластырь, крем от натирания, крем от солнца, спас-одеяло</p>
-      ${missMedkit>0 ? btnOrDisabled("medkit-tonorm", `Докупить ${missMedkit} поз. · ₽ ${priceMedkit.toLocaleString("ru-RU")}`, priceMedkit) : `<p class="hint">✅ Норма набрана</p>`}
+      <p>${S.res.medkit}/${needMedkit}</p>
+      ${missMedkit>0 ? btnOrDisabled("medkit-tonorm", `+${missMedkit} · ₽${priceMedkit.toLocaleString("ru-RU")}`, priceMedkit) : `<p class="hint">✅ норма</p>`}
     </div>
     <div class="shop-item ${missWater<=0?'ready':''}">
       <h3>💧 Вода</h3>
-      <p>Есть: ${S.res.water} · на эту гонку нужно ≈ ${needWater} × 0.5 л</p>
-      ${missWater>0 ? btnOrDisabled("water-tonorm", `Докупить ${missWater} бут. · ₽ ${priceWater.toLocaleString("ru-RU")}`, priceWater) : `<p class="hint">✅ Норма набрана</p>`}
+      <p>${S.res.water}/${needWater}</p>
+      ${missWater>0 ? btnOrDisabled("water-tonorm", `+${missWater} · ₽${priceWater.toLocaleString("ru-RU")}`, priceWater) : `<p class="hint">✅ норма</p>`}
     </div>
     <div class="shop-item">
-      <h3>🆘 Спас-одеяло</h3>
-      <p>Есть: ${S.res.blanket} шт. · 50/50 против погодного DNF</p>
-      ${btnOrDisabled("blanket-1", `Докупить 1 шт. · ₽ ${priceBlanket}`, priceBlanket)}
+      <h3>🆘 Одеяло</h3>
+      <p>${S.res.blanket} шт.</p>
+      ${btnOrDisabled("blanket-1", `+1 · ₽${priceBlanket}`, priceBlanket)}
     </div>
-    <div class="shop-item ${S.res.lampCharge>=100?'ready':''}">
+    <div class="shop-item ${S.res.lampCharge>=100?'ready':''}" style="grid-column:1/-1">
       <h3>🔦 Питание фонаря</h3>
       <p>АКБ: ${S.res.lampCharge}% · запасных: ${S.res.battery}</p>
       ${S.res.lampCharge<100 && S.res.battery>0

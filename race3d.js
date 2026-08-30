@@ -54,45 +54,69 @@
     group:   {shell:0x6fae5a, body:0xd8cdb0},
     straggler:{shell:0x556055, body:0x9a9a8a}
   };
+  const SHELL_TEX_CACHE = {};
+  function getShellTexture(hex){
+    if(SHELL_TEX_CACHE[hex]) return SHELL_TEX_CACHE[hex];
+    const c = document.createElement("canvas"); c.width=c.height=128;
+    const ctx = c.getContext("2d");
+    const base = "#"+hex.toString(16).padStart(6,"0");
+    ctx.fillStyle = base; ctx.fillRect(0,0,128,128);
+    ctx.strokeStyle = "rgba(0,0,0,0.4)"; ctx.lineWidth = 7;
+    ctx.translate(64,64);
+    for(let r=10;r<62;r+=11){ ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.stroke(); }
+    const tex = new THREE.CanvasTexture(c);
+    SHELL_TEX_CACHE[hex] = tex;
+    return tex;
+  }
   function buildSnailModel(kind){
     const c = SNAIL_COLORS[kind] || SNAIL_COLORS.group;
     const grp = new THREE.Group();
-    const scale = kind==="player"?1.5:(kind==="leader"?1.2:(kind==="straggler"?0.7:1.0));
+    const scale = (kind==="player"?1.5:(kind==="leader"?1.2:(kind==="straggler"?0.7:1.0))) * 2.1;
 
     const body = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.14,0.16,0.7,8),
+      new THREE.CylinderGeometry(0.16,0.19,0.78,10),
       new THREE.MeshLambertMaterial({color:c.body})
     );
     body.rotation.z = Math.PI/2;
-    body.position.set(0, 0.16, 0.05);
+    body.position.set(0, 0.17, 0.06);
     grp.add(body);
 
     const shell = new THREE.Mesh(
-      new THREE.SphereGeometry(0.32, 12, 10, 0, Math.PI*2, 0, Math.PI*0.75),
-      new THREE.MeshLambertMaterial({color:c.shell, emissive:kind==="player"?0x330000:(kind==="leader"?0x332200:0x000000), emissiveIntensity:0.4})
+      new THREE.SphereGeometry(0.34, 16, 14, 0, Math.PI*2, 0, Math.PI*0.8),
+      new THREE.MeshLambertMaterial({map:getShellTexture(c.shell), emissive:kind==="player"?0x440000:(kind==="leader"?0x442c00:0x000000), emissiveIntensity:0.35})
     );
-    shell.scale.set(1,0.85,1.15);
-    shell.position.set(0, 0.34, -0.18);
+    shell.scale.set(1,0.9,1.2);
+    shell.position.set(0, 0.36, -0.2);
     grp.add(shell);
 
-    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.09,8,8), new THREE.MeshLambertMaterial({color:c.shell}));
-    tip.position.set(0, 0.5, -0.36);
+    // cartoon-style dark outline for silhouette clarity at a distance
+    const outline = new THREE.Mesh(
+      shell.geometry,
+      new THREE.MeshBasicMaterial({color:0x0a0a0a, side:THREE.BackSide})
+    );
+    outline.scale.copy(shell.scale).multiplyScalar(1.12);
+    outline.position.copy(shell.position);
+    grp.add(outline);
+
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.095,8,8), new THREE.MeshLambertMaterial({color:c.shell}));
+    tip.position.set(0, 0.53, -0.4);
     grp.add(tip);
 
     // eye stalks
-    [-0.08, 0.08].forEach(dx=>{
-      const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.015,0.02,0.22,4), new THREE.MeshLambertMaterial({color:c.body}));
-      stalk.position.set(dx, 0.3, 0.32);
+    [-0.09, 0.09].forEach(dx=>{
+      const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.017,0.022,0.24,4), new THREE.MeshLambertMaterial({color:c.body}));
+      stalk.position.set(dx, 0.32, 0.35);
       stalk.rotation.x = -0.5;
       grp.add(stalk);
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.03,6,6), new THREE.MeshLambertMaterial({color:0x1a1a1a}));
-      eye.position.set(dx, 0.4, 0.42);
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.034,6,6), new THREE.MeshLambertMaterial({color:0x1a1a1a}));
+      eye.position.set(dx, 0.43, 0.46);
       grp.add(eye);
     });
 
     grp.scale.set(scale,scale,scale);
     grp.userData.phase = Math.random()*10;
     grp.userData.kind = kind;
+    grp.userData.facing = new THREE.Vector3(0,0,1);
     return grp;
   }
   function getSnailModel(key, kind){
@@ -107,6 +131,7 @@
     list.forEach(item=>{
       const sp = getSnailModel(item.key, item.kind);
       let px=item.x||0, py=item.y!==undefined?item.y:1.1, pz=item.z||0, facing=Math.PI;
+      let facingVec = new THREE.Vector3(0,0,1);
       if(pathCurve && item.t!==undefined){
         const ct = clamp01(item.t);
         const p = pathCurve.getPointAt(ct);
@@ -114,8 +139,12 @@
         const side = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize().multiplyScalar(item.laneOffset||0);
         px = p.x+side.x; pz = p.z+side.z; py = (item.y!==undefined?item.y:1.1)+p.y;
         facing = Math.atan2(tangent.x, tangent.z) + Math.PI;
+        facingVec = tangent.clone().normalize();
       }
       sp.userData.baseY = py;
+      sp.userData.baseX = px;
+      sp.userData.baseZ = pz;
+      sp.userData.facing = facingVec;
       sp.position.set(px, py, pz);
       sp.rotation.y = facing;
       sp.visible = true;
@@ -127,13 +156,18 @@
   function animateSnails(elapsed){
     if(!snailsGroup) return;
     modelCache.forEach(s=>{
-      const speed = s.userData.kind==="straggler"?2.2:3.2;
-      const amp = s.userData.kind==="player"?0.05:0.035;
+      const speed = s.userData.kind==="straggler"?2.6:3.6;
+      const amp = s.userData.kind==="player"?0.09:0.065;
       const wob = Math.sin(elapsed*speed + s.userData.phase);
-      s.position.y = (s.userData.baseY||1.1) + wob*amp;
-      const squash = 1 + wob*0.04;
-      const baseScale = s.userData.kind==="player"?1.5:(s.userData.kind==="leader"?1.2:(s.userData.kind==="straggler"?0.7:1.0));
-      s.scale.y = baseScale * squash;
+      s.position.y = (s.userData.baseY||1.1) + Math.abs(wob)*amp;
+      // visible "inching" crawl: small forward/back creep along the facing direction
+      const inch = Math.sin(elapsed*speed*0.5 + s.userData.phase) * 0.22;
+      const f = s.userData.facing || {x:0,z:1};
+      s.position.x = (s.userData.baseX||s.position.x) + f.x*inch;
+      s.position.z = (s.userData.baseZ||s.position.z) + f.z*inch;
+      const squash = 1 + wob*0.06;
+      const baseScale = (s.userData.kind==="player"?1.5:(s.userData.kind==="leader"?1.2:(s.userData.kind==="straggler"?0.7:1.0))) * 2.1;
+      s.scale.set(baseScale*(1-wob*0.03), baseScale*squash, baseScale*(1-wob*0.03));
     });
   }
 
