@@ -220,6 +220,7 @@ function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 function requiredWater(distanceKm, weather){ return Math.ceil(distanceKm * 0.3 * (WEATHER_WATER_MULT[weather]||1)); } // 0.5L bottles
 function requiredGels(distanceKm){ return Math.ceil(distanceKm/12); }
+function requiredMedkit(distanceKm){ return Math.max(1, Math.ceil(distanceKm/40)); }
 function slotPrice(levelIndex){
   if(levelIndex<3) return 0;
   let base = 250*(levelIndex-1)*(levelIndex-1);
@@ -767,7 +768,8 @@ function computeRisks(){
   if(S.res.water < needWater) risks.push({key:"water", text:"💧 Не хватает воды: есть "+S.res.water+"/"+needWater, ok:false, go:"carry"});
   const needGels = requiredGels(level.km);
   if(S.res.gels < needGels) risks.push({key:"gels", text:"🍯 Не хватает гелей «УГЛИ»: есть "+S.res.gels+"/"+needGels, ok:false, go:"carry"});
-  if(S.res.medkit < 1) risks.push({key:"medkit", text:"🩹 Нет аптечки", ok:false, go:"carry"});
+  const needMedkitRisk = requiredMedkit(level.km);
+  if(S.res.medkit < needMedkitRisk) risks.push({key:"medkit", text:"🩹 Не хватает аптечки: есть "+S.res.medkit+"/"+needMedkitRisk, ok:false, go:"carry"});
   if(level.weather!=="clear" && S.res.blanket<1 && level.km>=100) risks.push({key:"blanket", text:"🆘 Нет спас-одеяла на сложную погоду", ok:false, go:"carry"});
   if((S.currentLevel>=4) && S.res.lampCharge<40 && S.res.battery<1){
     risks.push({key:"battery", text:"🔦 Питание фонаря низкое, запасных батарей нет", ok:false, go:"lamp"});
@@ -977,39 +979,63 @@ function renderCarry(){
   const level = LEVELS[S.currentLevel];
   const needWater = requiredWater(level.km, level.weather);
   const needGels = requiredGels(level.km);
+  const needMedkit = requiredMedkit(level.km);
+  const missWater = Math.max(0, needWater - S.res.water);
+  const missGels = Math.max(0, needGels - S.res.gels);
+  const missMedkit = Math.max(0, needMedkit - S.res.medkit);
+  const priceWater = missWater*RES_PRICE.water;
+  const priceGels = missGels*RES_PRICE.gel;
+  const priceMedkit = missMedkit*RES_PRICE.medkit;
   const el = document.getElementById("carryList");
   el.innerHTML = `
-    <div class="shop-item">
+    <div class="shop-item ${missGels<=0?'ready':''}">
       <h3>🍯 Гели «УГЛИ»</h3>
-      <p>Есть: ${S.res.gels} · нужно по дистанции: ${needGels}</p>
-      <button data-buy="gel-tonorm">Докупить до нормы</button>
+      <p>Есть: ${S.res.gels} · на эту гонку нужно ≈ ${needGels}</p>
+      ${missGels>0
+        ? `<button data-buy="gel-tonorm">Докупить ${missGels} шт. · ₽ ${priceGels.toLocaleString("ru-RU")}</button>`
+        : `<p class="hint">✅ Норма набрана</p>`}
     </div>
-    <div class="shop-item">
+    <div class="shop-item ${missMedkit<=0?'ready':''}">
       <h3>🩹 Аптечка</h3>
-      <p>Комплектов: ${S.res.medkit} · бинт, марля, перекись, пластырь, крем от натирания, крем от солнца, спас-одеяло</p>
-      <button data-buy="medkit-1">Докупить 1 комплект (₽ ${RES_PRICE.medkit})</button>
+      <p>${S.res.medkit}/${needMedkit} · бинт, марля, перекись, пластырь, крем от натирания, крем от солнца, спас-одеяло</p>
+      ${missMedkit>0
+        ? `<button data-buy="medkit-tonorm">Докупить ${missMedkit} поз. · ₽ ${priceMedkit.toLocaleString("ru-RU")}</button>`
+        : `<p class="hint">✅ Норма набрана</p>`}
     </div>
-    <div class="shop-item">
+    <div class="shop-item ${missWater<=0?'ready':''}">
       <h3>💧 Вода</h3>
-      <p>Есть: ${S.res.water} · нужно по погоде и дистанции: ${needWater}</p>
-      <button data-buy="water-tonorm">Докупить до нормы</button>
+      <p>Есть: ${S.res.water} · на эту гонку нужно ≈ ${needWater} × 0.5 л</p>
+      ${missWater>0
+        ? `<button data-buy="water-tonorm">Докупить ${missWater} бут. · ₽ ${priceWater.toLocaleString("ru-RU")}</button>`
+        : `<p class="hint">✅ Норма набрана</p>`}
     </div>
     <div class="shop-item">
       <h3>🆘 Спас-одеяло</h3>
       <p>Есть: ${S.res.blanket} шт. · 50/50 против погодного DNF</p>
-      <button data-buy="blanket-1">Докупить 1 шт. (₽ ${RES_PRICE.blanket})</button>
+      <button data-buy="blanket-1">Докупить 1 шт. · ₽ ${RES_PRICE.blanket}</button>
+    </div>
+    <div class="shop-item ${S.res.lampCharge>=100?'ready':''}">
+      <h3>🔦 Питание фонаря</h3>
+      <p>АКБ: ${S.res.lampCharge}% · запасных: ${S.res.battery}</p>
+      ${S.res.lampCharge<100 && S.res.battery>0
+        ? `<button id="btnSwapBatteryCarry">🔋 Поставить заряженный АКБ · запас ${S.res.battery}</button>`
+        : (S.res.lampCharge>=100
+          ? `<p class="hint">✅ Питание фонаря готово</p>`
+          : `<p class="hint">Нет запасного АКБ — докупите во «Фонарь»</p>`)}
     </div>
   `;
   el.querySelectorAll("[data-buy]").forEach(btn=>{
     btn.onclick = ()=>{
-      const [what,qty]=btn.dataset.buy.split("-");
-      if(what==="gel"){ const need=Math.max(0,needGels-S.res.gels); buyRes("gel",need); }
-      if(what==="water"){ const need=Math.max(0,needWater-S.res.water); buyRes("water",need); }
-      if(what==="medkit") buyRes("medkit",1);
+      const [what]=btn.dataset.buy.split("-");
+      if(what==="gel") buyRes("gel",missGels);
+      if(what==="water") buyRes("water",missWater);
+      if(what==="medkit") buyRes("medkit",missMedkit);
       if(what==="blanket") buyRes("blanket",1);
       renderCarry(); renderStatbar(); renderRaceView();
     };
   });
+  const swap=document.getElementById("btnSwapBatteryCarry");
+  if(swap) swap.onclick=()=>{ S.res.battery--; S.res.lampCharge=100; saveGame(); renderCarry(); renderRaceView(); };
 }
 function buyRes(key,qty){
   const price = RES_PRICE[key]*qty;
