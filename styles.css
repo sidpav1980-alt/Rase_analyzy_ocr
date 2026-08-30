@@ -151,19 +151,20 @@ button{cursor:pointer;font-family:inherit;}
 .eq-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:8px;border-bottom:1px solid var(--line);}
 .eq-tab{flex:0 0 auto;background:var(--panel2);border:1px solid var(--line);color:var(--muted);border-radius:20px;padding:7px 12px;font-size:12px;white-space:nowrap;}
 .eq-tab.active{background:rgba(255,209,102,.12);border-color:var(--gold);color:var(--gold);font-weight:700;}
-.eq-cards{display:flex;flex-direction:column;gap:10px;}
-.eq-card{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:12px;}
+.eq-cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.eq-card{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 9px;font-size:10.5px;line-height:1.35;}
 .eq-card.eq-current{border-color:var(--good);background:rgba(61,220,132,.06);}
-.eq-card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
-.eq-card-head b{font-size:14px;}
-.eq-tier-pill{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:2px 7px;font-size:10px;color:var(--muted);}
-.eq-card-row{color:var(--muted);margin:3px 0;line-height:1.4;}
+.eq-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:4px;margin-bottom:3px;}
+.eq-card-head b{font-size:12px;line-height:1.2;}
+.eq-tier-pill{flex:0 0 auto;background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:1px 5px;font-size:9px;color:var(--muted);}
+.eq-card-row{color:var(--muted);margin:2px 0;}
 .eq-card-row b{color:var(--text);}
-.ok-badge{color:var(--good);font-weight:600;}
-.warn-badge{color:var(--warn);font-weight:600;}
-.eq-action{margin-top:8px;font-weight:700;}
+.ok-badge{color:var(--good);font-weight:600;font-size:10px;}
+.warn-badge{color:var(--warn);font-weight:600;font-size:10px;}
+.eq-action{margin-top:6px;font-weight:700;font-size:11px;}
 .eq-equipped{color:var(--good);}
-.eq-wear-btn{margin-top:8px;width:100%;background:var(--panel);border:1px solid var(--gold);color:var(--gold);border-radius:8px;padding:8px;font-size:12px;font-weight:700;}
+.eq-wear-btn{margin-top:6px;width:100%;background:var(--panel);border:1px solid var(--gold);color:var(--gold);border-radius:7px;padding:6px;font-size:10.5px;font-weight:700;}
+@media (max-width:380px){ .eq-cards{grid-template-columns:1fr;} }
 .shop-item.ready{border-color:var(--good);}
 .shop-item h3,.coach-item h3{margin:0 0 6px;font-size:13px;}
 .shop-item .tier{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--line);}

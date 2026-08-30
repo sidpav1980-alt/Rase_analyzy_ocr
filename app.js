@@ -81,12 +81,12 @@ Object.keys(GEAR_NAMES).forEach(slot=>{
 const SLOT_LABEL = {shoes:"👟 Кроссовки", jacket:"🧥 Мембрана", poles:"🥾 Палки", lamp:"🔦 Фонарь", watch:"⌚ Часы/пульсометр", pack:"🎒 Рюкзак/гидратор"};
 const SLOT_TAB_ICON = {shoes:"👟", jacket:"🧥", poles:"🥾", lamp:"🔦", watch:"⌚", pack:"🎒"};
 const SLOT_EFFECT = {
-  shoes:"скорость и стабильность темпа на технических участках",
+  shoes:"скорость и стабильность темпа",
   jacket:"защита от дождя и холода",
-  poles:"помощь на подъёмах и сложном рельефе, снижение риска падения",
-  lamp:"дальность и надёжность света на ночных участках",
-  watch:"точность данных о темпе и пульсе",
-  pack:"объём под воду и снаряжение, устойчивость на бегу"
+  poles:"помощь на подъёмах, меньше риск падения",
+  lamp:"дальность и надёжность света ночью",
+  watch:"точность темпа и пульса",
+  pack:"объём под воду и снаряжение"
 };
 
 /* ---------------------------- DATA: RESOURCES ---------------------------- */
@@ -1116,9 +1116,9 @@ function renderEquipment(){
       </div>
       <div class="eq-card-row">Цена: <b>${t.price?("₽ "+t.price.toLocaleString("ru-RU")):"бесплатно"}</b></div>
       <div class="eq-card-row">Эффект: ${SLOT_EFFECT[slot]}${t.paceFactor<1?` · темп ${Math.round((1-t.paceFactor)*100)}%`:""}</div>
-      <div class="eq-card-row">Прочность: ${t.durabilityMax} ед. · защита от поломки: +${Math.round((1-t.breakRisk)*100)}%</div>
-      <div class="eq-card-row">Для текущей гонки: желательно ${desiredTier}/7 · у тебя ${ownedTier}/7 ·
-        ${meetsReq?`<span class="ok-badge">✅ уровень подходит</span>`:`<span class="warn-badge">⚠️ ниже рекомендуемого</span>`}
+      <div class="eq-card-row">Прочность ${t.durabilityMax} · защита от поломки +${Math.round((1-t.breakRisk)*100)}%</div>
+      <div class="eq-card-row">Нужно ${desiredTier}/7 · есть ${ownedTier}/7 ·
+        ${meetsReq?`<span class="ok-badge">✅ подходит</span>`:`<span class="warn-badge">⚠️ ниже нормы</span>`}
       </div>
       ${actionHtml}
     </div>`;
