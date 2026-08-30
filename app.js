@@ -431,11 +431,16 @@ function tick(){
       RACE.guaranaBoostKmLeft=0;
       if(Math.random()<0.30){
         RACE.guaranaRollbackKmLeft=30;
-        showEvent({emoji:"📉", name:"Спад после гуараны", penalty:0});
+        showEvent({emoji:"📉", name:"Спад после гуараны: темп −40% на ближайшие 30 км", penalty:0});
+      } else {
+        logEvent("🫘 Эффект гуараны закончился без отката");
       }
     }
   }
-  if(RACE.guaranaRollbackKmLeft>0) RACE.guaranaRollbackKmLeft=Math.max(0,RACE.guaranaRollbackKmLeft-kmDelta);
+  if(RACE.guaranaRollbackKmLeft>0){
+    RACE.guaranaRollbackKmLeft=Math.max(0,RACE.guaranaRollbackKmLeft-kmDelta);
+    if(RACE.guaranaRollbackKmLeft<=0) logEvent("🫘 Спад после гуараны закончился, темп восстановлен");
+  }
 
   applyWaterUsage(kmDelta);
   applyGelUsage(kmDelta);
@@ -597,11 +602,12 @@ function useGuarana(){
     return;
   }
   S.res.guarana--; RACE.guaranaUsesLeft--;
+  logEvent("🫘 Гуарана использована ("+RACE.guaranaUsesLeft+" осталось на эту гонку)");
   if(Math.random()<0.60){
     RACE.guaranaBoostKmLeft = 20;
-    showEvent({emoji:"🫘", name:"Гуарана сработала! Буст на 20 км", penalty:0});
+    showEvent({emoji:"🫘", name:"Буст сработал! Ускорение на 20 км. После него 30% шанс отката (−40% темпа на 30 км)", penalty:0});
   } else {
-    showEvent({emoji:"🫘", name:"Гуарана не сработала", penalty:0});
+    showEvent({emoji:"🫘", name:"Гуарана не сработала — эффекта нет", penalty:0});
   }
   renderRaceUI();
 }

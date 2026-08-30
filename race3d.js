@@ -159,7 +159,7 @@
         const tangent = pathCurve.getTangentAt(ct);
         const side = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize().multiplyScalar(item.laneOffset||0);
         px = p.x+side.x; pz = p.z+side.z; py = (item.y!==undefined?item.y:1.1)+p.y;
-        facing = Math.atan2(tangent.x, tangent.z) + Math.PI;
+        facing = Math.atan2(tangent.x, tangent.z);
         facingVec = tangent.clone().normalize();
       }
       // these are TARGETS the render loop eases toward each frame — updateSnails
@@ -186,7 +186,7 @@
     const followK = 1 - Math.pow(0.0008, Math.min(dt,0.1)); // frame-rate-independent easing
     modelCache.forEach(s=>{
       const speed = s.userData.kind==="straggler"?2.6:3.6;
-      const amp = s.userData.kind==="player"?0.09:0.065;
+      const amp = s.userData.kind==="player"?0.018:0.013;
       const wob = Math.sin(elapsed*speed + s.userData.phase);
       const inch = Math.sin(elapsed*speed*0.5 + s.userData.phase) * 0.22;
       const f = s.userData.facing || {x:0,z:1};
