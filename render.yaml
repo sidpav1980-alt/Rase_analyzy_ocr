@@ -1,12 +1,10 @@
 services:
   - type: web
-    name: trail-race-analyzer
-    runtime: docker
-    healthCheckPath: /health
+    name: trail-runner-armageddon
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
     envVars:
-      - key: OPENROUTER_API_KEY
-        sync: false
-      - key: OPENROUTER_MODEL
-        value: openrouter/free
-      - key: SITE_URL
-        sync: false
+      - key: NODE_VERSION
+        value: 18.20.0

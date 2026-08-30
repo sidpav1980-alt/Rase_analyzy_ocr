@@ -1,0 +1,13 @@
+{
+  "name": "trail-runner-armageddon",
+  "version": "1.0.3",
+  "description": "Симулятор трейлраннера: Армагеддон — браузерная игра-симулятор",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED"
+}
