@@ -42,13 +42,46 @@ button{cursor:pointer;font-family:inherit;}
 #btnGuarana{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 10px;}
 #btnGuarana.glow{box-shadow:0 0 0 3px var(--gold);}
 
-.race-map{position:relative;background:linear-gradient(180deg,#0c223f,#081527);border-radius:10px;padding:10px;margin-bottom:10px;min-height:120px;}
-.top7{display:flex;flex-direction:column;gap:2px;font-size:11px;margin-bottom:8px;}
-.top7 .row{display:flex;justify-content:space-between;background:rgba(255,255,255,.04);border-radius:6px;padding:3px 6px;}
-.top7 .row.me{background:rgba(255,93,93,.25);font-weight:700;}
-.track{position:relative;height:26px;background:#0a1a30;border-radius:13px;overflow:hidden;border:1px solid var(--line);}
-.track-fill{position:absolute;left:0;top:0;bottom:0;width:0%;background:linear-gradient(90deg,#1c3f66,#2a5d94);}
-.player-dot{position:absolute;left:0%;top:2px;transform:translateX(-50%);font-size:18px;transition:left .3s linear;}
+.race-map{position:relative;border-radius:14px;padding:14px 10px 10px;margin-bottom:10px;min-height:200px;
+  overflow:hidden;background-size:cover;background-position:center;box-shadow:inset 0 0 40px rgba(0,0,0,.35);
+  transition:background .4s;}
+.map-fade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(3,8,16,.15) 0%,rgba(3,8,16,.55) 65%,rgba(3,8,16,.85) 100%);z-index:1;}
+.map-decor{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden;}
+.top7{position:relative;z-index:2;display:flex;flex-direction:column;gap:2px;font-size:11px;margin-bottom:10px;}
+.top7 .row{display:flex;justify-content:space-between;background:rgba(5,12,24,.55);backdrop-filter:blur(2px);border-radius:6px;padding:3px 6px;border:1px solid rgba(255,255,255,.06);}
+.top7 .row.me{background:rgba(255,93,93,.35);font-weight:700;border-color:rgba(255,93,93,.5);}
+.track{position:relative;z-index:2;height:28px;background:rgba(5,12,24,.6);border-radius:14px;overflow:hidden;border:1px solid rgba(255,255,255,.12);}
+.track-fill{position:absolute;left:0;top:0;bottom:0;width:0%;background:linear-gradient(90deg,#1c3f66,#3d9bdc);transition:width .3s linear;}
+.player-dot{position:absolute;left:0%;top:3px;transform:translateX(-50%);font-size:18px;transition:left .3s linear;filter:drop-shadow(0 0 4px #000);}
+
+/* ---- per-level sky themes ---- */
+.t-park{background:linear-gradient(180deg,#bfe6a8 0%,#6fae5a 55%,#2f5e33 100%);}
+.t-forest{background:linear-gradient(180deg,#7fae7a 0%,#375c3f 55%,#1c3521 100%);}
+.t-mud{background:linear-gradient(180deg,#9aa3a8 0%,#5f6a63 55%,#3a3a2e 100%);}
+.t-rocky{background:linear-gradient(180deg,#c9c2b0 0%,#8a7d69 55%,#4c4235 100%);}
+.t-night{background:linear-gradient(180deg,#0a1330 0%,#141c3f 55%,#060a1a 100%);}
+.t-alpine{background:linear-gradient(180deg,#a9d3ef 0%,#5f8fc0 55%,#2c3f5c 100%);}
+.t-windy{background:linear-gradient(180deg,#8fa9bd 0%,#516777 55%,#2b333b 100%);}
+.t-desert{background:linear-gradient(180deg,#ffd98a 0%,#e69a4e 55%,#8a4a24 100%);}
+.t-canyon{background:linear-gradient(180deg,#e0a377 0%,#a5563a 55%,#5c2a1e 100%);}
+.t-storm1{background:linear-gradient(180deg,#4a5568 0%,#2b3345 55%,#111621 100%);}
+.t-dusk{background:linear-gradient(180deg,#5b7fa6 0%,#33507a 55%,#151f38 100%);}
+.t-highalt{background:linear-gradient(180deg,#c9b7e0 0%,#7b6a9e 55%,#2f2a45 100%);}
+.t-chara{background-image:linear-gradient(180deg,rgba(10,20,35,.15),rgba(6,12,22,.55)),url('chara_bg.png');}
+.t-wildnight{background:linear-gradient(180deg,#241a3d 0%,#150f28 55%,#0a0716 100%);}
+.t-wasteland{background:linear-gradient(180deg,#f2b25e 0%,#c26a2e 55%,#6e3417 100%);}
+.t-icealpine{background:linear-gradient(180deg,#eaf6ff 0%,#a9cbe6 55%,#4d6b87 100%);}
+.t-stormpurple{background:linear-gradient(180deg,#5b4a75 0%,#382c50 55%,#1b1526 100%);}
+.t-violet{background:linear-gradient(180deg,#3c2a5e 0%,#241a3d 55%,#100b1e 100%);}
+.t-edgeworld{background:linear-gradient(180deg,#3f6e73 0%,#274a52 55%,#122327 100%);}
+.t-madness{background:linear-gradient(180deg,#ff8a4a 0%,#b3401f 55%,#3a1409 100%);}
+.t-armageddon{background:linear-gradient(180deg,#7a1210 0%,#2c0705 55%,#0a0201 100%);}
+
+/* ---- decorations ---- */
+.star{position:absolute;width:2px;height:2px;background:#fff;border-radius:50%;opacity:.8;animation:twinkle 2.4s infinite;}
+@keyframes twinkle{0%,100%{opacity:.2}50%{opacity:1}}
+.flake{position:absolute;top:-6px;width:4px;height:4px;background:#fff;border-radius:50%;opacity:.85;animation:fall linear infinite;}
+@keyframes fall{from{transform:translateY(-6px)}to{transform:translateY(210px)}}
 
 .race-metrics{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;margin-bottom:10px;}
 .race-metrics div{background:var(--panel2);border-radius:8px;padding:6px 8px;}

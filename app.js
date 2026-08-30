@@ -43,6 +43,21 @@ LEVELS.forEach((lv,i)=>{
   }
 });
 
+/* ---------------------------- LEVEL BACKGROUND THEMES --------------------------- */
+// one distinct visual theme per level; Chara (index 12) uses a real photo background.
+const LEVEL_THEMES = [
+  "t-park","t-forest","t-mud","t-rocky","t-night","t-alpine","t-windy","t-desert",
+  "t-canyon","t-storm1","t-dusk","t-highalt","t-chara","t-wildnight","t-wasteland",
+  "t-icealpine","t-stormpurple","t-violet","t-edgeworld","t-madness","t-armageddon"
+];
+const LEVEL_DECOR = [
+  "","","rain","","stars","snow","wind","heat",
+  "","storm","","snow","","stars","heat",
+  "snow","storm","stars","storm","heat","storm"
+];
+function levelThemeClass(i){ return LEVEL_THEMES[i] || "t-park"; }
+function levelDecorClass(i){ return LEVEL_DECOR[i] || ""; }
+
 /* ---------------------------- DATA: GEAR --------------------------------- */
 // each slot: 7 tiers -> [name, price, paceFactor(lower=faster), durabilityMax, breakRiskBase]
 const GEAR_NAMES = {
@@ -689,6 +704,37 @@ function computeRisks(){
 function renderRaceView(){
   const level = LEVELS[S.currentLevel];
   document.getElementById("raceLevelTitle").textContent = "Уровень "+(S.currentLevel+1)+": "+level.name;
+  const mapEl = document.getElementById("raceMap");
+  mapEl.className = "race-map "+levelThemeClass(S.currentLevel);
+  const decor = levelDecorClass(S.currentLevel);
+  let decorHost = document.getElementById("raceMapDecor");
+  if(!decorHost){
+    decorHost = document.createElement("div");
+    decorHost.id = "raceMapDecor";
+    decorHost.className = "map-decor";
+    mapEl.prepend(decorHost);
+  }
+  decorHost.className = "map-decor "+(decor?"decor-"+decor:"");
+  if(decorHost.dataset.builtFor!==decor){ decorHost.innerHTML=""; decorHost.dataset.builtFor=decor; decorHost.dataset.built=""; }
+  if(decor==="stars" && !decorHost.dataset.built){
+    decorHost.dataset.built="1";
+    for(let i=0;i<28;i++){
+      const s=document.createElement("span");
+      s.className="star"; s.style.left=Math.random()*100+"%"; s.style.top=Math.random()*70+"%";
+      s.style.animationDelay=(Math.random()*3).toFixed(2)+"s";
+      decorHost.appendChild(s);
+    }
+  }
+  if(decor==="snow" && !decorHost.dataset.built){
+    decorHost.dataset.built="1";
+    for(let i=0;i<20;i++){
+      const s=document.createElement("span");
+      s.className="flake"; s.style.left=Math.random()*100+"%";
+      s.style.animationDuration=(4+Math.random()*4).toFixed(2)+"s";
+      s.style.animationDelay=(Math.random()*4).toFixed(2)+"s";
+      decorHost.appendChild(s);
+    }
+  }
   const risks = computeRisks();
   const risksEl = document.getElementById("raceRisks");
   risksEl.innerHTML = risks.length
