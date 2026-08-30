@@ -413,7 +413,7 @@ function startRace(){
     field:createVirtualField(S.currentLevel), dnfQueue:[], eventsLog:[],
     overlayQueue:[], overlayShowing:false, playerDNF:false, playerFinished:false,
     playerPenaltySec:0, floodTriggered:false, gelsCarried:S.res.gels, gelsUsedInRace:0,
-    waterCarried:S.res.water, waterUsedInRace:0
+    waterCarried:S.res.water, waterUsedInRace:0, stableLead:[], stableGrp:[]
   };
   S.res.gels=0; S.res.water=0; // consumed items move into the race bag
   document.getElementById("btnStart").style.display="none";
@@ -982,16 +982,38 @@ function renderSnailTrack(){
     band.style.width = Math.max(2,right-left)+"%";
   } else { band.style.width="0"; }
 
+  // stable slot assignment: keep each visual "grpN"/"leadN" mesh tracking the
+  // same real racer tick to tick (only reassigning when that racer actually
+  // leaves the cluster) — otherwise the target position jumps to a different
+  // racer every 250ms and the smoothing in race3d.js can't hide that, which
+  // is what reads as "jerky" motion in the group cluster
+  function assignStableSlots(prevIds, candidateIds, maxSlots){
+    const kept = prevIds.filter(id => candidateIds.includes(id));
+    const remaining = candidateIds.filter(id => !kept.includes(id));
+    const result = kept.slice(0, maxSlots);
+    while(result.length < maxSlots && remaining.length) result.push(remaining.shift());
+    return result;
+  }
+  const byId = {};
+  others.forEach(n=>{ byId[n.id]=n; });
+
   let html = "";
   const isBreakaway = leaderCluster!==mainCluster && leaderCluster.members.length && leaderCluster.members.length<=4;
   if(isBreakaway){
-    leaderCluster.members.slice(0,4).forEach(n=>{
+    const candidates = leaderCluster.members.map(n=>n.id);
+    RACE.stableLead = assignStableSlots(RACE.stableLead||[], candidates, 4);
+    RACE.stableLead.map(id=>byId[id]).filter(Boolean).forEach(n=>{
       const pct = clamp(n.liveKm/distanceKm*100,0,100);
       html += `<div class="snail leader" style="left:${pct}%" title="${n.name}">🐌</div>`;
     });
+  } else {
+    RACE.stableLead = [];
   }
   // a handful of representative markers inside the main group for a "pack" feel
-  const repMembers = mainCluster.members.slice(0, isBreakaway?5:6);
+  const repCap = isBreakaway?5:6;
+  const groupCandidates = mainCluster.members.map(n=>n.id);
+  RACE.stableGrp = assignStableSlots(RACE.stableGrp||[], groupCandidates, repCap);
+  const repMembers = RACE.stableGrp.map(id=>byId[id]).filter(Boolean);
   repMembers.forEach((n,i)=>{
     const pct = clamp(n.liveKm/distanceKm*100,0,100);
     const jitter = (i%2===0? -1:1)* (2+i);
@@ -1026,7 +1048,7 @@ function renderSnailTrack(){
     };
     const items = [{key:"player", kind:"player", t:focusT, laneOffset:0, y:0.05}];
     if(isBreakaway){
-      leaderCluster.members.slice(0,4).forEach((n,i)=>{
+      RACE.stableLead.map(id=>byId[id]).filter(Boolean).forEach((n,i)=>{
         items.push({key:"lead"+i, kind:"leader", t:focusT+deltaT(n.liveKm), laneOffset:(i%2===0?-1:1)*(0.7+i*0.3), y:0.04});
       });
     }
@@ -1330,7 +1352,7 @@ function renderRest(){
   }
 }
 const TRAINING_PHASES = [
-  {cls:"phase-sprint", emoji:"🐌💨", label:"Спринт — короткие резкие рывки"},
+  {cls:"phase-sprint", emoji:"🐌💨", label:"Спринт — быстро по прямой"},
   {cls:"phase-interval", emoji:"🐌⏱️", label:"Интервалы — ускорение / восстановление"},
   {cls:"phase-hill", emoji:"🐌⛰️", label:"Бег в горку — силовая работа"},
   {cls:"phase-rest", emoji:"🐌💦👅", label:"Заминка — вся мокрая, язык на плече"}
