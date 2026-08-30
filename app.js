@@ -839,7 +839,11 @@ function renderRaceView(){
   document.getElementById("btnStart").disabled = blocked;
   document.getElementById("btnStart").style.opacity = blocked?0.5:1;
   document.getElementById("btnBuySlot").style.display = S.slotsOwned[S.currentLevel]?"none":"inline-block";
-  document.getElementById("btnBuySlot").textContent = "Купить · ₽ "+slotPrice(S.currentLevel).toLocaleString("ru-RU");
+  const slotPr = slotPrice(S.currentLevel);
+  const canAffordSlot = S.money>=slotPr;
+  document.getElementById("btnBuySlot").textContent = canAffordSlot ? "Купить · ₽ "+slotPr.toLocaleString("ru-RU") : "Не хватает ₽ "+slotPr.toLocaleString("ru-RU");
+  document.getElementById("btnBuySlot").disabled = !canAffordSlot;
+  document.getElementById("btnBuySlot").classList.toggle("btn-disabled", !canAffordSlot);
   document.getElementById("gelInRace").textContent = "🍯 Гели в гонке: "+(RACE?RACE.gelsUsedInRace:0)+" / "+(RACE?RACE.gelsCarried:S.res.gels);
   document.getElementById("guaranaCount").textContent = "· "+S.res.guarana+" шт.";
   if(!RACE || RACE.playerFinished || RACE.playerDNF){
@@ -986,33 +990,31 @@ function renderCarry(){
   const priceWater = missWater*RES_PRICE.water;
   const priceGels = missGels*RES_PRICE.gel;
   const priceMedkit = missMedkit*RES_PRICE.medkit;
+  const priceBlanket = RES_PRICE.blanket;
+  const btnOrDisabled = (id, label, price)=> S.money>=price
+    ? `<button data-buy="${id}">${label}</button>`
+    : `<button disabled class="btn-disabled">${label} — не хватает ₽</button>`;
   const el = document.getElementById("carryList");
   el.innerHTML = `
     <div class="shop-item ${missGels<=0?'ready':''}">
       <h3>🍯 Гели «УГЛИ»</h3>
       <p>Есть: ${S.res.gels} · на эту гонку нужно ≈ ${needGels}</p>
-      ${missGels>0
-        ? `<button data-buy="gel-tonorm">Докупить ${missGels} шт. · ₽ ${priceGels.toLocaleString("ru-RU")}</button>`
-        : `<p class="hint">✅ Норма набрана</p>`}
+      ${missGels>0 ? btnOrDisabled("gel-tonorm", `Докупить ${missGels} шт. · ₽ ${priceGels.toLocaleString("ru-RU")}`, priceGels) : `<p class="hint">✅ Норма набрана</p>`}
     </div>
     <div class="shop-item ${missMedkit<=0?'ready':''}">
       <h3>🩹 Аптечка</h3>
       <p>${S.res.medkit}/${needMedkit} · бинт, марля, перекись, пластырь, крем от натирания, крем от солнца, спас-одеяло</p>
-      ${missMedkit>0
-        ? `<button data-buy="medkit-tonorm">Докупить ${missMedkit} поз. · ₽ ${priceMedkit.toLocaleString("ru-RU")}</button>`
-        : `<p class="hint">✅ Норма набрана</p>`}
+      ${missMedkit>0 ? btnOrDisabled("medkit-tonorm", `Докупить ${missMedkit} поз. · ₽ ${priceMedkit.toLocaleString("ru-RU")}`, priceMedkit) : `<p class="hint">✅ Норма набрана</p>`}
     </div>
     <div class="shop-item ${missWater<=0?'ready':''}">
       <h3>💧 Вода</h3>
       <p>Есть: ${S.res.water} · на эту гонку нужно ≈ ${needWater} × 0.5 л</p>
-      ${missWater>0
-        ? `<button data-buy="water-tonorm">Докупить ${missWater} бут. · ₽ ${priceWater.toLocaleString("ru-RU")}</button>`
-        : `<p class="hint">✅ Норма набрана</p>`}
+      ${missWater>0 ? btnOrDisabled("water-tonorm", `Докупить ${missWater} бут. · ₽ ${priceWater.toLocaleString("ru-RU")}`, priceWater) : `<p class="hint">✅ Норма набрана</p>`}
     </div>
     <div class="shop-item">
       <h3>🆘 Спас-одеяло</h3>
       <p>Есть: ${S.res.blanket} шт. · 50/50 против погодного DNF</p>
-      <button data-buy="blanket-1">Докупить 1 шт. · ₽ ${RES_PRICE.blanket}</button>
+      ${btnOrDisabled("blanket-1", `Докупить 1 шт. · ₽ ${priceBlanket}`, priceBlanket)}
     </div>
     <div class="shop-item ${S.res.lampCharge>=100?'ready':''}">
       <h3>🔦 Питание фонаря</h3>
@@ -1040,7 +1042,7 @@ function renderCarry(){
 function buyRes(key,qty){
   const price = RES_PRICE[key]*qty;
   if(qty<=0) return;
-  if(S.money<price){ alert("НЕ ХВАТАЕТ ₽ — можно переиграть старые уровни и заработать."); return; }
+  if(S.money<price) return; // buttons that would exceed the balance are disabled in the UI
   S.money-=price; S.res[key]+=qty; saveGame();
 }
 
@@ -1074,10 +1076,13 @@ function renderEquipment(){
   el.innerHTML = Object.keys(GEAR).map(slot=>{
     const tiers = GEAR[slot].map((t,i)=>{
       const equipped = S.gear[slot]===i;
-      return `<div class="tier ${equipped?'equipped':''}">
-        <span>${t.name} (ур.${i+1})</span>
-        <span>${equipped?"✅ надето":(t.price===0?`<button data-eq="${slot}:${i}">Надеть</button>`:`₽ ${t.price.toLocaleString("ru-RU")} <button data-eq="${slot}:${i}">Купить/надеть</button>`)}</span>
-      </div>`;
+      const afford = t.price===0 || S.money>=t.price;
+      const btn = equipped
+        ? "✅ надето"
+        : afford
+          ? `${t.price?`₽ ${t.price.toLocaleString("ru-RU")} `:""}<button data-eq="${slot}:${i}">${t.price?"Купить/надеть":"Надеть"}</button>`
+          : `₽ ${t.price.toLocaleString("ru-RU")} <button disabled class="btn-disabled">Не хватает ₽</button>`;
+      return `<div class="tier ${equipped?'equipped':''}"><span>${t.name} (ур.${i+1})</span><span>${btn}</span></div>`;
     }).join("");
     return `<div class="shop-item"><h3>${SLOT_LABEL[slot]}</h3>${tiers}</div>`;
   }).join("");
@@ -1086,7 +1091,7 @@ function renderEquipment(){
       const [slot,tierStr]=btn.dataset.eq.split(":"); const tier=parseInt(tierStr);
       const t=GEAR[slot][tier];
       if(S.gear[slot]===tier) return;
-      if(t.price>0 && S.money<t.price){ alert("НЕ ХВАТАЕТ ₽"); return; }
+      if(t.price>0 && S.money<t.price) return; // button is disabled in this case anyway
       if(t.price>0) S.money-=t.price;
       S.gear[slot]=tier; S.durability[slot]=t.durabilityMax;
       saveGame(); renderEquipment(); renderStatbar(); renderRaceView();
@@ -1103,7 +1108,7 @@ function renderRepair(){
       <b>${SLOT_LABEL[slot]} — ${t.name}</b>
       <div class="durability-bar"><i style="width:${pct}%;background:${pct<30?'#ff5d5d':pct<60?'#ffb020':'#3ddc84'}"></i></div>
       <p>Прочность: ${pct}%</p>
-      ${pct<100?`<button data-repair="${slot}">Починить (₽ ${cost.toLocaleString("ru-RU")})</button>`:"<p class='hint'>В порядке</p>"}
+      ${pct<100?(S.money<cost?`<button disabled class="btn-disabled">Не хватает ₽ (нужно ${cost.toLocaleString("ru-RU")})</button>`:`<button data-repair="${slot}">Починить (₽ ${cost.toLocaleString("ru-RU")})</button>`):"<p class='hint'>В порядке</p>"}
     </div>`;
   }).join("");
   el.querySelectorAll("[data-repair]").forEach(btn=>{
@@ -1111,7 +1116,7 @@ function renderRepair(){
       const slot=btn.dataset.repair; const t=GEAR[slot][S.gear[slot]];
       const pct = S.durability[slot]/t.durabilityMax;
       const cost = Math.round(t.price*0.25*(1-pct)) || 50;
-      if(S.money<cost){ alert("НЕ ХВАТАЕТ ₽"); return; }
+      if(S.money<cost) return;
       S.money-=cost; S.durability[slot]=t.durabilityMax;
       saveGame(); renderRepair(); renderStatbar();
     };
@@ -1131,12 +1136,16 @@ function renderResources(){
     ["water","💧 Вода (0.5л)"],["gel","🍯 Гели «УГЛИ»"],["medkit","🩹 Комплект аптечки"],
     ["battery","🔋 Запасной АКБ"],["guarana","🫘 Гуарана"],["blanket","🆘 Спас-одеяло"]
   ];
-  el.innerHTML = rows.map(([key,label])=>`
-    <div class="res-item" id="res_${key}">
+  el.innerHTML = rows.map(([key,label])=>{
+    const p1=RES_PRICE[key], p5=RES_PRICE[key]*5;
+    return `<div class="res-item" id="res_${key}">
       <b>${label}</b> — есть: ${S.res[key]} · ₽ ${RES_PRICE[key]}/шт.
-      <div><button data-res="${key}:1">+1</button> <button data-res="${key}:5">+5</button></div>
-    </div>
-  `).join("");
+      <div>
+        ${S.money>=p1?`<button data-res="${key}:1">+1 · ₽${p1}</button>`:`<button disabled class="btn-disabled">+1 · ₽${p1}</button>`}
+        ${S.money>=p5?`<button data-res="${key}:5">+5 · ₽${p5}</button>`:`<button disabled class="btn-disabled">+5 · ₽${p5}</button>`}
+      </div>
+    </div>`;
+  }).join("");
   el.querySelectorAll("[data-res]").forEach(btn=>{
     btn.onclick=()=>{ const [key,qty]=btn.dataset.res.split(":"); buyRes(key,parseInt(qty)); renderResources(); renderStatbar(); renderRaceView(); };
   });
@@ -1195,17 +1204,20 @@ function renderTraining(){
 }
 function renderCoachView(){
   const el=document.getElementById("coachList");
-  el.innerHTML = COACHES.map(c=>`
-    <div class="coach-item">
+  el.innerHTML = COACHES.map(c=>{
+    const afford = c.price===0 || S.money>=c.price;
+    return `<div class="coach-item">
       <h3>${c.name} ${S.coachId===c.id?"✅":""}</h3>
       <p>Максимум тренированности: ${c.cap} · бонус темпа: ${Math.round(c.paceBonus*100)}% · снижение травматизма: ${Math.round(c.injuryCut*100)}%</p>
-      ${S.coachId===c.id?"":`<button data-coach="${c.id}">${c.price?("Нанять · ₽ "+c.price.toLocaleString("ru-RU")):"Выбрать"}</button>`}
-    </div>
-  `).join("");
+      ${S.coachId===c.id?"":(afford
+        ? `<button data-coach="${c.id}">${c.price?("Нанять · ₽ "+c.price.toLocaleString("ru-RU")):"Выбрать"}</button>`
+        : `<button disabled class="btn-disabled">Не хватает ₽ ${c.price.toLocaleString("ru-RU")}</button>`)}
+    </div>`;
+  }).join("");
   el.querySelectorAll("[data-coach]").forEach(btn=>{
     btn.onclick=()=>{
       const c=COACHES.find(x=>x.id===btn.dataset.coach);
-      if(c.price>0 && S.money<c.price){ alert("НЕ ХВАТАЕТ ₽"); return; }
+      if(c.price>0 && S.money<c.price) return;
       if(c.price>0) S.money-=c.price;
       S.coachId=c.id; saveGame(); renderCoachView(); renderStatbar(); renderTraining();
     };
@@ -1301,7 +1313,7 @@ function wireUI(){
   document.getElementById("bottomStart").onclick=startRace;
   document.getElementById("btnBuySlot").onclick=()=>{
     const price=slotPrice(S.currentLevel);
-    if(S.money<price){ alert("НЕ ХВАТАЕТ ₽ — можно переиграть старые уровни."); return; }
+    if(S.money<price) return; // disabled state already prevents this, but guard anyway
     S.money-=price; S.slotsOwned[S.currentLevel]=true;
     if(Math.random()<0.15){
       const slot=pick(Object.keys(S.gear));

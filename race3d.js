@@ -173,7 +173,7 @@
     const rnd = mulberry32(idx*97+13);
 
     ground.material.color.setHex(t.ground);
-    scene.fog = new THREE.Fog(t.fog, 40, 170);
+    scene.fog = new THREE.Fog(t.fog, 55, 210);
 
     clearGroup(mountainsGroup);
     for(let i=0;i<11;i++){
@@ -182,7 +182,7 @@
         new THREE.ConeGeometry(w, h, 5),
         new THREE.MeshLambertMaterial({color:t.mtn})
       );
-      cone.position.set((i-5)*13 + (rnd()-0.5)*8, h/2-1, -110 - rnd()*30);
+      cone.position.set((i-5)*13 + (rnd()-0.5)*8, h/2-1, -80 - rnd()*22);
       cone.rotation.y = rnd()*Math.PI;
       mountainsGroup.add(cone);
       if(t.snow){
@@ -200,7 +200,7 @@
     for(let i=0;i<treeCount;i++){
       const side = rnd()<0.5?-1:1;
       const x = side*(3 + rnd()*16);
-      const z = -10 - rnd()*140;
+      const z = -8 - rnd()*95;
       const s = 0.6+rnd()*0.9;
       const grp = new THREE.Group();
       const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12*s,0.16*s,1.1*s,5), new THREE.MeshLambertMaterial({color:0x4a3323}));
