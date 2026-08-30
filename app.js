@@ -588,8 +588,12 @@ function useGuarana(){
     openResourcesAndHighlight("guarana");
     return;
   }
-  if(S.res.guarana<=0 || RACE.guaranaUsesLeft<=0){
+  if(S.res.guarana<=0){
     openResourcesAndHighlight("guarana");
+    return;
+  }
+  if(RACE.guaranaUsesLeft<=0){
+    showEvent({emoji:"🫘", name:"Лимит гуараны на эту гонку исчерпан", penalty:0});
     return;
   }
   S.res.guarana--; RACE.guaranaUsesLeft--;

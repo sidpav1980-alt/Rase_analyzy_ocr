@@ -72,21 +72,37 @@
     const c = SNAIL_COLORS[kind] || SNAIL_COLORS.group;
     const grp = new THREE.Group();
     const scale = (kind==="player"?1.5:(kind==="leader"?1.2:(kind==="straggler"?0.7:1.0))) * 2.1;
+    const bodyMat = new THREE.MeshLambertMaterial({color:c.body});
 
-    const body = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.16,0.19,0.78,10),
-      new THREE.MeshLambertMaterial({color:c.body})
-    );
-    body.rotation.z = Math.PI/2;
-    body.position.set(0, 0.17, 0.06);
-    grp.add(body);
+    // foot/body: one elongated blob from tail to head, tapered
+    const foot = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 10), bodyMat);
+    foot.scale.set(0.82, 0.58, 2.05);
+    foot.position.set(0, 0.14, 0.02);
+    grp.add(foot);
 
+    // tail point, tapering off behind the shell
+    const tail = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), bodyMat);
+    tail.scale.set(0.8, 0.6, 1);
+    tail.position.set(0, 0.11, -0.42);
+    grp.add(tail);
+
+    // head: a distinct rounded bump out front, unmissable as "this end looks forward"
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.165, 14, 10), bodyMat);
+    head.scale.set(1, 0.92, 1.05);
+    head.position.set(0, 0.2, 0.52);
+    grp.add(head);
+    // small snout tip so the front reads even more clearly
+    const snout = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 8), bodyMat);
+    snout.position.set(0, 0.16, 0.66);
+    grp.add(snout);
+
+    // shell: coiled dome sitting up on the back, behind the head
     const shell = new THREE.Mesh(
-      new THREE.SphereGeometry(0.34, 16, 14, 0, Math.PI*2, 0, Math.PI*0.8),
+      new THREE.SphereGeometry(0.36, 16, 14, 0, Math.PI*2, 0, Math.PI*0.82),
       new THREE.MeshLambertMaterial({map:getShellTexture(c.shell), emissive:kind==="player"?0x440000:(kind==="leader"?0x442c00:0x000000), emissiveIntensity:0.35})
     );
-    shell.scale.set(1,0.9,1.2);
-    shell.position.set(0, 0.36, -0.2);
+    shell.scale.set(1, 0.95, 1.15);
+    shell.position.set(0, 0.4, -0.12);
     grp.add(shell);
 
     // cartoon-style dark outline for silhouette clarity at a distance
@@ -94,22 +110,23 @@
       shell.geometry,
       new THREE.MeshBasicMaterial({color:0x0a0a0a, side:THREE.BackSide})
     );
-    outline.scale.copy(shell.scale).multiplyScalar(1.12);
+    outline.scale.copy(shell.scale).multiplyScalar(1.1);
     outline.position.copy(shell.position);
     grp.add(outline);
 
-    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.095,8,8), new THREE.MeshLambertMaterial({color:c.shell}));
-    tip.position.set(0, 0.53, -0.4);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.09,8,8), new THREE.MeshLambertMaterial({color:c.shell}));
+    tip.position.set(0, 0.58, -0.34);
     grp.add(tip);
 
-    // eye stalks
-    [-0.09, 0.09].forEach(dx=>{
-      const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.017,0.022,0.24,4), new THREE.MeshLambertMaterial({color:c.body}));
-      stalk.position.set(dx, 0.32, 0.35);
-      stalk.rotation.x = -0.5;
+    // eye stalks, sprouting from the head and leaning forward — the clearest
+    // "this is the front" signal on the whole model
+    [-0.075, 0.075].forEach(dx=>{
+      const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.016,0.022,0.26,4), bodyMat);
+      stalk.position.set(dx, 0.35, 0.6);
+      stalk.rotation.x = -0.35;
       grp.add(stalk);
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.034,6,6), new THREE.MeshLambertMaterial({color:0x1a1a1a}));
-      eye.position.set(dx, 0.43, 0.46);
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.036,6,6), new THREE.MeshLambertMaterial({color:0x141414}));
+      eye.position.set(dx, 0.47, 0.68);
       grp.add(eye);
     });
 
