@@ -534,6 +534,19 @@ function canStartRace(){
   return true;
 }
 
+// no purchases of any kind while a race is actually in progress (finished/DNF
+// races don't count — the player is back in "prep" mode by then)
+function isRaceActive(){
+  return !!(RACE && !RACE.playerFinished && !RACE.playerDNF);
+}
+function blockIfRacing(){
+  if(isRaceActive()){ alert("Во время гонки покупки недоступны. Дождитесь финиша."); return true; }
+  return false;
+}
+function racingBannerHtml(){
+  return isRaceActive() ? `<div class="risk">🏃 Гонка идёт — покупки и найм недоступны до финиша.</div>` : "";
+}
+
 function tick(){
   if(!RACE || RACE.paused || RACE.playerDNF || RACE.playerFinished) return;
   const simDelta = 0.25 * RACE.speed;
@@ -691,7 +704,7 @@ function flushDnfBatch(){
   const batch = RACE.dnfQueue.splice(0, RACE.dnfQueue.length);
   const lines = batch.map(n=>n.name+" — "+n.dnfKm+" км").join("\n");
   logEvent("🚫 Сошли "+batch.length+" участник(ов):\n"+lines);
-  queueRaceOverlay({type:"dnfbatch", title:"🚫 Сошли "+batch.length+" участников", lines:batch.map(n=>n.name+" — "+n.dnfKm+" км")});
+  queueRaceOverlay({type:"dnfbatch", title:"🚫 Сошли "+batch.length+" участников", subtitle:fmtTime(RACE.simSeconds), lines:batch.map(n=>n.name+" — "+n.dnfKm+" км")});
 }
 
 function triggerCharaFloodEvent(){
@@ -944,7 +957,8 @@ function logEvent(text){
 }
 function showEvent(ev){
   logEvent(ev.emoji+" "+ev.name+(ev.penalty?" ("+(ev.penalty>0?"+":"")+Math.round(ev.penalty)+"с)":""));
-  queueRaceOverlay({type:"event", title:ev.emoji+" "+ev.name, holdMs:3000});
+  const timeLabel = RACE ? fmtTime(RACE.simSeconds) : "";
+  queueRaceOverlay({type:"event", title:ev.emoji+" "+ev.name, subtitle:timeLabel, holdMs:3000});
 }
 function queueRaceOverlay(item){
   RACE.overlayQueue.push(item);
@@ -963,10 +977,10 @@ function drainOverlayQueue(){
       <div class="flood-foot">${item.footer}</div>`;
   } else if(item.type==="dnfbatch"){
     div.className="overlay";
-    div.innerHTML = `<b>${item.title}</b><br>`+item.lines.map(l=>`<div>${l}</div>`).join("");
+    div.innerHTML = (item.subtitle?`<b>${item.title}</b> <span style="font-size:10px;color:var(--muted)">⏱ ${item.subtitle}</span><br>`:`<b>${item.title}</b><br>`)+item.lines.map(l=>`<div>${l}</div>`).join("");
   } else {
     div.className="overlay";
-    div.innerHTML = `<b>${item.title}</b>`;
+    div.innerHTML = item.subtitle ? `<b>${item.title}</b><br><span style="font-size:10px;color:var(--muted)">⏱ ${item.subtitle}</span>` : `<b>${item.title}</b>`;
   }
   host.prepend(div);
   const hold = item.holdMs || 3000;
@@ -1314,7 +1328,7 @@ function renderCarry(){
 
   const el = document.getElementById("carryList");
   el.className = "carry-grid";
-  el.innerHTML = `
+  el.innerHTML = racingBannerHtml() + `
     <div class="shop-item ${missGels<=0?'ready':''}">
       <h3>🍯 Гели</h3>
       <p>${S.res.gels}/${needGels}</p>
@@ -1359,6 +1373,7 @@ function renderCarry(){
   if(swap) swap.onclick=()=>{ S.res.battery--; S.res.lampCharge=100; saveGame(); renderCarry(); renderRaceView(); };
 }
 function buyRes(key,qty){
+  if(blockIfRacing()) return;
   const price = RES_PRICE[key]*qty;
   if(qty<=0) return;
   if(S.money<price) return; // buttons that would exceed the balance are disabled in the UI
@@ -1436,9 +1451,10 @@ function renderEquipment(){
     </div>`;
   }).join("");
 
-  el.innerHTML = `<div class="eq-cards">${cards}</div>`;
+  el.innerHTML = racingBannerHtml() + `<div class="eq-cards">${cards}</div>`;
   el.querySelectorAll("[data-eq]").forEach(btn=>{
     btn.onclick=()=>{
+      if(blockIfRacing()) return;
       const [slot2,tierStr]=btn.dataset.eq.split(":"); const tier=parseInt(tierStr);
       const t=GEAR[slot2][tier];
       if(S.gear[slot2]===tier) return;
@@ -1452,7 +1468,7 @@ function renderEquipment(){
 function renderRepair(){
   const el = document.getElementById("repairList");
   el.className = "repair-grid";
-  el.innerHTML = Object.keys(S.gear).map(slot=>{
+  el.innerHTML = racingBannerHtml() + Object.keys(S.gear).map(slot=>{
     const t=GEAR[slot][S.gear[slot]];
     const pct = Math.round(S.durability[slot]/t.durabilityMax*100);
     const cost = Math.round(t.price*0.25*(1-pct/100)) || 50;
@@ -1465,6 +1481,7 @@ function renderRepair(){
   }).join("");
   el.querySelectorAll("[data-repair]").forEach(btn=>{
     btn.onclick=()=>{
+      if(blockIfRacing()) return;
       const slot=btn.dataset.repair; const t=GEAR[slot][S.gear[slot]];
       const pct = S.durability[slot]/t.durabilityMax;
       const cost = Math.round(t.price*0.25*(1-pct)) || 50;
@@ -1476,6 +1493,15 @@ function renderRepair(){
 }
 document.addEventListener("click", e=>{
   if(e.target && e.target.id==="btnRepairAll"){
+    if(blockIfRacing()) return;
+    let totalCost = 0;
+    Object.keys(S.gear).forEach(slot=>{
+      const t = GEAR[slot][S.gear[slot]];
+      const pct = S.durability[slot]/t.durabilityMax;
+      if(pct<1) totalCost += Math.round(t.price*0.25*(1-pct)) || 50;
+    });
+    if(totalCost>0 && S.money<totalCost){ alert("Не хватает ₽ "+totalCost.toLocaleString("ru-RU")+" на полный ремонт."); return; }
+    S.money -= totalCost;
     Object.keys(S.gear).forEach(slot=>{ S.durability[slot]=GEAR[slot][S.gear[slot]].durabilityMax; });
     saveGame(); renderRepair(); renderStatbar();
   }
@@ -1488,7 +1514,7 @@ function renderResources(){
     ["water","💧 Вода (0.5л)"],["gels","🍯 Гели «УГЛИ»"],["medkit","🩹 Комплект аптечки"],
     ["battery","🔋 Запасной АКБ"],["guarana","🫘 Гуарана"],["blanket","🆘 Спас-одеяло"]
   ];
-  el.innerHTML = rows.map(([key,label])=>{
+  el.innerHTML = racingBannerHtml() + rows.map(([key,label])=>{
     const p1=RES_PRICE[key], p5=RES_PRICE[key]*5;
     return `<div class="res-item" id="res_${key}">
       <b>${label}</b> — есть: ${S.res[key]} · ₽ ${RES_PRICE[key]}/шт.
@@ -1599,7 +1625,7 @@ function renderTraining(){
 function renderCoachView(){
   const el=document.getElementById("coachList");
   el.className = "eq-cards";
-  el.innerHTML = COACHES.map((c,i)=>{
+  el.innerHTML = racingBannerHtml() + COACHES.map((c,i)=>{
     const afford = c.price===0 || S.money>=c.price;
     const active = S.coachId===c.id;
     const stars = "★".repeat(i+1) + "☆".repeat(COACHES.length-1-i);
@@ -1619,6 +1645,7 @@ function renderCoachView(){
   }).join("");
   el.querySelectorAll("[data-coach]").forEach(btn=>{
     btn.onclick=()=>{
+      if(blockIfRacing()) return;
       const c=COACHES.find(x=>x.id===btn.dataset.coach);
       if(c.price>0 && S.money<c.price) return;
       if(c.price>0) S.money-=c.price;
@@ -1716,6 +1743,7 @@ function wireUI(){
   document.getElementById("btnStart").onclick=startRace;
   document.getElementById("bottomStart").onclick=startRace;
   document.getElementById("btnBuySlot").onclick=()=>{
+    if(blockIfRacing()) return;
     const price=slotPrice(S.currentLevel);
     if(S.money<price) return; // disabled state already prevents this, but guard anyway
     S.money-=price; S.slotsOwned[S.currentLevel]=true;
