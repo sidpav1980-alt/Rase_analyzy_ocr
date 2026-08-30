@@ -1,14 +1,10 @@
 services:
   - type: web
     name: trail-runner-armageddon
-    runtime: node
+    env: node
     plan: free
     buildCommand: npm install
     startCommand: npm start
     envVars:
       - key: NODE_VERSION
-        value: 22
-    disk:
-      name: trail-data
-      mountPath: /opt/render/project/src/data
-      sizeGB: 1
+        value: 18.20.0
