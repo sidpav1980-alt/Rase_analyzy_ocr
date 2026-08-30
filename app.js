@@ -701,9 +701,22 @@ function computeRisks(){
   if(S.fatigue>=70) risks.push({key:"fatigue", text:"😓 Высокая усталость ("+S.fatigue+"%) — стоит отдохнуть", ok:false, go:"rest"});
   return risks;
 }
+function ensure3DInit(){
+  if(!window.Race3D || window._race3dInited) return;
+  const host = document.getElementById("scene3d");
+  if(!host) return;
+  window.Race3D.init(host);
+  window._race3dInited = true;
+}
 function renderRaceView(){
+  ensure3DInit();
   const level = LEVELS[S.currentLevel];
   document.getElementById("raceLevelTitle").textContent = "Уровень "+(S.currentLevel+1)+": "+level.name;
+  if(window.Race3D){
+    window.Race3D.setLevel(S.currentLevel);
+    window.Race3D.setRainActive(level.weather==="rain" || level.weather==="severe" || level.weather==="mixed");
+    window.Race3D.setProgress(RACE ? (RACE.playerKm/RACE.distanceKm*100) : 0);
+  }
   const mapEl = document.getElementById("raceMap");
   mapEl.className = "race-map "+levelThemeClass(S.currentLevel);
   const decor = levelDecorClass(S.currentLevel);
@@ -780,6 +793,7 @@ function renderRaceUI(){
   `;
   renderTop14();
   document.getElementById("guaranaCount").textContent = "· "+S.res.guarana+" шт. (в гонке "+RACE.guaranaUsesLeft+")";
+  if(window.Race3D) window.Race3D.setProgress(pct);
 }
 function renderTop14(){
   const el = document.getElementById("top14");
@@ -1106,7 +1120,9 @@ function wireUI(){
   document.getElementById("navToggle").onclick=()=>{
     document.getElementById("navItems").classList.toggle("collapsed");
     document.getElementById("bottomStart").classList.toggle("show");
+    setTimeout(()=>{ if(window.Race3D) window.Race3D.onResize(); }, 260);
   };
+  window.addEventListener("orientationchange", ()=>setTimeout(()=>{ if(window.Race3D) window.Race3D.onResize(); },300));
   document.querySelectorAll("#navItems button").forEach(b=>{
     b.onclick=()=>showView(b.dataset.view);
   });
