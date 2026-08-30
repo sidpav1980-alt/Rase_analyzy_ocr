@@ -45,46 +45,86 @@
   let ground, mountainsGroup, treesGroup, fordMesh, rainPoints, sunMesh, moonMesh, hemi, sun;
   let container, currentLevel = 0, rainActive = false, ready = false;
   let dayPhase = 0.25; // 0..1 across a slow real-time day/night loop
-  let snailsGroup, spriteCache = new Map();
+  let snailsGroup, modelCache = new Map();
 
-  function buildSnailSprite(kind){
-    const size = 64;
-    const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = size;
-    const ctx = canvas.getContext("2d");
-    ctx.font = (kind==="leader"?"44px":"38px")+" serif";
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    if(kind==="player"){
-      ctx.shadowColor = "#ff5d5d"; ctx.shadowBlur = 14;
-    } else if(kind==="leader"){
-      ctx.shadowColor = "#ffd166"; ctx.shadowBlur = 10;
-    } else if(kind==="straggler"){
-      ctx.globalAlpha = 0.55;
-    }
-    ctx.fillText("🐌", size/2, size/2+2);
-    const tex = new THREE.CanvasTexture(canvas);
-    const mat = new THREE.SpriteMaterial({map:tex, transparent:true, depthTest:true});
-    const sprite = new THREE.Sprite(mat);
-    const s = kind==="player"?1.5:(kind==="leader"?1.25:(kind==="straggler"?0.75:1.0));
-    sprite.scale.set(s,s,s);
-    return sprite;
+  const SNAIL_COLORS = {
+    player:  {shell:0xff5d5d, body:0xffd0c0},
+    leader:  {shell:0xffd166, body:0xf0e2c0},
+    group:   {shell:0x6fae5a, body:0xd8cdb0},
+    straggler:{shell:0x556055, body:0x9a9a8a}
+  };
+  function buildSnailModel(kind){
+    const c = SNAIL_COLORS[kind] || SNAIL_COLORS.group;
+    const grp = new THREE.Group();
+    const scale = kind==="player"?1.5:(kind==="leader"?1.2:(kind==="straggler"?0.7:1.0));
+
+    const body = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.14,0.16,0.7,8),
+      new THREE.MeshLambertMaterial({color:c.body})
+    );
+    body.rotation.z = Math.PI/2;
+    body.position.set(0, 0.16, 0.05);
+    grp.add(body);
+
+    const shell = new THREE.Mesh(
+      new THREE.SphereGeometry(0.32, 12, 10, 0, Math.PI*2, 0, Math.PI*0.75),
+      new THREE.MeshLambertMaterial({color:c.shell, emissive:kind==="player"?0x330000:(kind==="leader"?0x332200:0x000000), emissiveIntensity:0.4})
+    );
+    shell.scale.set(1,0.85,1.15);
+    shell.position.set(0, 0.34, -0.18);
+    grp.add(shell);
+
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.09,8,8), new THREE.MeshLambertMaterial({color:c.shell}));
+    tip.position.set(0, 0.5, -0.36);
+    grp.add(tip);
+
+    // eye stalks
+    [-0.08, 0.08].forEach(dx=>{
+      const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.015,0.02,0.22,4), new THREE.MeshLambertMaterial({color:c.body}));
+      stalk.position.set(dx, 0.3, 0.32);
+      stalk.rotation.x = -0.5;
+      grp.add(stalk);
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.03,6,6), new THREE.MeshLambertMaterial({color:0x1a1a1a}));
+      eye.position.set(dx, 0.4, 0.42);
+      grp.add(eye);
+    });
+
+    grp.scale.set(scale,scale,scale);
+    grp.userData.phase = Math.random()*10;
+    grp.userData.kind = kind;
+    return grp;
   }
-  function getSnailSprite(key, kind){
-    let s = spriteCache.get(key);
-    if(!s){ s = buildSnailSprite(kind); snailsGroup.add(s); spriteCache.set(key, s); }
+  function getSnailModel(key, kind){
+    let s = modelCache.get(key);
+    if(!s){ s = buildSnailModel(kind); snailsGroup.add(s); modelCache.set(key, s); }
     s.userData.seen = true;
     return s;
   }
   function updateSnails(list){
     if(!ready || !snailsGroup) return;
-    spriteCache.forEach(s=>{ s.userData.seen=false; });
+    modelCache.forEach(s=>{ s.userData.seen=false; });
     list.forEach(item=>{
-      const sp = getSnailSprite(item.key, item.kind);
-      sp.position.set(item.x, item.y!==undefined?item.y:1.1, item.z);
+      const sp = getSnailModel(item.key, item.kind);
+      sp.userData.baseY = item.y!==undefined?item.y:1.1;
+      sp.position.set(item.x, sp.userData.baseY, item.z);
+      // face the direction of travel (toward more negative z = "ahead")
+      sp.rotation.y = Math.PI;
       sp.visible = true;
     });
-    spriteCache.forEach((s,key)=>{
-      if(!s.userData.seen){ snailsGroup.remove(s); spriteCache.delete(key); }
+    modelCache.forEach((s,key)=>{
+      if(!s.userData.seen){ snailsGroup.remove(s); modelCache.delete(key); }
+    });
+  }
+  function animateSnails(elapsed){
+    if(!snailsGroup) return;
+    modelCache.forEach(s=>{
+      const speed = s.userData.kind==="straggler"?2.2:3.2;
+      const amp = s.userData.kind==="player"?0.05:0.035;
+      const wob = Math.sin(elapsed*speed + s.userData.phase);
+      s.position.y = (s.userData.baseY||1.1) + wob*amp;
+      const squash = 1 + wob*0.04;
+      const baseScale = s.userData.kind==="player"?1.5:(s.userData.kind==="leader"?1.2:(s.userData.kind==="straggler"?0.7:1.0));
+      s.scale.y = baseScale * squash;
     });
   }
 
@@ -218,7 +258,7 @@
     hemi.groundColor.setHex(t.sand? 0x8a6a3a : 0x223322);
 
     clearGroup(snailsGroup);
-    spriteCache.clear();
+    modelCache.clear();
   }
 
   function updateDayNight(dt){
@@ -246,11 +286,14 @@
   }
   function clamp01(v){ return Math.max(0, Math.min(1, v)); }
 
+  let elapsedTotal = 0;
   function animate(){
     requestAnimationFrame(animate);
     if(!ready) return;
     const dt = Math.min(0.1, clock.getDelta());
+    elapsedTotal += dt;
     updateDayNight(dt);
+    animateSnails(elapsedTotal);
 
     if(rainPoints.visible){
       const pos = rainPoints.geometry.attributes.position;
