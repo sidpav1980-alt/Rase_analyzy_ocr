@@ -166,6 +166,18 @@ button{cursor:pointer;font-family:inherit;}
 .eq-wear-btn{margin-top:6px;width:100%;background:var(--panel);border:1px solid var(--gold);color:var(--gold);border-radius:7px;padding:6px;font-size:10.5px;font-weight:700;}
 @media (max-width:380px){ .eq-cards{grid-template-columns:1fr;} }
 .shop-item.ready{border-color:var(--good);}
+
+.repair-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.repair-grid .repair-item{margin-bottom:0;padding:8px 9px;font-size:10.5px;}
+.repair-grid .repair-item b{font-size:11.5px;}
+.repair-grid .repair-item p{margin:3px 0;color:var(--muted);}
+.repair-grid .repair-item button{width:100%;margin-top:2px;}
+@media (max-width:380px){ .repair-grid{grid-template-columns:1fr;} }
+
+.current-gear h3{font-size:13px;margin:14px 0 6px;color:var(--gold);}
+.cur-gear-row{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:7px 9px;margin-bottom:6px;font-size:11px;}
+.cur-gear-name{display:flex;align-items:center;gap:6px;justify-content:space-between;margin-bottom:4px;}
+.cur-gear-meta{color:var(--muted);margin-top:3px;}
 .shop-item h3,.coach-item h3{margin:0 0 6px;font-size:13px;}
 .shop-item .tier{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--line);}
 .shop-item .tier:last-child{border-bottom:none;}

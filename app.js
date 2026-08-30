@@ -476,10 +476,10 @@ function checkAidStations(){
 }
 
 function maybeTriggerRandomEvent(kmDelta){
-  const hazard = 0.006*kmDelta*(WEATHER_HAZARD[RACE.weather]||1);
+  const hazard = 0.22*kmDelta*(WEATHER_HAZARD[RACE.weather]||1);
   if(Math.random() < hazard){
     // small chance of a severe (player DNF-risk) event, mostly ordinary events
-    if(Math.random() < 0.06 && RACE.playerKm>10){
+    if(Math.random() < 0.10 && RACE.playerKm > RACE.distanceKm*0.05){
       triggerSevereEvent();
     } else {
       const ev = pick(EVENT_POOL);
@@ -996,6 +996,30 @@ function renderSnailTrack(){
   }
 }
 
+/* ---------------------------- RENDER: CURRENT GEAR SUMMARY (Текущее) ----------- */
+function renderCurrentGear(){
+  const el = document.getElementById("currentGearSummary");
+  if(!el) return;
+  const level = LEVELS[S.currentLevel];
+  const desiredTier = level.tier+1;
+  el.innerHTML = `<h3>👕 Текущая экипировка</h3>` + Object.keys(GEAR).map(slot=>{
+    const t = GEAR[slot][S.gear[slot]];
+    const pct = Math.round(S.durability[slot]/t.durabilityMax*100);
+    const ownedTier = S.gear[slot]+1;
+    const meetsReq = ownedTier>=desiredTier;
+    return `<div class="cur-gear-row">
+      <div class="cur-gear-name">${SLOT_TAB_ICON[slot]} ${t.name} <span class="eq-tier-pill">ур. ${ownedTier}/7</span></div>
+      <div class="durability-bar"><i style="width:${pct}%;background:${pct<30?'#ff5d5d':pct<60?'#ffb020':'#3ddc84'}"></i></div>
+      <div class="cur-gear-meta">Прочность ${pct}% · ${meetsReq?`<span class="ok-badge">✅ подходит уровню</span>`:`<span class="warn-badge">⚠️ ниже нормы</span>`}</div>
+    </div>`;
+  }).join("") + `
+    <h3>🧃 Расходники</h3>
+    <div class="cur-gear-row"><div class="cur-gear-meta">💧 Вода: ${S.res.water} · 🍯 Гели: ${S.res.gels} · 🩹 Аптечка: ${S.res.medkit} · 🔋 АКБ: ${S.res.battery} · 🫘 Гуарана: ${S.res.guarana} · 🆘 Одеяла: ${S.res.blanket}</div></div>
+    <h3>🏋️ Тренер</h3>
+    <div class="cur-gear-row"><div class="cur-gear-meta">${coach().name} · тренированность до ${coach().cap}</div></div>
+  `;
+}
+
 function renderCarry(){
   const level = LEVELS[S.currentLevel];
   const needWater = requiredWater(level.km, level.weather);
@@ -1146,15 +1170,16 @@ function renderEquipment(){
 }
 function renderRepair(){
   const el = document.getElementById("repairList");
+  el.className = "repair-grid";
   el.innerHTML = Object.keys(S.gear).map(slot=>{
     const t=GEAR[slot][S.gear[slot]];
     const pct = Math.round(S.durability[slot]/t.durabilityMax*100);
     const cost = Math.round(t.price*0.25*(1-pct/100)) || 50;
     return `<div class="repair-item">
-      <b>${SLOT_LABEL[slot]} — ${t.name}</b>
+      <b>${SLOT_TAB_ICON[slot]} ${t.name}</b>
       <div class="durability-bar"><i style="width:${pct}%;background:${pct<30?'#ff5d5d':pct<60?'#ffb020':'#3ddc84'}"></i></div>
-      <p>Прочность: ${pct}%</p>
-      ${pct<100?(S.money<cost?`<button disabled class="btn-disabled">Не хватает ₽ (нужно ${cost.toLocaleString("ru-RU")})</button>`:`<button data-repair="${slot}">Починить (₽ ${cost.toLocaleString("ru-RU")})</button>`):"<p class='hint'>В порядке</p>"}
+      <p>${pct}%</p>
+      ${pct<100?(S.money<cost?`<button disabled class="btn-disabled">Не хватает ₽ ${cost.toLocaleString("ru-RU")}</button>`:`<button data-repair="${slot}">Починить · ₽ ${cost.toLocaleString("ru-RU")}</button>`):"<p class='hint'>✅ В порядке</p>"}
     </div>`;
   }).join("");
   el.querySelectorAll("[data-repair]").forEach(btn=>{
@@ -1250,14 +1275,20 @@ function renderTraining(){
 }
 function renderCoachView(){
   const el=document.getElementById("coachList");
+  el.className = "eq-cards";
   el.innerHTML = COACHES.map(c=>{
     const afford = c.price===0 || S.money>=c.price;
-    return `<div class="coach-item">
-      <h3>${c.name} ${S.coachId===c.id?"✅":""}</h3>
-      <p>Максимум тренированности: ${c.cap} · бонус темпа: ${Math.round(c.paceBonus*100)}% · снижение травматизма: ${Math.round(c.injuryCut*100)}%</p>
-      ${S.coachId===c.id?"":(afford
-        ? `<button data-coach="${c.id}">${c.price?("Нанять · ₽ "+c.price.toLocaleString("ru-RU")):"Выбрать"}</button>`
-        : `<button disabled class="btn-disabled">Не хватает ₽ ${c.price.toLocaleString("ru-RU")}</button>`)}
+    const active = S.coachId===c.id;
+    let actionHtml;
+    if(active) actionHtml = `<div class="eq-action eq-equipped">✅ активен</div>`;
+    else if(afford) actionHtml = `<button class="eq-wear-btn" data-coach="${c.id}">${c.price?("Нанять · ₽ "+c.price.toLocaleString("ru-RU")):"Выбрать"}</button>`;
+    else actionHtml = `<button class="eq-wear-btn btn-disabled" disabled>Не хватает ₽ ${c.price.toLocaleString("ru-RU")}</button>`;
+    return `<div class="eq-card ${active?'eq-current':''}">
+      <div class="eq-card-head"><b>${c.name}</b></div>
+      <div class="eq-card-row">Цена: <b>${c.price?("₽ "+c.price.toLocaleString("ru-RU")):"бесплатно"}</b></div>
+      <div class="eq-card-row">Тренированность до: <b>${c.cap}/100</b></div>
+      <div class="eq-card-row">Бонус темпа: <b>${Math.round(c.paceBonus*100)}%</b> · снижение травматизма: <b>${Math.round(c.injuryCut*100)}%</b></div>
+      ${actionHtml}
     </div>`;
   }).join("");
   el.querySelectorAll("[data-coach]").forEach(btn=>{
@@ -1293,6 +1324,7 @@ function showView(name){
   });
   document.querySelectorAll("#navItems button").forEach(b=>b.classList.toggle("active", b.dataset.view===name));
   if(name==="race") renderRaceView();
+  if(name==="profile") renderCurrentGear();
   if(name==="carry") renderCarry();
   if(name==="campaign") renderCampaign();
   if(name==="equipment") renderEquipment();
