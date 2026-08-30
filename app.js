@@ -79,6 +79,15 @@ Object.keys(GEAR_NAMES).forEach(slot=>{
   }));
 });
 const SLOT_LABEL = {shoes:"👟 Кроссовки", jacket:"🧥 Мембрана", poles:"🥾 Палки", lamp:"🔦 Фонарь", watch:"⌚ Часы/пульсометр", pack:"🎒 Рюкзак/гидратор"};
+const SLOT_TAB_ICON = {shoes:"👟", jacket:"🧥", poles:"🥾", lamp:"🔦", watch:"⌚", pack:"🎒"};
+const SLOT_EFFECT = {
+  shoes:"скорость и стабильность темпа на технических участках",
+  jacket:"защита от дождя и холода",
+  poles:"помощь на подъёмах и сложном рельефе, снижение риска падения",
+  lamp:"дальность и надёжность света на ночных участках",
+  watch:"точность данных о темпе и пульсе",
+  pack:"объём под воду и снаряжение, устойчивость на бегу"
+};
 
 /* ---------------------------- DATA: RESOURCES ---------------------------- */
 const RES_PRICE = { water:60, gel:90, medkit:450, battery:300, guarana:250, blanket:600 };
@@ -1071,29 +1080,58 @@ function renderCampaign(){
 }
 
 /* ---------------------------- RENDER: EQUIPMENT / REPAIR ------------------------ */
+let equipmentActiveTab = "shoes";
 function renderEquipment(){
+  const tabsEl = document.getElementById("equipmentTabs");
   const el = document.getElementById("equipmentShop");
-  el.innerHTML = Object.keys(GEAR).map(slot=>{
-    const tiers = GEAR[slot].map((t,i)=>{
-      const equipped = S.gear[slot]===i;
-      const afford = t.price===0 || S.money>=t.price;
-      const btn = equipped
-        ? "✅ надето"
-        : afford
-          ? `${t.price?`₽ ${t.price.toLocaleString("ru-RU")} `:""}<button data-eq="${slot}:${i}">${t.price?"Купить/надеть":"Надеть"}</button>`
-          : `₽ ${t.price.toLocaleString("ru-RU")} <button disabled class="btn-disabled">Не хватает ₽</button>`;
-      return `<div class="tier ${equipped?'equipped':''}"><span>${t.name} (ур.${i+1})</span><span>${btn}</span></div>`;
-    }).join("");
-    return `<div class="shop-item"><h3>${SLOT_LABEL[slot]}</h3>${tiers}</div>`;
+  const level = LEVELS[S.currentLevel];
+  const desiredTier = level.tier+1; // 1..7 scale for display
+
+  tabsEl.innerHTML = Object.keys(GEAR).map(slot=>
+    `<button class="eq-tab ${slot===equipmentActiveTab?'active':''}" data-tab="${slot}">${SLOT_TAB_ICON[slot]} ${SLOT_LABEL[slot].replace(/^\S+\s/,"")}</button>`
+  ).join("");
+  tabsEl.querySelectorAll("[data-tab]").forEach(btn=>{
+    btn.onclick=()=>{ equipmentActiveTab = btn.dataset.tab; renderEquipment(); };
+  });
+
+  const slot = equipmentActiveTab;
+  const cards = GEAR[slot].map((t,i)=>{
+    const equipped = S.gear[slot]===i;
+    const ownedTier = i+1;
+    const meetsReq = ownedTier>=desiredTier;
+    const afford = t.price===0 || S.money>=t.price;
+    let actionHtml;
+    if(equipped){
+      actionHtml = `<div class="eq-action eq-equipped">✅ надето</div>`;
+    } else if(afford){
+      actionHtml = `<button class="eq-wear-btn" data-eq="${slot}:${i}">${t.price?"Купить/надеть":"Надеть"}</button>`;
+    } else {
+      actionHtml = `<button class="eq-wear-btn btn-disabled" disabled>Не хватает ₽ ${t.price.toLocaleString("ru-RU")}</button>`;
+    }
+    return `<div class="eq-card ${equipped?'eq-current':''}">
+      <div class="eq-card-head">
+        <b>${t.name}</b>
+        <span class="eq-tier-pill">ур. ${ownedTier}/7</span>
+      </div>
+      <div class="eq-card-row">Цена: <b>${t.price?("₽ "+t.price.toLocaleString("ru-RU")):"бесплатно"}</b></div>
+      <div class="eq-card-row">Эффект: ${SLOT_EFFECT[slot]}${t.paceFactor<1?` · темп ${Math.round((1-t.paceFactor)*100)}%`:""}</div>
+      <div class="eq-card-row">Прочность: ${t.durabilityMax} ед. · защита от поломки: +${Math.round((1-t.breakRisk)*100)}%</div>
+      <div class="eq-card-row">Для текущей гонки: желательно ${desiredTier}/7 · у тебя ${ownedTier}/7 ·
+        ${meetsReq?`<span class="ok-badge">✅ уровень подходит</span>`:`<span class="warn-badge">⚠️ ниже рекомендуемого</span>`}
+      </div>
+      ${actionHtml}
+    </div>`;
   }).join("");
+
+  el.innerHTML = `<div class="eq-cards">${cards}</div>`;
   el.querySelectorAll("[data-eq]").forEach(btn=>{
     btn.onclick=()=>{
-      const [slot,tierStr]=btn.dataset.eq.split(":"); const tier=parseInt(tierStr);
-      const t=GEAR[slot][tier];
-      if(S.gear[slot]===tier) return;
-      if(t.price>0 && S.money<t.price) return; // button is disabled in this case anyway
+      const [slot2,tierStr]=btn.dataset.eq.split(":"); const tier=parseInt(tierStr);
+      const t=GEAR[slot2][tier];
+      if(S.gear[slot2]===tier) return;
+      if(t.price>0 && S.money<t.price) return;
       if(t.price>0) S.money-=t.price;
-      S.gear[slot]=tier; S.durability[slot]=t.durabilityMax;
+      S.gear[slot2]=tier; S.durability[slot2]=t.durabilityMax;
       saveGame(); renderEquipment(); renderStatbar(); renderRaceView();
     };
   });
