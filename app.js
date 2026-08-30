@@ -90,7 +90,7 @@ const SLOT_EFFECT = {
 };
 
 /* ---------------------------- DATA: RESOURCES ---------------------------- */
-const RES_PRICE = { water:60, gel:90, medkit:450, battery:300, guarana:250, blanket:600 };
+const RES_PRICE = { water:60, gels:90, medkit:450, battery:300, guarana:250, blanket:600 };
 
 /* ---------------------------- DATA: COACHES ------------------------------ */
 const COACHES = [
@@ -1046,35 +1046,49 @@ function renderCarry(){
   const missWater = Math.max(0, needWater - S.res.water);
   const missGels = Math.max(0, needGels - S.res.gels);
   const missMedkit = Math.max(0, needMedkit - S.res.medkit);
-  const priceWater = missWater*RES_PRICE.water;
-  const priceGels = missGels*RES_PRICE.gel;
-  const priceMedkit = missMedkit*RES_PRICE.medkit;
+
+  // buy as much of the missing amount as the balance allows — full amount
+  // when affordable, otherwise however many units the player can afford
+  const buyPlan = (key, missing)=>{
+    if(missing<=0) return null;
+    const unitPrice = RES_PRICE[key];
+    const affordable = Math.floor(S.money/unitPrice);
+    const qty = Math.min(missing, affordable);
+    return {qty, cost: qty*unitPrice, partial: qty>0 && qty<missing, none: qty<=0};
+  };
+  const planButton = (id, plan)=>{
+    if(!plan) return `<p class="hint">✅ норма</p>`;
+    if(plan.none) return `<button disabled class="btn-disabled">Не хватает ₽</button>`;
+    const label = plan.partial ? `+${plan.qty} (не хватит на все) · ₽${plan.cost.toLocaleString("ru-RU")}` : `+${plan.qty} · ₽${plan.cost.toLocaleString("ru-RU")}`;
+    return `<button data-buy="${id}">${label}</button>`;
+  };
+  const planGels = buyPlan("gels", missGels);
+  const planMedkit = buyPlan("medkit", missMedkit);
+  const planWater = buyPlan("water", missWater);
   const priceBlanket = RES_PRICE.blanket;
-  const btnOrDisabled = (id, label, price)=> S.money>=price
-    ? `<button data-buy="${id}">${label}</button>`
-    : `<button disabled class="btn-disabled">${label} — не хватает ₽</button>`;
+
   const el = document.getElementById("carryList");
   el.className = "carry-grid";
   el.innerHTML = `
     <div class="shop-item ${missGels<=0?'ready':''}">
       <h3>🍯 Гели</h3>
       <p>${S.res.gels}/${needGels}</p>
-      ${missGels>0 ? btnOrDisabled("gel-tonorm", `+${missGels} · ₽${priceGels.toLocaleString("ru-RU")}`, priceGels) : `<p class="hint">✅ норма</p>`}
+      ${planButton("gels", planGels)}
     </div>
     <div class="shop-item ${missMedkit<=0?'ready':''}">
       <h3>🩹 Аптечка</h3>
       <p>${S.res.medkit}/${needMedkit}</p>
-      ${missMedkit>0 ? btnOrDisabled("medkit-tonorm", `+${missMedkit} · ₽${priceMedkit.toLocaleString("ru-RU")}`, priceMedkit) : `<p class="hint">✅ норма</p>`}
+      ${planButton("medkit", planMedkit)}
     </div>
     <div class="shop-item ${missWater<=0?'ready':''}">
       <h3>💧 Вода</h3>
       <p>${S.res.water}/${needWater}</p>
-      ${missWater>0 ? btnOrDisabled("water-tonorm", `+${missWater} · ₽${priceWater.toLocaleString("ru-RU")}`, priceWater) : `<p class="hint">✅ норма</p>`}
+      ${planButton("water", planWater)}
     </div>
     <div class="shop-item">
       <h3>🆘 Одеяло</h3>
       <p>${S.res.blanket} шт.</p>
-      ${btnOrDisabled("blanket-1", `+1 · ₽${priceBlanket}`, priceBlanket)}
+      ${S.money>=priceBlanket ? `<button data-buy="blanket">+1 · ₽${priceBlanket}</button>` : `<button disabled class="btn-disabled">Не хватает ₽</button>`}
     </div>
     <div class="shop-item ${S.res.lampCharge>=100?'ready':''}" style="grid-column:1/-1">
       <h3>🔦 Питание фонаря</h3>
@@ -1088,10 +1102,10 @@ function renderCarry(){
   `;
   el.querySelectorAll("[data-buy]").forEach(btn=>{
     btn.onclick = ()=>{
-      const [what]=btn.dataset.buy.split("-");
-      if(what==="gel") buyRes("gel",missGels);
-      if(what==="water") buyRes("water",missWater);
-      if(what==="medkit") buyRes("medkit",missMedkit);
+      const what = btn.dataset.buy;
+      if(what==="gels" && planGels) buyRes("gels", planGels.qty);
+      if(what==="water" && planWater) buyRes("water", planWater.qty);
+      if(what==="medkit" && planMedkit) buyRes("medkit", planMedkit.qty);
       if(what==="blanket") buyRes("blanket",1);
       renderCarry(); renderStatbar(); renderRaceView();
     };
@@ -1223,7 +1237,7 @@ document.addEventListener("click", e=>{
 function renderResources(){
   const el = document.getElementById("resourcesShop");
   const rows = [
-    ["water","💧 Вода (0.5л)"],["gel","🍯 Гели «УГЛИ»"],["medkit","🩹 Комплект аптечки"],
+    ["water","💧 Вода (0.5л)"],["gels","🍯 Гели «УГЛИ»"],["medkit","🩹 Комплект аптечки"],
     ["battery","🔋 Запасной АКБ"],["guarana","🫘 Гуарана"],["blanket","🆘 Спас-одеяло"]
   ];
   el.innerHTML = rows.map(([key,label])=>{
