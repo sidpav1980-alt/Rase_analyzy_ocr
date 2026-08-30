@@ -227,6 +227,27 @@ function slotPrice(levelIndex){
   return Math.round(base/50)*50;
 }
 
+/* ---------------------------- USER PREFERENCES (device-local, not game save) --- */
+const PREFS_KEY = "trailArmageddonPrefs_v1";
+function loadPrefs(){
+  try{
+    const raw = localStorage.getItem(PREFS_KEY);
+    return Object.assign({textSize:"normal", reduceMotion:false, highContrast:false, scene3D:true},
+      raw?JSON.parse(raw):{});
+  }catch(e){ return {textSize:"normal", reduceMotion:false, highContrast:false, scene3D:true}; }
+}
+function savePrefs(){ try{ localStorage.setItem(PREFS_KEY, JSON.stringify(PREFS)); }catch(e){} }
+let PREFS = loadPrefs();
+function applyPrefs(){
+  const root = document.documentElement;
+  root.classList.toggle("text-large", PREFS.textSize==="large");
+  root.classList.toggle("reduce-motion", !!PREFS.reduceMotion);
+  root.classList.toggle("high-contrast", !!PREFS.highContrast);
+  const host = document.getElementById("scene3d");
+  if(host) host.style.display = PREFS.scene3D ? "" : "none";
+  if(window.Race3D && window.Race3D.onResize) setTimeout(()=>window.Race3D.onResize(), 50);
+}
+
 /* ---------------------------- PLAYER PACE CALC ------------------------------ */
 function gearAvgPaceFactor(){
   let f=1;
@@ -1234,6 +1255,20 @@ function wireUI(){
   document.getElementById("btnHelpClose").onclick=()=>document.getElementById("helpModal").classList.remove("open");
   document.getElementById("helpModal").onclick=(e)=>{ if(e.target.id==="helpModal") e.currentTarget.classList.remove("open"); };
 
+  document.getElementById("btnSettings").onclick=()=>{
+    document.getElementById("prefTextSize").value = PREFS.textSize;
+    document.getElementById("prefReduceMotion").checked = !!PREFS.reduceMotion;
+    document.getElementById("prefHighContrast").checked = !!PREFS.highContrast;
+    document.getElementById("prefScene3D").checked = PREFS.scene3D!==false;
+    document.getElementById("settingsModal").classList.add("open");
+  };
+  document.getElementById("btnSettingsClose").onclick=()=>document.getElementById("settingsModal").classList.remove("open");
+  document.getElementById("settingsModal").onclick=(e)=>{ if(e.target.id==="settingsModal") e.currentTarget.classList.remove("open"); };
+  document.getElementById("prefTextSize").onchange=(e)=>{ PREFS.textSize=e.target.value; savePrefs(); applyPrefs(); };
+  document.getElementById("prefReduceMotion").onchange=(e)=>{ PREFS.reduceMotion=e.target.checked; savePrefs(); applyPrefs(); };
+  document.getElementById("prefHighContrast").onchange=(e)=>{ PREFS.highContrast=e.target.checked; savePrefs(); applyPrefs(); };
+  document.getElementById("prefScene3D").onchange=(e)=>{ PREFS.scene3D=e.target.checked; savePrefs(); applyPrefs(); };
+
   document.getElementById("profileName").value = S.profile.name;
   document.getElementById("profileName").oninput = (e)=>{
     const v = e.target.value.replace(/(бляд|хуй|пизд|еба[тн]|сук[аи])/gi,"***");
@@ -1284,10 +1319,29 @@ function tickTimers(){
 }
 
 function init(){
+  applyPrefs();
   wireUI();
   renderStatbar();
   showView("race");
   setInterval(tickTimers, 1000);
   saveGame();
+  runSelfTests();
+}
+
+/* ---------------------------- LIGHTWEIGHT SELF-TESTS ---------------------------
+   Runs once on load; logs to console only. Catches the most common regressions
+   (missing DOM hooks, broken data tables) without needing a test harness. */
+function runSelfTests(){
+  const problems = [];
+  if(LEVELS.length!==21) problems.push("LEVELS должно быть 21, а не "+LEVELS.length);
+  if(BASE_REWARD.length!==21) problems.push("BASE_REWARD должно быть 21, а не "+BASE_REWARD.length);
+  if(LEVELS[12].special!=="chara" || LEVELS[12].km!==138) problems.push("13-й уровень должен быть Чарой на 138 км");
+  if(LEVELS[20].special!=="armageddon") problems.push("21-й уровень должен быть Армагеддоном");
+  ["btnStart","bottomStart","btnGuarana","speedSelect","raceMap","scene3d","snailLayer","statbar"].forEach(id=>{
+    if(!document.getElementById(id)) problems.push("Нет элемента #"+id);
+  });
+  if(placeBonusPct(1)!==1 || placeBonusPct(21)!==0) problems.push("placeBonusPct считает неверно");
+  if(problems.length){ console.warn("[self-test] найдены проблемы:", problems); }
+  else console.log("[self-test] ok — 21 уровень, экономика и ключевые DOM-узлы на месте");
 }
 document.addEventListener("DOMContentLoaded", init);

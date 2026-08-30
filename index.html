@@ -18,6 +18,7 @@
     </div>
     <div class="topbtns">
       <a class="support-btn" href="https://www.tbank.ru/cf/49SEnJlLa0Y" target="_blank" rel="noopener">❤️ ПОДДЕРЖАТЬ</a>
+      <button class="icon-btn" id="btnSettings" aria-label="Настройки">⚙️</button>
       <button class="help-btn" id="btnHelp">❓ Помощь</button>
     </div>
   </header>
@@ -184,6 +185,35 @@
       <button class="modal-close" id="btnHelpClose">✕</button>
       <h2>СИМУЛЯТОР ТРЕЙЛРАННЕРА: АРМАГЕДДОН · СПРАВОЧНИК</h2>
       <div id="helpContent"></div>
+    </div>
+  </div>
+
+  <div id="settingsModal" class="modal">
+    <div class="modal-box">
+      <button class="modal-close" id="btnSettingsClose">✕</button>
+      <h2>⚙️ Настройки</h2>
+      <div class="settings-group">
+        <label class="settings-row">
+          <span>Размер текста</span>
+          <select id="prefTextSize">
+            <option value="normal">Обычный</option>
+            <option value="large">Крупный</option>
+          </select>
+        </label>
+        <label class="settings-row">
+          <span>Уменьшить анимацию</span>
+          <input type="checkbox" id="prefReduceMotion">
+        </label>
+        <label class="settings-row">
+          <span>Высокий контраст</span>
+          <input type="checkbox" id="prefHighContrast">
+        </label>
+        <label class="settings-row">
+          <span>3D-фон гонки</span>
+          <input type="checkbox" id="prefScene3D" checked>
+        </label>
+      </div>
+      <p class="hint">Настройки сохраняются на этом устройстве и не влияют на игровой прогресс.</p>
     </div>
   </div>
 
