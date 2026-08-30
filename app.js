@@ -404,6 +404,8 @@ function startRace(){
   if(!level) return;
   if(!canStartRace()) return;
 
+  const resultHost = document.getElementById("raceResultHost");
+  if(resultHost) resultHost.innerHTML = "";
   const guaranaUses = level.km<=100 ? 1 : (level.km<500 ? 2 : 4);
   RACE = {
     levelIndex:S.currentLevel, level, distanceKm:level.km, weather:level.weather,
@@ -729,7 +731,7 @@ function finishRace(){
 }
 
 function showFinishSummary(data){
-  const host = document.getElementById("raceOverlayHost");
+  const host = document.getElementById("raceResultHost");
   let html = "";
   if(data.dnf){
     const treatNote = data.fracture

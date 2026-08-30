@@ -117,8 +117,9 @@ button{cursor:pointer;font-family:inherit;}
 .race-metrics div{background:var(--panel2);border-radius:8px;padding:6px 8px;}
 .race-metrics b{display:block;font-size:14px;}
 
-.overlay-host{position:relative;min-height:0;}
-.overlay{background:var(--panel2);border:1px solid var(--gold);border-radius:10px;padding:8px 10px;margin-bottom:6px;font-size:12px;animation:fadein .2s;}
+.overlay-host{position:absolute;left:8px;right:8px;top:52px;z-index:7;max-height:190px;overflow-y:auto;pointer-events:none;}
+.overlay{background:rgba(19,39,67,.95);backdrop-filter:blur(3px);border:1px solid var(--gold);border-radius:10px;padding:8px 10px;margin-bottom:6px;font-size:12px;animation:fadein .2s;box-shadow:0 4px 14px rgba(0,0,0,.4);}
+.result-host{position:relative;min-height:0;}
 .overlay.flood{border-color:#4fd6ff;max-height:220px;display:flex;flex-direction:column;}
 .overlay.flood .flood-title{position:sticky;top:0;background:var(--panel2);font-weight:700;padding-bottom:4px;}
 .overlay.flood .flood-list{overflow-y:auto;flex:1;font-size:11px;}
