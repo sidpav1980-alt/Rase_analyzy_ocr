@@ -74,37 +74,44 @@
     const scale = (kind==="player"?1.5:(kind==="leader"?1.2:(kind==="straggler"?0.7:1.0))) * 2.1;
     const bodyMat = new THREE.MeshLambertMaterial({color:c.body});
 
-    // foot/body: one elongated blob from tail to head, tapered
+    // foot/body: smaller now — the neck+head carry the "forward" read instead
     const foot = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 10), bodyMat);
-    foot.scale.set(0.82, 0.58, 2.05);
-    foot.position.set(0, 0.14, 0.02);
+    foot.scale.set(0.6, 0.4, 1.35);
+    foot.position.set(0, 0.12, -0.06);
     foot.castShadow = true;
     grp.add(foot);
 
     // tail point, tapering off behind the shell
-    const tail = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), bodyMat);
-    tail.scale.set(0.8, 0.6, 1);
-    tail.position.set(0, 0.11, -0.42);
+    const tail = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 8), bodyMat);
+    tail.scale.set(0.75, 0.55, 1);
+    tail.position.set(0, 0.09, -0.32);
     grp.add(tail);
 
-    // head: a distinct rounded bump out front, unmissable as "this end looks forward"
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.165, 14, 10), bodyMat);
+    // neck: lengthened, angled up and forward, lifting the head clear above the shell
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.1, 0.46, 8), bodyMat);
+    neck.position.set(0, 0.3, 0.4);
+    neck.rotation.x = -0.8;
+    neck.castShadow = true;
+    grp.add(neck);
+
+    // head: raised well above the shell now, unmistakably "looking forward"
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.175, 14, 10), bodyMat);
     head.scale.set(1, 0.92, 1.05);
-    head.position.set(0, 0.2, 0.52);
+    head.position.set(0, 0.5, 0.68);
     head.castShadow = true;
     grp.add(head);
     // small snout tip so the front reads even more clearly
-    const snout = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 8), bodyMat);
-    snout.position.set(0, 0.16, 0.66);
+    const snout = new THREE.Mesh(new THREE.SphereGeometry(0.078, 8, 8), bodyMat);
+    snout.position.set(0, 0.46, 0.83);
     grp.add(snout);
 
-    // shell: coiled dome sitting up on the back, behind the head
+    // shell: coiled dome sitting up on the back, now clearly lower than the head
     const shell = new THREE.Mesh(
       new THREE.SphereGeometry(0.36, 16, 14, 0, Math.PI*2, 0, Math.PI*0.82),
       new THREE.MeshLambertMaterial({map:getShellTexture(c.shell), emissive:kind==="player"?0x440000:(kind==="leader"?0x442c00:0x000000), emissiveIntensity:0.35})
     );
     shell.scale.set(1, 0.95, 1.15);
-    shell.position.set(0, 0.4, -0.12);
+    shell.position.set(0, 0.36, -0.16);
     shell.castShadow = true;
     grp.add(shell);
 
@@ -118,18 +125,18 @@
     grp.add(outline);
 
     const tip = new THREE.Mesh(new THREE.SphereGeometry(0.09,8,8), new THREE.MeshLambertMaterial({color:c.shell}));
-    tip.position.set(0, 0.58, -0.34);
+    tip.position.set(0, 0.54, -0.38);
     grp.add(tip);
 
-    // eye stalks, sprouting from the head and leaning forward — the clearest
-    // "this is the front" signal on the whole model
-    [-0.075, 0.075].forEach(dx=>{
-      const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.016,0.022,0.26,4), bodyMat);
-      stalk.position.set(dx, 0.35, 0.6);
-      stalk.rotation.x = -0.35;
+    // усики (feelers): now sprouting from the raised head, long and clearly
+    // visible — the strongest "this is the front" signal on the model
+    [-0.08, 0.08].forEach(dx=>{
+      const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.017,0.024,0.32,4), bodyMat);
+      stalk.position.set(dx, 0.66, 0.78);
+      stalk.rotation.x = -0.3;
       grp.add(stalk);
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.036,6,6), new THREE.MeshLambertMaterial({color:0x141414}));
-      eye.position.set(dx, 0.47, 0.68);
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.038,6,6), new THREE.MeshLambertMaterial({color:0x141414}));
+      eye.position.set(dx, 0.8, 0.87);
       grp.add(eye);
     });
 
@@ -151,14 +158,14 @@
     modelCache.forEach(s=>{ s.userData.seen=false; });
     list.forEach(item=>{
       const sp = getSnailModel(item.key, item.kind);
-      let px=item.x||0, py=item.y!==undefined?item.y:1.1, pz=item.z||0, facing=Math.PI;
+      let px=item.x||0, py=item.y!==undefined?item.y:0.04, pz=item.z||0, facing=Math.PI;
       let facingVec = new THREE.Vector3(0,0,1);
       if(pathCurve && item.t!==undefined){
         const ct = clamp01(item.t);
         const p = pathCurve.getPointAt(ct);
         const tangent = pathCurve.getTangentAt(ct);
         const side = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize().multiplyScalar(item.laneOffset||0);
-        px = p.x+side.x; pz = p.z+side.z; py = (item.y!==undefined?item.y:1.1)+p.y;
+        px = p.x+side.x; pz = p.z+side.z; py = (item.y!==undefined?item.y:0.04)+p.y;
         facing = Math.atan2(tangent.x, tangent.z);
         facingVec = tangent.clone().normalize();
       }
@@ -191,7 +198,7 @@
       const inch = Math.sin(elapsed*speed*0.5 + s.userData.phase) * 0.22;
       const f = s.userData.facing || {x:0,z:1};
       const targetX = (s.userData.baseX||0) + f.x*inch;
-      const targetY = (s.userData.baseY||1.1) + Math.abs(wob)*amp;
+      const targetY = (s.userData.baseY||0.04) + Math.abs(wob)*amp;
       const targetZ = (s.userData.baseZ||0) + f.z*inch;
       s.position.x += (targetX - s.position.x)*followK;
       s.position.y += (targetY - s.position.y)*followK;
@@ -359,6 +366,15 @@
     return mesh;
   }
 
+  function keepClearOfPath(x){
+    // the path wanders up to ±9 and snails fan out a bit further with lane
+    // offsets — keep mountain bases outside that corridor so nothing clips
+    // through solid rock
+    const clearance = 21;
+    if(Math.abs(x) >= clearance) return x;
+    return x<0 ? x-clearance : x+clearance;
+  }
+
   function buildLevel(idx){
     currentLevel = idx;
     const t = THEME_3D[idx] || THEME_3D[0];
@@ -378,7 +394,7 @@
         new THREE.ConeGeometry(w, h, 5),
         new THREE.MeshStandardMaterial({color:t.mtn, roughness:0.95, metalness:0})
       );
-      cone.position.set((i-5)*13 + (rnd()-0.5)*8, h/2-1, -80 - rnd()*22);
+      cone.position.set(keepClearOfPath((i-5)*13 + (rnd()-0.5)*8), h/2-1, -80 - rnd()*22);
       cone.rotation.y = rnd()*Math.PI;
       cone.receiveShadow = true;
       mountainsGroup.add(cone);

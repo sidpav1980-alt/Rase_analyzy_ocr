@@ -1024,17 +1024,17 @@ function renderSnailTrack(){
       const d = clamp((km-RACE.playerKm)/windowKm, -1, 1);
       return d*0.32;
     };
-    const items = [{key:"player", kind:"player", t:focusT, laneOffset:0, y:1.3}];
+    const items = [{key:"player", kind:"player", t:focusT, laneOffset:0, y:0.05}];
     if(isBreakaway){
       leaderCluster.members.slice(0,4).forEach((n,i)=>{
-        items.push({key:"lead"+i, kind:"leader", t:focusT+deltaT(n.liveKm), laneOffset:(i%2===0?-1:1)*(0.7+i*0.3), y:1.25});
+        items.push({key:"lead"+i, kind:"leader", t:focusT+deltaT(n.liveKm), laneOffset:(i%2===0?-1:1)*(0.7+i*0.3), y:0.04});
       });
     }
     repMembers.forEach((n,i)=>{
-      items.push({key:"grp"+i, kind:"group", t:focusT+deltaT(n.liveKm), laneOffset:(i%2===0?-1:1)*(0.6+i*0.3), y:1.1});
+      items.push({key:"grp"+i, kind:"group", t:focusT+deltaT(n.liveKm), laneOffset:(i%2===0?-1:1)*(0.6+i*0.3), y:0.03});
     });
     clusters.filter(c=>c!==mainCluster && c!==leaderCluster).slice(0,2).forEach((c,i)=>{
-      items.push({key:"strag"+i, kind:"straggler", t:focusT+deltaT(c.maxKm), laneOffset:(i%2===0?-1.6:1.6), y:1.0});
+      items.push({key:"strag"+i, kind:"straggler", t:focusT+deltaT(c.maxKm), laneOffset:(i%2===0?-1.6:1.6), y:0.03});
     });
     window.Race3D.updateSnails(items);
   }
