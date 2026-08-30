@@ -505,27 +505,34 @@ function checkAidStations(){
 }
 
 function maybeTriggerRandomEvent(kmDelta){
-  const hazard = 0.22*kmDelta*(WEATHER_HAZARD[RACE.weather]||1);
-  if(Math.random() < hazard){
-    // small chance of a severe (player DNF-risk) event, mostly ordinary events
-    if(Math.random() < 0.10 && RACE.playerKm > RACE.distanceKm*0.05){
-      triggerSevereEvent();
-    } else {
-      const ev = pick(EVENT_POOL);
-      let penalty = ev.penalty;
-      if(ev.healable){
-        if(S.res.medkitUses===undefined) S.res.medkitUses = S.res.medkit*3;
-      }
-      if(ev.emoji==="🔥"){ // потёртость uses medkit
-        if(RACE._medkitLeft===undefined) RACE._medkitLeft = S.res.medkit;
-        if(RACE._medkitLeft>0){ RACE._medkitLeft--; }
-        else { penalty*=2; ev.name="Потёртость (аптечка пуста — хуже)"; }
-      }
-      if(ev.kind==="gear") applyGearWear(0.08);
-      showEvent(ev);
-      RACE.playerPenaltySec += Math.max(0,penalty);
-      if(penalty<0) RACE.playerPenaltySec += penalty; // bonus reduces elapsed effectively via base pace credit
+  // guaranteed pacing instead of a pure per-tick coin flip: without this, a
+  // short 5km race had roughly a 1-in-3 chance of showing zero events at all,
+  // which reads as "events are broken" even though the mechanism was firing
+  // correctly on longer races
+  if(RACE._nextEventKm===undefined) RACE._nextEventKm = rnd(2.5, 4.5);
+  RACE._eventKmAccum = (RACE._eventKmAccum||0) + kmDelta*(WEATHER_HAZARD[RACE.weather]||1);
+  if(RACE._eventKmAccum < RACE._nextEventKm) return;
+  RACE._eventKmAccum = 0;
+  RACE._nextEventKm = rnd(2.5, 4.5);
+
+  // small chance of a severe (player DNF-risk) event, mostly ordinary events
+  if(Math.random() < 0.08 && RACE.playerKm > RACE.distanceKm*0.05){
+    triggerSevereEvent();
+  } else {
+    const ev = pick(EVENT_POOL);
+    let penalty = ev.penalty;
+    if(ev.healable){
+      if(S.res.medkitUses===undefined) S.res.medkitUses = S.res.medkit*3;
     }
+    if(ev.emoji==="🔥"){ // потёртость uses medkit
+      if(RACE._medkitLeft===undefined) RACE._medkitLeft = S.res.medkit;
+      if(RACE._medkitLeft>0){ RACE._medkitLeft--; }
+      else { penalty*=2; ev.name="Потёртость (аптечка пуста — хуже)"; }
+    }
+    if(ev.kind==="gear") applyGearWear(0.08);
+    showEvent(ev);
+    RACE.playerPenaltySec += Math.max(0,penalty);
+    if(penalty<0) RACE.playerPenaltySec += penalty; // bonus reduces elapsed effectively via base pace credit
   }
 }
 
@@ -762,7 +769,7 @@ function logEvent(text){
 }
 function showEvent(ev){
   logEvent(ev.emoji+" "+ev.name+(ev.penalty?" ("+(ev.penalty>0?"+":"")+Math.round(ev.penalty)+"с)":""));
-  queueRaceOverlay({type:"event", title:ev.emoji+" "+ev.name, holdMs:2000});
+  queueRaceOverlay({type:"event", title:ev.emoji+" "+ev.name, holdMs:3000});
 }
 function queueRaceOverlay(item){
   RACE.overlayQueue.push(item);
@@ -787,7 +794,7 @@ function drainOverlayQueue(){
     div.innerHTML = `<b>${item.title}</b>`;
   }
   host.prepend(div);
-  const hold = item.holdMs || 2000;
+  const hold = item.holdMs || 3000;
   setTimeout(()=>{
     div.remove();
     if(item.onDone) item.onDone();
