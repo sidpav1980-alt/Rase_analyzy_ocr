@@ -131,7 +131,7 @@ function defaultState(){
   return {
     profile:{name:""},
     money:1500, level:1, xp:0, xpNext:100, itra:250, reputation:0, wins:0,
-    fatigue:0, training:1, coachId:"none",
+    fatigue:0, training:1, coachId:"none", firstWinLevels:[], winStreak:0,
     campaignDone:0, completedLevels:[], slotsOwned:[true,true,true],
     gear:{shoes:0,jacket:0,poles:0,lamp:0,watch:0,pack:0},
     durability:{shoes:GEAR.shoes[0].durabilityMax,jacket:GEAR.jacket[0].durabilityMax,poles:GEAR.poles[0].durabilityMax,
@@ -162,6 +162,48 @@ function addXP(n){
   while(S.xp>=S.xpNext){ S.xp-=S.xpNext; S.level++; S.xpNext=xpForLevel(S.level); }
 }
 function reputationBonus(){ return Math.min(30, Math.floor(S.reputation/10)) / 100; }
+
+/* ---------------------------- ECONOMY: LEVEL REWARDS --------------------------- */
+// base reward for a clean successful finish, per level (index-aligned with LEVELS)
+const BASE_REWARD = [
+  1000,1300,1700,2200,2800,3500,4300,5200,6300,7500,
+  9000,10500,12500,15000,18000,21000,25000,30000,36000,43000,55000
+];
+function placeBonusPct(place){
+  if(place===1) return 1.00;
+  if(place===2) return 0.70;
+  if(place===3) return 0.50;
+  if(place>=4 && place<=5) return 0.30;
+  if(place>=6 && place<=10) return 0.15;
+  if(place>=11 && place<=20) return 0.05;
+  return 0;
+}
+function streakBonusPct(streak){
+  if(streak>=5) return 0.20;
+  if(streak===4) return 0.15;
+  if(streak===3) return 0.10;
+  if(streak===2) return 0.05;
+  return 0;
+}
+// Full breakdown for a successful finish. Reward table + place/first-time/streak
+// bonuses come straight from the economy spec; the "СЛОЖНОСТЬ" multiplier is
+// intentionally NOT stacked on top, since it would break the spec's own worked
+// examples for Чара (12500→25000 at 1st) and Армагеддон (55000→110000 at 1st).
+function computeFinishReward(levelIndex, place){
+  const isFirstCompletion = !S.completedLevels.includes(levelIndex);
+  const rawBase = BASE_REWARD[levelIndex] ?? 1000;
+  const base = isFirstCompletion ? rawBase : Math.round(rawBase*0.70);
+  const placeBonus = Math.round(base*placeBonusPct(place));
+  const firstCompletionBonus = isFirstCompletion ? Math.round(rawBase*0.25) : 0;
+  const isFirstWin = place===1 && !S.firstWinLevels.includes(levelIndex);
+  const firstWinBonus = isFirstWin ? Math.round(rawBase*0.50) : 0;
+  const nextStreak = place===1 ? (S.winStreak||0)+1 : 0;
+  const streakPct = streakBonusPct(nextStreak);
+  const repPct = reputationBonus();
+  const subtotal = base+placeBonus+firstCompletionBonus+firstWinBonus;
+  const total = Math.round(subtotal*(1+repPct+streakPct));
+  return {isFirstCompletion, rawBase, base, placeBonus, firstCompletionBonus, isFirstWin, firstWinBonus, nextStreak, streakPct, repPct, subtotal, total};
+}
 
 /* ---------------------------- HELPERS -------------------------------------- */
 function fmtTime(sec){
@@ -551,6 +593,7 @@ function handlePlayerDNF(ev){
   const dnfKm = +RACE.playerKm.toFixed(1);
   logEvent("⛔ DNF игрока: "+ev.name+" на "+dnfKm+" км");
   S.fatigue = clamp(S.fatigue+25,0,100);
+  S.winStreak = 0;
   if(ev.fracture){
     S.treatmentUntil = Date.now() + 5*60*1000;
   }
@@ -576,10 +619,10 @@ function finishRace(){
   const totalFinishers = ranked.length;
 
   const level = RACE.level;
-  const baseReward = Math.round(level.km*35 + level.km*level.km*0.4);
-  const posMultiplier = clamp(1.3 - (place-1)/Math.max(4,totalFinishers*0.5)*0.9, 0.35, 1.3);
-  const reward = Math.round(baseReward*posMultiplier*(1+reputationBonus()));
-  S.money += reward;
+  const rw = computeFinishReward(S.currentLevel, place);
+  if(rw.isFirstWin) S.firstWinLevels.push(S.currentLevel);
+  S.winStreak = rw.nextStreak;
+  S.money += rw.total;
   addXP(Math.round(20+level.km*0.6));
   S.itra = Math.round(clamp(S.itra + (place<=3?8:(place<=10?3:1)) - (place>totalFinishers*0.6?2:0), 200, 999));
   S.reputation += place===1?4:(place<=3?2:1);
@@ -605,19 +648,28 @@ function finishRace(){
 
   saveGame();
   const top3 = ranked.slice(0,3);
-  showFinishSummary({dnf:false, place, totalFinishers, reward, top3, ranked});
+  showFinishSummary({dnf:false, place, totalFinishers, rw, top3, ranked});
 }
 
 function showFinishSummary(data){
   const host = document.getElementById("raceOverlayHost");
   let html = "";
   if(data.dnf){
-    html += `<div class="overlay"><b>⛔ DNF</b><br>Причина: ${data.reason}<br>Сошёл на ${data.dnfKm} км.<br>Награда не начислена.</div>`;
+    html += `<div class="overlay"><b>⛔ DNF</b><br>Причина: ${data.reason}<br>Сошёл на ${data.dnfKm} км.<br>💰 За DNF награда: ₽ 0</div>`;
   } else {
-    html += `<div class="overlay"><b>🏁 Финиш!</b><br>Место: ${data.place} / ${data.totalFinishers}<br>Награда: ₽ ${data.reward.toLocaleString("ru-RU")}<br></div>`;
+    const r = data.rw;
+    html += `<div class="overlay"><b>🏁 Финиш</b><br>Место: ${data.place} / ${data.totalFinishers}<br>`;
+    html += `База${r.isFirstCompletion?"":" (повтор ×70%)"}: ₽ ${r.base.toLocaleString("ru-RU")}<br>`;
+    html += `Бонус за место (+${Math.round(placeBonusPct(data.place)*100)}%): +₽ ${r.placeBonus.toLocaleString("ru-RU")}<br>`;
+    if(r.firstCompletionBonus) html += `Первое прохождение: +₽ ${r.firstCompletionBonus.toLocaleString("ru-RU")}<br>`;
+    if(r.firstWinBonus) html += `Первая победа: +₽ ${r.firstWinBonus.toLocaleString("ru-RU")}<br>`;
+    if(r.repPct) html += `Репутация: +${Math.round(r.repPct*100)}%<br>`;
+    if(r.streakPct) html += `Серия побед (${S.winStreak}): +${Math.round(r.streakPct*100)}%<br>`;
+    html += `<b>ИТОГО: ₽ ${r.total.toLocaleString("ru-RU")}</b><br>`;
+    html += `💰 Баланс: ₽ ${S.money.toLocaleString("ru-RU")}</div>`;
     html += `<div class="overlay"><b>🏆 ТОП-3 · время финиша</b><br>`;
     const medals=["🥇","🥈","🥉"];
-    data.top3.forEach((r,i)=>{ html += medals[i]+" "+(i+1)+". "+r.name+" — "+fmtTime(r.sec)+"<br>"; });
+    data.top3.forEach((r2,i)=>{ html += medals[i]+" "+(i+1)+". "+r2.name+" — "+fmtTime(r2.sec)+"<br>"; });
     html += `</div>`;
     if(S.champion){ html += `<div class="overlay"><b>👑 ЧЕМПИОН АРМАГЕДДОНА!</b><br>Кампания пройдена 21/21.</div>`; }
   }
@@ -777,6 +829,7 @@ function renderRaceView(){
     document.getElementById("snailLayer").innerHTML="";
     document.getElementById("groupBand").style.width="0";
     document.getElementById("trackLegend").innerHTML="";
+    if(window.Race3D) window.Race3D.updateSnails([]);
   }
 }
 function renderRaceUI(){
@@ -878,6 +931,27 @@ function renderSnailTrack(){
     ${mainCluster.members.length?`<span>🐌 основная группа (${mainCluster.members.length})</span>`:""}
     ${RACE.field.filter(n=>n.dnf).length?`<span>🚫 сошли: ${RACE.field.filter(n=>n.dnf).length}</span>`:""}
   `;
+
+  // mirror the same clustering into the 3D scene: leaders further down the
+  // trail (deeper/smaller = "ahead"), main group around the player, stragglers
+  // closer to camera ("behind"). Not literally to-scale — spacing is by rank,
+  // same abstraction as the 2D lane above.
+  if(window.Race3D){
+    const zPlayer = -25;
+    const items = [{key:"player", kind:"player", x:0, y:1.4, z:zPlayer}];
+    if(isBreakaway){
+      leaderCluster.members.slice(0,4).forEach((n,i)=>{
+        items.push({key:"lead"+i, kind:"leader", x:(i%2===0?-1:1)*(1+i*0.4), y:1.3, z:zPlayer-8-i*3});
+      });
+    }
+    repMembers.forEach((n,i)=>{
+      items.push({key:"grp"+i, kind:"group", x:(i%2===0?-1:1)*(0.8+i*0.5), y:1.1, z:zPlayer + (i%3-1)*3});
+    });
+    clusters.filter(c=>c!==mainCluster && c!==leaderCluster).slice(0,2).forEach((c,i)=>{
+      items.push({key:"strag"+i, kind:"straggler", x:(i%2===0?-2:2), y:1.0, z:zPlayer+10+i*4});
+    });
+    window.Race3D.updateSnails(items);
+  }
 }
 
 function renderCarry(){

@@ -4,7 +4,7 @@
    Purely decorative/atmospheric — does not affect game logic or numbers.
    ========================================================================== */
 (function(){
-  if(typeof THREE === "undefined"){ window.Race3D = { init(){}, setLevel(){}, setRainActive(){}, setProgress(){} }; return; }
+  if(typeof THREE === "undefined"){ window.Race3D = { init(){}, setLevel(){}, setRainActive(){}, setProgress(){}, updateSnails(){}, onResize(){} }; return; }
 
   // deterministic PRNG so a level's trees/mountains look the same every time
   function mulberry32(seed){
@@ -45,6 +45,48 @@
   let ground, mountainsGroup, treesGroup, fordMesh, rainPoints, sunMesh, moonMesh, hemi, sun;
   let container, currentLevel = 0, rainActive = false, ready = false;
   let dayPhase = 0.25; // 0..1 across a slow real-time day/night loop
+  let snailsGroup, spriteCache = new Map();
+
+  function buildSnailSprite(kind){
+    const size = 64;
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    ctx.font = (kind==="leader"?"44px":"38px")+" serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    if(kind==="player"){
+      ctx.shadowColor = "#ff5d5d"; ctx.shadowBlur = 14;
+    } else if(kind==="leader"){
+      ctx.shadowColor = "#ffd166"; ctx.shadowBlur = 10;
+    } else if(kind==="straggler"){
+      ctx.globalAlpha = 0.55;
+    }
+    ctx.fillText("🐌", size/2, size/2+2);
+    const tex = new THREE.CanvasTexture(canvas);
+    const mat = new THREE.SpriteMaterial({map:tex, transparent:true, depthTest:true});
+    const sprite = new THREE.Sprite(mat);
+    const s = kind==="player"?1.5:(kind==="leader"?1.25:(kind==="straggler"?0.75:1.0));
+    sprite.scale.set(s,s,s);
+    return sprite;
+  }
+  function getSnailSprite(key, kind){
+    let s = spriteCache.get(key);
+    if(!s){ s = buildSnailSprite(kind); snailsGroup.add(s); spriteCache.set(key, s); }
+    s.userData.seen = true;
+    return s;
+  }
+  function updateSnails(list){
+    if(!ready || !snailsGroup) return;
+    spriteCache.forEach(s=>{ s.userData.seen=false; });
+    list.forEach(item=>{
+      const sp = getSnailSprite(item.key, item.kind);
+      sp.position.set(item.x, item.y!==undefined?item.y:1.1, item.z);
+      sp.visible = true;
+    });
+    spriteCache.forEach((s,key)=>{
+      if(!s.userData.seen){ snailsGroup.remove(s); spriteCache.delete(key); }
+    });
+  }
 
   function init(containerEl){
     container = containerEl;
@@ -82,6 +124,7 @@
 
     mountainsGroup = new THREE.Group(); scene.add(mountainsGroup);
     treesGroup = new THREE.Group(); scene.add(treesGroup);
+    snailsGroup = new THREE.Group(); scene.add(snailsGroup);
 
     fordMesh = new THREE.Mesh(
       new THREE.PlaneGeometry(9, 3.6),
@@ -173,6 +216,9 @@
     fordMesh.visible = !t.sand || rnd()>0.4;
 
     hemi.groundColor.setHex(t.sand? 0x8a6a3a : 0x223322);
+
+    clearGroup(snailsGroup);
+    spriteCache.clear();
   }
 
   function updateDayNight(dt){
@@ -242,5 +288,5 @@
     camera.position.z = z;
   }
 
-  window.Race3D = { init, setLevel, setRainActive, setProgress, onResize };
+  window.Race3D = { init, setLevel, setRainActive, setProgress, updateSnails, onResize };
 })();
