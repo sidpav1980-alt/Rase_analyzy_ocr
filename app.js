@@ -305,12 +305,15 @@ function createVirtualField(levelIndex){
   const isChara = level.special==="chara";
   const isFinal = level.special==="armageddon";
   const advanced = levelIndex>=12;
+  // named rivals (all fictional) get progressively more common and stronger
+  // on later levels — a level-1 park run shouldn't be full of elite runners
+  const rivalChance = clamp(0.10 + levelIndex*0.03, 0.10, 0.7);
 
   RIVALS.forEach(r=>{
     let include=false;
     if(r.boss) include = isFinal ? true : (advanced && Math.random()<0.35);
-    else if(r.hiddenForm) include = isChara ? true : Math.random()<0.55;
-    else include = Math.random() < (advanced?0.7:0.5);
+    else if(r.hiddenForm) include = isChara ? true : Math.random()<Math.min(0.55, rivalChance+0.1);
+    else include = Math.random() < rivalChance;
     if(!include) return;
 
     let effItra = r.itra;
@@ -332,10 +335,13 @@ function createVirtualField(levelIndex){
       hazardScale: r.itra>=870 ? 0.35 : (r.itra>=820?0.7:1)
     });
   });
-  // filler pack to make the field feel alive
+  // filler pack to make the field feel alive — scaled to the level's
+  // difficulty so a beginner park run isn't full of near-elite runners
+  const fillerMin = clamp(200 + levelIndex*16, 200, 560);
+  const fillerMax = clamp(330 + levelIndex*20, 330, 780);
   const fillerCount = 20 + Math.floor(levelIndex*1.4);
   for(let i=0;i<fillerCount;i++){
-    const itra = Math.round(rnd(500, 800));
+    const itra = Math.round(rnd(fillerMin, fillerMax));
     let finishSec = finishSecForItra(itra, level.km, level.weather);
     if(isChara) finishSec = Math.max(finishSec, 18*3600+rnd(0,3600));
     field.push({
@@ -1299,16 +1305,33 @@ function renderRest(){
     hospEl.innerHTML = `<h3>🏥 Больница</h3><p>не требуется</p><p class="hint">Больница появляется как обязательный этап после перелома. Лечение занимает 5 минут реального времени.</p>`;
   }
 }
+const TRAINING_PHASES = [
+  {cls:"phase-sprint", emoji:"🐌💨", label:"Спринт — короткие резкие рывки"},
+  {cls:"phase-interval", emoji:"🐌⏱️", label:"Интервалы — ускорение / восстановление"},
+  {cls:"phase-hill", emoji:"🐌⛰️", label:"Бег в горку — силовая работа"},
+  {cls:"phase-rest", emoji:"🐌💦👅", label:"Заминка — вся мокрая, язык на плече"}
+];
+function trainingPhaseFor(msRemaining){
+  const total = 60000;
+  const elapsed = clamp(total - msRemaining, 0, total-1);
+  const seg = Math.min(3, Math.floor(elapsed / (total/4)));
+  return TRAINING_PHASES[seg];
+}
 function renderTraining(){
   const el=document.getElementById("trainingPanel");
   const now=Date.now();
   if(S.trainingUntil>now){
-    el.innerHTML = `<p>🏋️ Тренировка идёт... осталось ${Math.ceil((S.trainingUntil-now)/1000)} с.</p>`;
+    const remaining = S.trainingUntil-now;
+    const phase = trainingPhaseFor(remaining);
+    el.innerHTML = `
+      <div class="train-anim ${phase.cls}"><div class="train-emoji">${phase.emoji}</div></div>
+      <p class="train-phase-label">${phase.label}</p>
+      <p>🏋️ Тренировка идёт... осталось ${Math.ceil(remaining/1000)} с.</p>`;
   } else {
     const cap=trainingCap();
     el.innerHTML = `<p>${S.training} / ${cap}${coach().id==="none"?" (без тренера, максимум 30)":""}</p>
       <button id="btnTrain" ${S.training>=cap?"disabled":""}>▶ Начать тренировку на 1 минуту</button>
-      <p class="hint">Одна тренировка длится 1 минуту и даёт +1 к тренированности, пока не достигнут предел тренера.</p>`;
+      <p class="hint">Одна тренировка длится 1 минуту и даёт +1 к тренированности, пока не достигнут предел тренера. Спринт → интервалы → горка → заминка.</p>`;
     const b=document.getElementById("btnTrain");
     if(b) b.onclick=()=>{
       if(RACE && !RACE.playerFinished && !RACE.playerDNF){ alert("Во время гонки тренироваться нельзя."); return; }

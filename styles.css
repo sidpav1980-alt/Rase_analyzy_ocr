@@ -254,3 +254,41 @@ button:active{ transform:scale(.96); }
 :root.text-large .settings-row{font-size:14px;}
 :root.text-large .nav-items button{font-size:10.5px;}
 :root.text-large .statbar{font-size:12px;}
+
+/* ---------------------------- training animation ---------------------------- */
+.train-anim{height:100px;border-radius:14px;background:linear-gradient(180deg,#0e2540,#0a1a30);
+  display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;margin-bottom:8px;
+  border:1px solid var(--line);}
+.train-emoji{font-size:44px;}
+.train-phase-label{font-size:12px;color:var(--gold);font-weight:600;margin:0 0 8px;}
+
+.train-anim.phase-sprint{background:linear-gradient(180deg,#301515,#1a0a0a);}
+.train-anim.phase-sprint .train-emoji{animation:sprintShake .35s infinite;}
+@keyframes sprintShake{
+  0%{transform:translateX(-14px) scaleX(1);}
+  50%{transform:translateX(14px) scaleX(-1);}
+  100%{transform:translateX(-14px) scaleX(1);}
+}
+
+.train-anim.phase-interval{background:linear-gradient(180deg,#152f30,#0a1a1a);}
+.train-anim.phase-interval .train-emoji{animation:intervalPulse 1.2s infinite;}
+@keyframes intervalPulse{
+  0%,100%{transform:translateX(-16px) scale(1);}
+  25%{transform:translateX(16px) scale(1.25);}
+  50%{transform:translateX(16px) scale(1.25);}
+  75%{transform:translateX(-16px) scale(0.9);}
+}
+
+.train-anim.phase-hill{background:linear-gradient(115deg,#1a2b18 40%,#0a1a30 40%);}
+.train-anim.phase-hill .train-emoji{animation:hillClimb 1.8s infinite ease-in-out;}
+@keyframes hillClimb{
+  0%{transform:translate(-20px,14px) rotate(-18deg);}
+  100%{transform:translate(20px,-14px) rotate(-18deg);}
+}
+
+.train-anim.phase-rest{background:linear-gradient(180deg,#101d30,#0a1220);}
+.train-anim.phase-rest .train-emoji{animation:restDroop 2.4s infinite ease-in-out;display:inline-block;}
+@keyframes restDroop{
+  0%,100%{transform:rotate(-4deg) translateY(0);}
+  50%{transform:rotate(4deg) translateY(3px);}
+}
