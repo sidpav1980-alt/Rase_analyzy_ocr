@@ -141,13 +141,15 @@ function defaultState(){
     profile:{name:""},
     money:1500, level:1, xp:0, xpNext:100, itra:250, reputation:0, wins:0,
     fatigue:0, training:1, coachId:"none", firstWinLevels:[], winStreak:0,
-    campaignDone:0, completedLevels:[], slotsOwned:[true,true,true],
+    campaignDone:0, completedLevels:[], slotsOwned:[true,true,true,true,true],
     gear:{shoes:0,jacket:0,poles:0,lamp:0,watch:0,pack:0},
     durability:{shoes:GEAR.shoes[0].durabilityMax,jacket:GEAR.jacket[0].durabilityMax,poles:GEAR.poles[0].durabilityMax,
       lamp:GEAR.lamp[0].durabilityMax,watch:GEAR.watch[0].durabilityMax,pack:GEAR.pack[0].durabilityMax},
     res:{water:0, gels:0, medkit:0, battery:0, guarana:0, blanket:0, lampCharge:100},
     restUntil:0, treatmentUntil:0, trainingUntil:0,
-    currentLevel:0, achievements:[], champion:false
+    currentLevel:0, achievements:[], champion:false,
+    // economy v2 additions — safe defaults so old saves migrate without a reset
+    finishStreak:0, achieveFlags:{}, levelPlayCount:new Array(21).fill(0), maxFrontier:0
   };
 }
 let S = loadGame();
@@ -170,48 +172,150 @@ function addXP(n){
   S.xp+=n;
   while(S.xp>=S.xpNext){ S.xp-=S.xpNext; S.level++; S.xpNext=xpForLevel(S.level); }
 }
-function reputationBonus(){ return Math.min(30, Math.floor(S.reputation/10)) / 100; }
+/* ---------------------------- ECONOMY v2: level rewards, place/reputation coefficients,
+   prize pools, sponsors, streaks, achievements, entry fees (per the new economy spec) ---- */
 
-/* ---------------------------- ECONOMY: LEVEL REWARDS --------------------------- */
-// base reward for a clean successful finish, per level (index-aligned with LEVELS)
+// base reward for a clean successful finish, per level (1-indexed in the spec,
+// levelIndex is 0-indexed here); levels beyond 20 use the spec's formula
 const BASE_REWARD = [
-  1000,1300,1700,2200,2800,3500,4300,5200,6300,7500,
-  9000,10500,12500,15000,18000,21000,25000,30000,36000,43000,55000
+  1000,1300,1600,2000,2500,3000,3600,4300,5000,6000,
+  7000,8000,9000,10000,12000,14000,16000,18000,21000,25000
 ];
-function placeBonusPct(place){
+function baseRewardForLevel(levelIndex){
+  const levelNumber = levelIndex+1;
+  if(levelNumber<=20) return BASE_REWARD[levelIndex];
+  return 25000 + (levelNumber-20)*3000;
+}
+function placeMultiplier(place){
+  if(place===1) return 2.5;
+  if(place===2) return 2.0;
+  if(place===3) return 1.7;
+  if(place<=5) return 1.4;
+  if(place<=10) return 1.2;
+  if(place<=20) return 1.0;
+  if(place<=30) return 0.8;
+  if(place<=50) return 0.6;
+  return 0.4;
+}
+function reputationMultiplier(rep){
+  if(rep>=95) return 1.75;
+  if(rep>=85) return 1.50;
+  if(rep>=70) return 1.35;
+  if(rep>=55) return 1.25;
+  if(rep>=40) return 1.15;
+  if(rep>=25) return 1.10;
+  if(rep>=10) return 1.05;
+  return 1.00;
+}
+// deterministic per-level prize pool (stable across attempts, not re-rolled) —
+// seeded from the level index so it doesn't need extra save-state
+function prizePoolForLevel(levelIndex){
+  const n = levelIndex+1;
+  const seed = mulberrySeed(levelIndex*71+13);
+  const roll = (min,max)=> Math.round(min + (max-min)*seed);
+  if(n<=3) return 0;
+  if(n<=6) return roll(2000,4000);
+  if(n<=10) return roll(3000,10000);
+  if(n<=15) return roll(5000,20000);
+  if(n<=20) return roll(10000,40000);
+  return roll(15000,100000);
+}
+function mulberrySeed(seed){
+  let t = seed += 0x6D2B79F5;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+function prizePayoutPct(place){
   if(place===1) return 1.00;
   if(place===2) return 0.70;
   if(place===3) return 0.50;
-  if(place>=4 && place<=5) return 0.30;
-  if(place>=6 && place<=10) return 0.15;
-  if(place>=11 && place<=20) return 0.05;
+  if(place<=5) return 0.30;
+  if(place<=10) return 0.10;
   return 0;
 }
-function streakBonusPct(streak){
-  if(streak>=5) return 0.20;
-  if(streak===4) return 0.15;
-  if(streak===3) return 0.10;
-  if(streak===2) return 0.05;
+// simplified sponsor mechanic: from level 7 on, a sponsor tier is derived from
+// current standing and paid automatically on every non-DNF finish (the spec's
+// full accept/decline contract-with-conditions UI is not implemented — this
+// keeps the payout logic without adding a whole new contract-management screen)
+function sponsorTierBonus(){
+  if(S.currentLevel < 6) return 0;
+  const score = S.itra + S.reputation*3 + S.wins*10;
+  const seed = mulberrySeed(Math.round(score)+S.currentLevel*7);
+  const roll=(min,max)=>Math.round(min+(max-min)*seed);
+  if(score>=900) return roll(30000,50000);
+  if(score>=700) return roll(15000,30000);
+  if(score>=500) return roll(7000,15000);
+  if(score>=300) return roll(3000,7000);
+  return roll(1000,3000);
+}
+function finishStreakBonusPct(streak){
+  if(streak>=10) return 0.25;
+  if(streak>=7) return 0.15;
+  if(streak>=5) return 0.10;
+  if(streak>=3) return 0.05;
   return 0;
 }
-// Full breakdown for a successful finish. Reward table + place/first-time/streak
-// bonuses come straight from the economy spec; the "СЛОЖНОСТЬ" multiplier is
-// intentionally NOT stacked on top, since it would break the spec's own worked
-// examples for Чара (12500→25000 at 1st) and Армагеддон (55000→110000 at 1st).
-function computeFinishReward(levelIndex, place){
-  const isFirstCompletion = !S.completedLevels.includes(levelIndex);
-  const rawBase = BASE_REWARD[levelIndex] ?? 1000;
-  const base = isFirstCompletion ? rawBase : Math.round(rawBase*0.70);
-  const placeBonus = Math.round(base*placeBonusPct(place));
-  const firstCompletionBonus = isFirstCompletion ? Math.round(rawBase*0.25) : 0;
-  const isFirstWin = place===1 && !S.firstWinLevels.includes(levelIndex);
-  const firstWinBonus = isFirstWin ? Math.round(rawBase*0.50) : 0;
-  const nextStreak = place===1 ? (S.winStreak||0)+1 : 0;
-  const streakPct = streakBonusPct(nextStreak);
-  const repPct = reputationBonus();
-  const subtotal = base+placeBonus+firstCompletionBonus+firstWinBonus;
-  const total = Math.round(subtotal*(1+repPct+streakPct));
-  return {isFirstCompletion, rawBase, base, placeBonus, firstCompletionBonus, isFirstWin, firstWinBonus, nextStreak, streakPct, repPct, subtotal, total};
+function repeatMultiplierFor(levelIndex){
+  const n = S.levelPlayCount[levelIndex]||0;
+  if(n<=0) return 1.0;
+  if(n===1) return 0.7;
+  if(n===2) return 0.4;
+  return 0.2;
+}
+function entryFee(levelIndex){
+  const n = levelIndex+1;
+  const seed = mulberrySeed(levelIndex*113+7);
+  const roll=(min,max)=>Math.round((min+(max-min)*seed)/50)*50;
+  if(n<=5) return 0;
+  if(n<=10) return roll(500,1500);
+  if(n<=15) return roll(1500,4000);
+  if(n<=20) return roll(3000,7000);
+  return roll(5000,15000);
+}
+// one-time achievement bonuses; each fires once per save (S.achieveFlags)
+const ACHIEVEMENTS = [
+  {id:"firstFinish", reward:1000, label:"Первый финиш", check:(c)=>!c.dnf},
+  {id:"firstTop10", reward:2000, label:"Первый ТОП-10", check:(c)=>!c.dnf && c.place<=10},
+  {id:"firstPodium", reward:5000, label:"Первый подиум", check:(c)=>!c.dnf && c.place<=3},
+  {id:"firstWin", reward:10000, label:"Первая победа", check:(c)=>!c.dnf && c.place===1},
+  {id:"wins5", reward:15000, label:"5 побед", check:(c)=>S.wins>=5},
+  {id:"wins10", reward:30000, label:"10 побед", check:(c)=>S.wins>=10},
+  {id:"firstRace50km", reward:5000, label:"Первая гонка 50+ км", check:(c)=>c.km>=50},
+  {id:"firstFinish100km", reward:15000, label:"Первый финиш 100+ км", check:(c)=>!c.dnf && c.km>=100},
+  {id:"win100km", reward:30000, label:"Победа в гонке 100+ км", check:(c)=>!c.dnf && c.place===1 && c.km>=100},
+  {id:"itra500", reward:10000, label:"ITRA 500", check:(c)=>S.itra>=500},
+  {id:"itra600", reward:20000, label:"ITRA 600", check:(c)=>S.itra>=600},
+  {id:"itra700", reward:40000, label:"ITRA 700", check:(c)=>S.itra>=700}
+];
+function collectNewAchievements(ctx){
+  const won=[];
+  ACHIEVEMENTS.forEach(a=>{
+    if(S.achieveFlags[a.id]) return;
+    if(a.check(ctx)){ S.achieveFlags[a.id]=true; won.push(a); }
+  });
+  return won;
+}
+// bonus for beating a rival with a meaningfully higher ITRA (only on a win)
+function strongRivalBonus(place, field){
+  if(place!==1) return {amount:0, rival:null};
+  const beaten = field.filter(n=>!n.dnf).sort((a,b)=>b.itra-a.itra)[0];
+  if(!beaten) return {amount:0, rival:null};
+  const diff = beaten.itra - S.itra;
+  let amount=0;
+  if(diff>=150) amount=5000;
+  else if(diff>=100) amount=3000;
+  else if(diff>=50) amount=1500;
+  else if(diff>=20) amount=500;
+  return {amount, rival: amount>0?beaten:null};
+}
+function generateSponsorTask(levelIndex){
+  if(levelIndex<6) return null; // sponsor tasks start around level 7, same gate as sponsor tier
+  if(Math.random()<0.5) return null; // not every race carries a task
+  const hard = Math.random()<0.35;
+  return hard
+    ? {id:"top3", text:"Спонсорское задание: финишируйте в ТОП-3", reward:15000, check:(place)=>place<=3}
+    : {id:"top10", text:"Спонсорское задание: финишируйте в ТОП-10", reward:5000, check:(place)=>place<=10};
 }
 
 /* ---------------------------- HELPERS -------------------------------------- */
@@ -235,10 +339,7 @@ function requiredWater(distanceKm, weather){ return Math.ceil(distanceKm * 0.3 *
 function requiredGels(distanceKm){ return Math.ceil(distanceKm/12); }
 function requiredMedkit(distanceKm){ return Math.max(1, Math.ceil(distanceKm/40)); }
 function slotPrice(levelIndex){
-  if(levelIndex<3) return 0;
-  let base = 250*(levelIndex-1)*(levelIndex-1);
-  if(levelIndex>=8) base*=3;
-  return Math.round(base/50)*50;
+  return entryFee(levelIndex);
 }
 
 /* ---------------------------- USER PREFERENCES (device-local, not game save) --- */
@@ -415,19 +516,21 @@ function startRace(){
     field:createVirtualField(S.currentLevel), dnfQueue:[], eventsLog:[],
     overlayQueue:[], overlayShowing:false, playerDNF:false, playerFinished:false,
     playerPenaltySec:0, floodTriggered:false, gelsCarried:S.res.gels, gelsUsedInRace:0,
-    waterCarried:S.res.water, waterUsedInRace:0, stableLead:[], stableGrp:[]
+    waterCarried:S.res.water, waterUsedInRace:0, stableLead:[], stableGrp:[],
+    sponsorTask: ensureSponsorTask()
   };
   S.res.gels=0; S.res.water=0; // consumed items move into the race bag
   document.getElementById("btnStart").style.display="none";
   document.getElementById("bottomStart").classList.remove("show");
   raceTimer = setInterval(tick, 250);
   logEvent("▶ Старт гонки: "+level.name);
+  if(RACE.sponsorTask) logEvent("🎯 "+RACE.sponsorTask.text+" · награда ₽"+RACE.sponsorTask.reward.toLocaleString("ru-RU"));
   renderRaceUI();
 }
 
 function canStartRace(){
   if(S.trainingUntil>Date.now() || S.restUntil>Date.now() || S.treatmentUntil>Date.now()) return false;
-  if(!S.slotsOwned[S.currentLevel]) return false;
+  if(!S.slotsOwned[S.currentLevel] && entryFee(S.currentLevel)>0) return false;
   return true;
 }
 
@@ -662,16 +765,21 @@ function handlePlayerDNF(ev){
   RACE.paused = true;
   clearInterval(raceTimer);
   RACE.overlayQueue = [];
+  RACE.overlayShowing = false;
+  const liveOverlayHost = document.getElementById("raceOverlayHost");
+  if(liveOverlayHost) liveOverlayHost.innerHTML = "";
   const dnfKm = +RACE.playerKm.toFixed(1);
   logEvent("⛔ DNF игрока: "+ev.name+" на "+dnfKm+" км");
   S.fatigue = clamp(S.fatigue+25,0,100);
   S.winStreak = 0;
+  S.finishStreak = 0;
+  S.reputation = clamp(S.reputation-3, 0, 100);
   if(ev.fracture){
     S.treatmentUntil = Date.now() + 5*60*1000;
   }
   saveGame();
   renderRaceUI();
-  showFinishSummary({dnf:true, reason:ev.name, dnfKm, fracture:!!ev.fracture});
+  showFinishSummary({dnf:true, reason:ev.name, dnfKm, fracture:!!ev.fracture, sponsorTaskFailed:!!RACE.sponsorTask});
 }
 
 function finishRace(){
@@ -679,30 +787,81 @@ function finishRace(){
   RACE.paused = true;
   clearInterval(raceTimer);
   flushDnfBatch();
+  RACE.overlayQueue = [];
+  RACE.overlayShowing = false;
+  const liveOverlayHost = document.getElementById("raceOverlayHost");
+  if(liveOverlayHost) liveOverlayHost.innerHTML = "";
   updateRacePosition();
 
   const finishSec = RACE.simSeconds + RACE.playerPenaltySec;
   const finishers = RACE.field.filter(n=>!n.dnf);
   finishers.forEach(n=>{ if(!n.finishSec) n.finishSec = n.finishSec; });
-  const ranked = finishers.map(n=>({name:n.name, sec:n.finishSec}))
+  const ranked = finishers.map(n=>({name:n.name, sec:n.finishSec, itra:n.itra}))
     .concat([{name:S.profile.name||"Трейлраннер", sec:finishSec, isPlayer:true}])
     .sort((a,b)=>a.sec-b.sec);
   const place = ranked.findIndex(r=>r.isPlayer)+1;
   const totalFinishers = ranked.length;
 
   const level = RACE.level;
-  const rw = computeFinishReward(S.currentLevel, place);
-  if(rw.isFirstWin) S.firstWinLevels.push(S.currentLevel);
-  S.winStreak = rw.nextStreak;
-  S.money += rw.total;
   addXP(Math.round(20+level.km*0.6));
   S.itra = Math.round(clamp(S.itra + (place<=3?8:(place<=10?3:1)) - (place>totalFinishers*0.6?2:0), 200, 999));
-  S.reputation += place===1?4:(place<=3?2:1);
   if(place===1) S.wins++;
 
-  // fatigue accumulates after every race, scaled by distance and weather —
-  // this was previously only applied on DNF, so it never grew after a
-  // normal finish
+  // reputation: 0-100 scale now, grows more for stronger results, shrinks on
+  // DNF (handled in handlePlayerDNF) — feeds reputationMultiplier() below
+  let repGain = 1;
+  if(place<=10) repGain += 2;
+  if(place<=3) repGain += 3;
+  if(place===1) repGain += 4;
+  if(level.tier>=4) repGain += 1;
+  S.reputation = clamp(S.reputation+repGain, 0, 100);
+
+  // ---- economy v2: base × place × reputation, plus prize pool / sponsor /
+  // streak / rival / achievement bonuses, per the new economy spec ----
+  const rawBase = baseRewardForLevel(S.currentLevel);
+  const repeatMult = repeatMultiplierFor(S.currentLevel);
+  const base = Math.round(rawBase*repeatMult);
+  const placeMult = placeMultiplier(place);
+  const repMult = reputationMultiplier(S.reputation);
+  const resultReward = Math.round(base*placeMult*repMult);
+
+  const prizePool = prizePoolForLevel(S.currentLevel);
+  const prizePayout = Math.round(prizePool*prizePayoutPct(place));
+
+  const sponsorAmount = sponsorTierBonus();
+
+  const nextFinishStreak = (S.finishStreak||0)+1;
+  const streakPct = finishStreakBonusPct(nextFinishStreak);
+  const streakBonus = Math.round(resultReward*streakPct);
+
+  const rivalInfo = strongRivalBonus(place, RACE.field);
+
+  let taskBonus = 0, taskResult = null;
+  if(RACE.sponsorTask){
+    const passed = RACE.sponsorTask.check(place);
+    taskBonus = passed ? RACE.sponsorTask.reward : 0;
+    taskResult = {text:RACE.sponsorTask.text, reward:RACE.sponsorTask.reward, passed};
+  }
+
+  const ctx = {dnf:false, place, km:level.km};
+  const newAchievements = collectNewAchievements(ctx);
+  const achievementTotal = newAchievements.reduce((s,a)=>s+a.reward,0);
+
+  const total = resultReward+prizePayout+sponsorAmount+streakBonus+rivalInfo.amount+taskBonus+achievementTotal;
+  S.money += total;
+  S.finishStreak = nextFinishStreak;
+
+  // repeat-play diminishing returns, with a reset once the campaign frontier
+  // actually advances (so replaying old levels earns full price again)
+  const isNewFrontier = S.currentLevel > S.maxFrontier;
+  S.levelPlayCount[S.currentLevel] = (S.levelPlayCount[S.currentLevel]||0)+1;
+  if(isNewFrontier){
+    S.maxFrontier = S.currentLevel;
+    S.levelPlayCount = new Array(21).fill(0);
+    S.levelPlayCount[S.currentLevel] = 1;
+  }
+
+  // fatigue accumulates after every race, scaled by distance and weather
   const weatherFatigue = (level.weather==="severe"?8:(level.weather==="heat"||level.weather==="cold"?4:0));
   const fatigueGain = clamp(Math.round(4 + level.km*0.12 + weatherFatigue), 4, 45);
   S.fatigue = clamp(S.fatigue+fatigueGain, 0, 100);
@@ -711,12 +870,11 @@ function finishRace(){
     const tier=GEAR[slot][S.gear[slot]];
     S.durability[slot]=Math.max(0, S.durability[slot]-tier.durabilityMax*(0.08+level.km/2000));
   });
-  S.res.guarana = S.res.guarana; // unchanged, already decremented on use
 
   if(!S.completedLevels.includes(S.currentLevel)) S.completedLevels.push(S.currentLevel);
   S.campaignDone = S.completedLevels.length;
   const nextIdx = S.currentLevel+1;
-  if(nextIdx<LEVELS.length && !S.slotsOwned[nextIdx] && nextIdx<3) S.slotsOwned[nextIdx]=true;
+  if(nextIdx<LEVELS.length && !S.slotsOwned[nextIdx] && entryFee(nextIdx)===0) S.slotsOwned[nextIdx]=true;
   if(level.special==="armageddon" && S.completedLevels.length>=21) S.champion=true;
 
   // advance to the next not-yet-completed level so the player isn't stuck re-selecting it manually
@@ -727,7 +885,14 @@ function finishRace(){
 
   saveGame();
   const top3 = ranked.slice(0,3);
-  showFinishSummary({dnf:false, place, totalFinishers, rw, top3, ranked});
+  const consumablesCost = Math.round((RACE.gelsUsedInRace||0)*RES_PRICE.gels + (RACE.waterUsedInRace||0)/0.5*RES_PRICE.water);
+  showFinishSummary({
+    dnf:false, place, totalFinishers, top3, ranked,
+    rawBase, repeatMult, placeMult, repMult, resultReward,
+    prizePool, prizePayout, sponsorAmount, nextFinishStreak, streakPct, streakBonus,
+    rivalInfo, taskResult, newAchievements, achievementTotal, total,
+    consumablesCost, entryFeePaid: entryFee(S.currentLevel)
+  });
 }
 
 function showFinishSummary(data){
@@ -737,17 +902,25 @@ function showFinishSummary(data){
     const treatNote = data.fracture
       ? `<br><b>Перелом ноги требует лечения в больнице 5 минут перед новой попыткой.</b>`
       : "";
-    html += `<div class="overlay"><b>⛔ DNF</b><br>Причина: ${data.reason}<br>Сошёл на ${data.dnfKm} км.${treatNote}<br>💰 За DNF награда: ₽ 0</div>`;
+    const taskNote = data.sponsorTaskFailed ? `<br>Спонсорское задание провалено.` : "";
+    html += `<div class="overlay"><b>⛔ DNF</b><br>Причина: ${data.reason}<br>Сошёл на ${data.dnfKm} км.${treatNote}${taskNote}<br>💰 За DNF награда: ₽ 0</div>`;
   } else {
-    const r = data.rw;
-    html += `<div class="overlay"><b>🏁 Финиш</b><br>Место: ${data.place} / ${data.totalFinishers}<br>`;
-    html += `База${r.isFirstCompletion?"":" (повтор ×70%)"}: ₽ ${r.base.toLocaleString("ru-RU")}<br>`;
-    html += `Бонус за место (+${Math.round(placeBonusPct(data.place)*100)}%): +₽ ${r.placeBonus.toLocaleString("ru-RU")}<br>`;
-    if(r.firstCompletionBonus) html += `Первое прохождение: +₽ ${r.firstCompletionBonus.toLocaleString("ru-RU")}<br>`;
-    if(r.firstWinBonus) html += `Первая победа: +₽ ${r.firstWinBonus.toLocaleString("ru-RU")}<br>`;
-    if(r.repPct) html += `Репутация: +${Math.round(r.repPct*100)}%<br>`;
-    if(r.streakPct) html += `Серия побед (${S.winStreak}): +${Math.round(r.streakPct*100)}%<br>`;
-    html += `<b>ИТОГО: ₽ ${r.total.toLocaleString("ru-RU")}</b><br>`;
+    html += `<div class="overlay"><b>💰 ФИНАНСЫ ГОНКИ</b><br>Место: ${data.place} / ${data.totalFinishers}<br>`;
+    html += `База: ₽ ${data.rawBase.toLocaleString("ru-RU")}${data.repeatMult<1?` (повтор ×${data.repeatMult})`:""}<br>`;
+    html += `Место: ×${data.placeMult}<br>`;
+    html += `Репутация (${S.reputation}/100): ×${data.repMult}<br>`;
+    html += `<b>Награда за результат: ₽ ${data.resultReward.toLocaleString("ru-RU")}</b><br>`;
+    if(data.prizePayout) html += `Призовые: +₽ ${data.prizePayout.toLocaleString("ru-RU")}<br>`;
+    if(data.sponsorAmount) html += `Спонсор: +₽ ${data.sponsorAmount.toLocaleString("ru-RU")}<br>`;
+    if(data.taskResult) html += `${data.taskResult.text}: ${data.taskResult.passed?`✅ +₽ ${data.taskResult.reward.toLocaleString("ru-RU")}`:"❌ не выполнено"}<br>`;
+    if(data.streakBonus) html += `Серия финишей (${data.nextFinishStreak}): +${Math.round(data.streakPct*100)}% · +₽ ${data.streakBonus.toLocaleString("ru-RU")}<br>`;
+    if(data.rivalInfo && data.rivalInfo.amount) html += `Победа над ${data.rivalInfo.rival.name} (ITRA ${data.rivalInfo.rival.itra}): +₽ ${data.rivalInfo.amount.toLocaleString("ru-RU")}<br>`;
+    if(data.newAchievements && data.newAchievements.length){
+      data.newAchievements.forEach(a=>{ html += `🏅 ${a.label}: +₽ ${a.reward.toLocaleString("ru-RU")}<br>`; });
+    }
+    html += `<b>ИТОГО ЗАРАБОТАНО: ₽ ${data.total.toLocaleString("ru-RU")}</b><br>`;
+    if(data.consumablesCost) html += `Расходники за гонку (справочно): −₽ ${data.consumablesCost.toLocaleString("ru-RU")}<br>`;
+    if(data.entryFeePaid) html += `Стартовый взнос (уже оплачен): −₽ ${data.entryFeePaid.toLocaleString("ru-RU")}<br>`;
     html += `💰 Баланс: ₽ ${S.money.toLocaleString("ru-RU")}</div>`;
     html += `<div class="overlay"><b>🏆 ТОП-3 · время финиша</b><br>`;
     const medals=["🥇","🥈","🥉"];
@@ -811,7 +984,7 @@ function renderStatbar(){
     <div class="stat">Уровень<b>${S.level}</b>${S.xp}/${S.xpNext} XP</div>
     <div class="stat">Рубли<b>₽ ${S.money.toLocaleString("ru-RU")}</b></div>
     <div class="stat">Пройдено<b>${S.campaignDone} / 21</b></div>
-    <div class="stat">Репутация<b>${S.reputation}</b>+${Math.min(30,Math.floor(S.reputation/10))}%</div>
+    <div class="stat">Репутация<b>${S.reputation}/100</b>доход ×${reputationMultiplier(S.reputation)}</div>
     <div class="stat">Победы<b>${S.wins}</b></div>
     <div class="stat">Усталость<b>${S.fatigue}%</b></div>
     <div class="stat">Тренированность<b>${S.training.toFixed(1)} / ${trainingCap()}</b></div>
@@ -823,8 +996,8 @@ function renderStatbar(){
 function computeRisks(){
   const level = LEVELS[S.currentLevel];
   const risks = [];
-  if(!S.slotsOwned[S.currentLevel]){
-    risks.push({key:"slot", text:"⛔ 🎟️ Нужен слот на гонку · ₽ "+slotPrice(S.currentLevel).toLocaleString("ru-RU"), ok:false, go:"slot"});
+  if(!S.slotsOwned[S.currentLevel] && entryFee(S.currentLevel)>0){
+    risks.push({key:"slot", text:"⛔ 🎟️ Нужен стартовый взнос · ₽ "+entryFee(S.currentLevel).toLocaleString("ru-RU"), ok:false, go:"slot"});
   }
   const needWater = requiredWater(level.km, level.weather);
   if(S.res.water < needWater) risks.push({key:"water", text:"💧 Не хватает воды: есть "+S.res.water+"/"+needWater, ok:false, go:"carry"});
@@ -849,10 +1022,19 @@ function ensure3DInit(){
   window.Race3D.init(host);
   window._race3dInited = true;
 }
+let pendingSponsorTask = null, pendingSponsorTaskLevel = -1;
+function ensureSponsorTask(){
+  if(pendingSponsorTaskLevel!==S.currentLevel){
+    pendingSponsorTask = generateSponsorTask(S.currentLevel);
+    pendingSponsorTaskLevel = S.currentLevel;
+  }
+  return pendingSponsorTask;
+}
 function renderRaceView(){
   ensure3DInit();
   const level = LEVELS[S.currentLevel];
   document.getElementById("raceLevelTitle").textContent = "Уровень "+(S.currentLevel+1)+": "+level.name;
+  document.getElementById("raceLevelMeta").textContent = level.km+" км · +"+level.gain+" м набора · "+WEATHER_LABEL[level.weather];
   if(window.Race3D){
     window.Race3D.setLevel(S.currentLevel);
     window.Race3D.setRainActive(level.weather==="rain" || level.weather==="severe" || level.weather==="mixed");
@@ -897,6 +1079,9 @@ function renderRaceView(){
   risksEl.querySelectorAll(".risk[data-go]").forEach(elm=>{
     elm.onclick = ()=>showView(elm.dataset.go);
   });
+  const task = ensureSponsorTask();
+  const taskEl = document.getElementById("sponsorTaskBox");
+  if(taskEl) taskEl.innerHTML = task ? `<div class="risk ok">🎯 ${task.text} · награда ₽${task.reward.toLocaleString("ru-RU")}</div>` : "";
   const blocked = risks.some(r=>["slot","treat","train","rest"].includes(r.key));
   document.getElementById("btnStart").disabled = blocked;
   document.getElementById("btnStart").style.opacity = blocked?0.5:1;
@@ -937,6 +1122,7 @@ function renderRaceUI(){
     <div>Темп<b>${fmtPace(RACE.playerBaseSecPerKm*paceFactor)}</b></div>
     <div>Позиция<b>${RACE.playerRank||"—"} / ${(RACE.liveField||[]).length}</b></div>
     <div>Дистанция<b>${RACE.playerKm.toFixed(1)} / ${RACE.distanceKm} км</b></div>
+    <div>Набор высоты<b>+${RACE.level.gain} м</b></div>
     <div>Время<b>${fmtTime(RACE.simSeconds)}</b></div>
     <div>Погода<b>${WEATHER_LABEL[RACE.weather]}</b></div>
     <div>Штрафы<b>+${fmtTime(RACE.playerPenaltySec)}</b></div>
@@ -1614,13 +1800,13 @@ function init(){
 function runSelfTests(){
   const problems = [];
   if(LEVELS.length!==21) problems.push("LEVELS должно быть 21, а не "+LEVELS.length);
-  if(BASE_REWARD.length!==21) problems.push("BASE_REWARD должно быть 21, а не "+BASE_REWARD.length);
+  if(BASE_REWARD.length!==20) problems.push("BASE_REWARD должно быть 20 (levels 1-20; 21 use the formula), а не "+BASE_REWARD.length);
   if(LEVELS[12].special!=="chara" || LEVELS[12].km!==138) problems.push("13-й уровень должен быть Чарой на 138 км");
   if(LEVELS[20].special!=="armageddon") problems.push("21-й уровень должен быть Армагеддоном");
   ["btnStart","bottomStart","btnGuarana","speedSelect","raceMap","scene3d","snailLayer","statbar"].forEach(id=>{
     if(!document.getElementById(id)) problems.push("Нет элемента #"+id);
   });
-  if(placeBonusPct(1)!==1 || placeBonusPct(21)!==0) problems.push("placeBonusPct считает неверно");
+  if(placeMultiplier(1)!==2.5 || placeMultiplier(60)!==0.4) problems.push("placeMultiplier считает неверно");
   if(problems.length){ console.warn("[self-test] найдены проблемы:", problems); }
   else console.log("[self-test] ok — 21 уровень, экономика и ключевые DOM-узлы на месте");
 }
