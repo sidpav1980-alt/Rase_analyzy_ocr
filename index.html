@@ -1,229 +1,1229 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#07111f">
-<title>Симулятор трейлраннера: Армагеддон</title>
-<link rel="stylesheet" href="styles.css">
-<link rel="icon" href="icon-192.png">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Trail Analyzer">
+  <title>Прогноз и анализ трейловых гонок</title>
+  <link rel="manifest" href="manifest.webmanifest?v=075">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="styles.css?v=261-itra-file-replace">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynBv0TtP4JpC5dQF3Vqv2tLIbV0w=" crossorigin="">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+
+<style>
+/* v0.08: визуальный разделитель между кнопками прогноза */
+#forecastAnalyzeGpxBtn, #forecastWithGpxAnalysis, .forecast-gpx-analysis-btn {
+  margin-top: 14px !important;
+}
+.forecast-action-separator {
+  height: 14px;
+  width: 100%;
+  flex-basis: 100%;
+}
+#equipmentCheckBtn:disabled{opacity:.55;cursor:not-allowed}\n
+.sim-speed-label{
+  display:inline-block;
+  margin:4px 8px 4px 0;
+  color:#cbd5e1;
+  font-size:13px;
+  font-weight:600;
+  vertical-align:middle;
+}
+
+.virtual-track-box{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 12px}
+.virtual-track-box button{width:auto;min-height:44px}
+.virtual-track-box span{font-size:13px;color:#94a3b8}
+@media(max-width:600px){.virtual-track-box button{width:100%}.virtual-track-box span{width:100%}}
+
+.virtual-track-box .active-source{
+  outline:2px solid #38bdf8!important;
+  box-shadow:0 0 0 2px rgba(56,189,248,.15)!important;
+}
+
+#simRealTrackBtn.active-source{background:#22c55e!important;color:#07120a!important;border-color:#22c55e!important;outline:none!important;box-shadow:none!important}
+#simVirtual20Btn:disabled{background:#334155!important;color:#94a3b8!important;border-color:#475569!important;opacity:.6!important;cursor:not-allowed!important}
+</style>
+
+<style>
+/* v0.09: реальный визуальный разделитель между кнопками прогноза */
+#raceForecastBtn {
+  margin-bottom: 18px !important;
+}
+#raceForecastGpxBtn {
+  margin-top: 0 !important;
+}
+</style>
+<style>
+.app-offline-state{
+ position:fixed; top:58px; right:18px; z-index:9999;
+ padding:5px 10px; border:1px solid #334155; border-radius:999px;
+ background:#0f172a; color:#94a3b8; font-size:12px; font-weight:700;
+}
+.app-offline-state.online{color:#22c55e}
+.app-offline-state.offline{color:#f59e0b}
+</style>
+<style>
+.map-info-note{
+  margin-top:12px;
+  padding:12px 14px;
+  border:1px solid #334155;
+  border-radius:12px;
+  background:rgba(14,165,233,.08);
+  color:#cbd5e1;
+  line-height:1.45;
+}
+.map-info-note b{color:#e2e8f0}
+</style>
+<style>
+#simCourseCanvas{height:460px!important;min-height:460px}
+@media(max-width:640px){#simCourseCanvas{height:500px!important;min-height:500px}}
+</style>
+<style>
+.ford-map-layout{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(280px,42%);
+  gap:14px;
+  align-items:start;
+  margin-top:12px;
+}
+.ford-map-panel{
+  border:1px solid #334155;
+  border-radius:14px;
+  padding:10px;
+  background:#0b1423;
+}
+.ford-map-title{
+  font-weight:700;
+  margin-bottom:8px;
+}
+.ford-leaflet-map{
+  width:100%;
+  height:340px;
+  border-radius:10px;
+  overflow:hidden;
+  background:#0f172a;
+}
+.ford-map-caption{margin-top:8px;line-height:1.4}
+@media(max-width:800px){
+  .ford-map-layout{grid-template-columns:1fr}
+  .ford-leaflet-map{height:300px}
+}
+</style>
+
+<style>
+.sim-reference-shell{display:grid;gap:14px}
+.sim-top-metrics{
+  display:grid;grid-template-columns:repeat(6,minmax(0,1fr));
+  border:1px solid #263650;border-radius:16px;overflow:hidden;background:#091422
+}
+.sim-top-metrics>div{padding:14px 16px;border-right:1px solid #1e2c40}
+.sim-top-metrics>div:last-child{border-right:0}
+.sim-top-metrics span,.sim-top-metrics small{display:block;color:#94a3b8;font-size:12px}
+.sim-top-metrics b{display:block;font-size:24px;margin-top:4px;color:#f8fafc}
+.sim-top-metrics>div:nth-child(1) b,.sim-top-metrics>div:nth-child(2) b,.sim-top-metrics>div:nth-child(4) b{color:#4ade80}
+.sim-top-metrics>div:nth-child(6) b,.sim-top-metrics>div:nth-child(6) small{color:#fbbf24}
+
+.sim-profile-card,.sim-events-card,.sim-fords-card,.sim-scene-card,.sim-result-box,.sim-reset-box{
+  border:1px solid #263650;border-radius:16px;background:#091422;overflow:hidden
+}
+#simProfileCanvas{display:block;width:100%;height:260px}
+.sim-mid-grid{display:grid;grid-template-columns:1fr 1.15fr;gap:14px}
+.sim-events-card{padding:16px}
+.sim-events-card h3,.sim-fords-info h3,.sim-result-box h3{margin:0 0 12px}
+.sim-log{display:grid;gap:0}
+.sim-log>div{display:grid;grid-template-columns:90px 1fr 70px;gap:10px;padding:10px 0;border-bottom:1px solid #1e2c40;align-items:center}
+.sim-log>div.current{border:1px solid #f59e0b;border-radius:10px;padding:10px;margin:3px 0}
+.sim-log b.plus,.sim-log b.negative{color:#f87171}
+.sim-log b.minus,.sim-log b.positive{color:#4ade80}
+.sim-events-note{margin-top:12px;line-height:1.5}
+
+.sim-fords-card{display:grid;grid-template-columns:.8fr 1.25fr;min-height:330px}
+.sim-fords-info{padding:16px}
+.sim-ford-lines{display:grid;gap:8px;color:#cbd5e1;font-size:14px}
+.sim-ford-summary{margin:18px 0;line-height:1.5}
+.sim-ford-map{min-height:330px;background:#0f172a}
+.sim-ford-map .leaflet-container{width:100%;height:100%}
+
+.sim-scene-card{position:relative}
+.sim-scene-title{position:absolute;left:16px;top:12px;z-index:3;font-weight:800;color:#f8fafc}
+#simCourseCanvas{display:block;width:100%;height:430px!important;min-height:430px!important}
+.event-card{
+  position:absolute;left:31%;top:38px;z-index:5;width:min(360px,44%);
+  padding:16px 18px;border:1px solid #f59e0b;border-radius:14px;background:rgba(5,12,22,.94);
+  opacity:0;pointer-events:none;transform:translateY(-8px);transition:.18s
+}
+.event-card.show{opacity:1;transform:translateY(0)}
+.event-card b,.event-card span,.event-card strong{display:block}
+.event-card b{font-size:18px}.event-card span{margin:8px 0;color:#cbd5e1}.event-card strong{color:#f59e0b}
+.sim-pause-badge{
+  position:absolute;right:16px;top:16px;z-index:6;background:rgba(2,6,23,.9);
+  border:1px solid #475569;border-radius:999px;padding:7px 10px;color:#f8fafc;display:none
+}
+.sim-pause-badge.show{display:block}
+.sim-scene-controls{
+  display:grid;grid-template-columns:58px 1fr auto;gap:14px;align-items:center;
+  padding:12px 14px;border-top:1px solid #263650;background:#08111d
+}
+.sim-icon-btn{width:48px;height:48px;border-radius:10px;border:1px solid #334155;background:#0f172a;color:#f8fafc;font-size:20px}
+.sim-control-center{display:grid;gap:8px}
+.sim-progress{height:8px;background:#1e293b;border-radius:999px;overflow:hidden}
+.sim-progress i{display:block;height:100%;width:0;background:#38bdf8}
+.sim-speed-wrap{display:flex;align-items:center;gap:10px}
+.sim-speed-wrap select{min-width:90px}
+
+.sim-bottom-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.sim-result-box{padding:16px}
+.sim-result-box>div{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1e2c40}
+.sim-result-total b{color:#fbbf24}
+.sim-reset-box{padding:16px;display:flex;align-items:center;justify-content:flex-end}
+
+@media(max-width:900px){
+  .sim-top-metrics{grid-template-columns:repeat(2,1fr)}
+  .sim-top-metrics>div{border-bottom:1px solid #1e2c40}
+  .sim-mid-grid{grid-template-columns:1fr}
+  .sim-fords-card{grid-template-columns:1fr}
+  .sim-ford-map{height:320px}
+  .sim-bottom-grid{grid-template-columns:1fr}
+  .event-card{left:18px;right:18px;width:auto;top:44px}
+}
+</style>
+
+
+<style>
+/* v0.0261 — compact phone simulation */
+.sim-profile-card{display:none!important}
+.sim-reference-shell{gap:10px!important}
+.sim-scene-title{
+  position:static!important;
+  padding:9px 12px 0!important;
+  background:#091422!important;
+  font-size:15px!important;
+  font-weight:800!important
+}
+.sim-scene-card{overflow:hidden!important}
+#simCourseCanvas{width:100%!important;height:360px!important;min-height:360px!important}
+.sim-scene-controls{
+  position:relative!important;
+  display:grid!important;
+  grid-template-columns:46px minmax(0,1fr) 96px!important;
+  gap:8px!important;
+  padding:8px 10px!important;
+  align-items:center!important
+}
+.sim-icon-btn{width:42px!important;height:42px!important}
+.sim-control-center{min-width:0!important}
+#simStatus{font-size:12px!important;line-height:1.25!important;overflow-wrap:anywhere!important}
+.sim-speed-wrap{font-size:12px!important;gap:5px!important}
+.sim-speed-wrap select{min-width:64px!important;padding:7px!important}
+.sim-top-metrics>div{min-width:0!important}
+.sim-mid-grid{gap:10px!important}
+.sim-events-card,.sim-fords-card{min-height:0!important}
+.sim-events-card{padding:10px!important}
+.sim-events-card h3,.sim-fords-info h3{font-size:15px!important;margin-bottom:7px!important}
+.sim-events-note{font-size:11px!important;margin-top:7px!important}
+.sim-log>div{padding:7px 0!important}
+.sim-fords-info{padding:10px!important}
+.sim-ford-lines,.sim-ford-summary{font-size:12px!important}
+.sim-ford-summary{margin:9px 0!important}
+.sim-bottom-grid{display:none!important}
+
+@media(max-width:700px){
+  /* Metrics: 3 columns × 2 rows */
+  .sim-top-metrics{
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    border-radius:12px!important
+  }
+  .sim-top-metrics>div{
+    padding:7px 8px!important;
+    min-height:64px!important
+  }
+  .sim-top-metrics span,.sim-top-metrics small{font-size:9px!important;line-height:1.15!important}
+  .sim-top-metrics b{font-size:17px!important;line-height:1.05!important;margin-top:3px!important}
+
+  /* One block contains BOTH profile movement and runner scene */
+  #simCourseCanvas{height:315px!important;min-height:315px!important}
+
+  /* controls stay in one row and never cover text */
+  .sim-scene-controls{
+    grid-template-columns:42px minmax(0,1fr) 78px!important;
+    padding:7px!important
+  }
+  .sim-icon-btn{width:38px!important;height:38px!important;font-size:16px!important}
+  .sim-speed-wrap{display:block!important}
+  .sim-speed-wrap span{display:none!important}
+  .sim-speed-wrap select{width:100%!important;min-width:0!important;font-size:13px!important}
+
+  /* Events + ford map remain side by side on phone like the reference */
+  .sim-mid-grid{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+    gap:7px!important
+  }
+  .sim-fords-card{
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    min-width:0!important
+  }
+  .sim-fords-info{padding:8px!important}
+  .sim-ford-lines{display:none!important}
+  .sim-ford-summary{font-size:10px!important;line-height:1.3!important;margin:4px 0!important}
+  .sim-fords-info .muted{display:none!important}
+  .sim-ford-map{height:155px!important;min-height:155px!important}
+  .sim-events-card{min-width:0!important;padding:8px!important;max-height:220px!important;overflow:auto!important}
+  .sim-events-card h3{font-size:13px!important}
+  .sim-log>div{
+    grid-template-columns:43px minmax(0,1fr) 45px!important;
+    gap:4px!important;
+    font-size:10px!important
+  }
+  .sim-events-note{font-size:9px!important}
+
+  .event-card{
+    left:10px!important;right:10px!important;top:36px!important;width:auto!important;
+    padding:10px!important;font-size:12px!important
+  }
+}
+</style>
+
+
+<style>
+.ford-scheme-canvas{
+  display:block;
+  width:100%;
+  height:360px;
+  border-radius:10px;
+  background:#081321;
+  border:1px solid #263650;
+}
+.ford-leaflet-map{margin-top:10px}
+@media(max-width:800px){
+  .ford-map-layout{grid-template-columns:minmax(0,44%) minmax(0,56%)!important;gap:8px!important}
+  .ford-map-info{min-width:0}
+  .ford-map-panel{padding:7px!important;min-width:0}
+  .ford-map-title{font-size:13px!important;margin-bottom:6px!important}
+  .ford-scheme-canvas{height:350px}
+  /* On phone the scheme is enough and avoids a blank/slow external tile area. */
+  #fordLeafletMap{display:block!important}
+  .ford-map-caption{font-size:10px!important;line-height:1.3!important}
+}
+</style>
+
+<style>
+/* v0.0261 — small event notification above the track profile */
+#simEventCard{display:none!important}
+.sim-event-chip{
+  position:absolute;
+  top:58px;
+  left:50%;
+  transform:translateX(-50%) translateY(-6px);
+  z-index:8;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  max-width:calc(100% - 24px);
+  padding:7px 10px;
+  border:1px solid #f59e0b;
+  border-radius:999px;
+  background:rgba(5,12,22,.94);
+  color:#f8fafc;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .18s ease, transform .18s ease;
+  box-shadow:0 4px 14px rgba(0,0,0,.25);
+  white-space:nowrap;
+}
+.sim-event-chip.show{
+  opacity:1;
+  transform:translateX(-50%) translateY(0);
+}
+.sim-event-chip span{font-size:17px}
+.sim-event-chip b{
+  font-size:12px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.sim-event-chip strong{
+  font-size:12px;
+  color:#fbbf24;
+  flex:0 0 auto;
+}
+@media(max-width:700px){
+  .sim-event-chip{
+    top:52px;
+    max-width:calc(100% - 16px);
+    padding:6px 8px;
+    gap:5px;
+  }
+  .sim-event-chip b,.sim-event-chip strong{font-size:11px}
+  .sim-event-chip span{font-size:15px}
+}
+</style>
+
+<style>
+@media(max-width:700px){
+  .sim-scene-controls{
+    display:grid!important;
+    grid-template-columns:44px minmax(0,1fr)!important;
+    grid-template-areas:"start status" "speed speed"!important;
+    gap:8px!important;
+    padding:10px!important;
+  }
+  .sim-icon-btn{
+    grid-area:start!important;
+    width:42px!important;
+    height:42px!important;
+    min-width:42px!important;
+    padding:0!important;
+  }
+  .sim-control-center{grid-area:status!important;min-width:0!important}
+  .sim-speed-wrap{
+    grid-area:speed!important;
+    display:grid!important;
+    grid-template-columns:auto minmax(0,1fr)!important;
+    gap:8px!important;
+    align-items:center!important;
+  }
+}
+</style>
+
+<style>
+/* v0.0261 — static route map, no zoom/pan */
+.ford-leaflet-map,
+.sim-ford-map{
+  touch-action:none!important;
+  user-select:none!important;
+}
+.leaflet-control-zoom{display:none!important}
+.leaflet-container{cursor:default!important}
+@media(max-width:800px){
+  #fordLeafletMap{height:260px!important;min-height:260px!important;margin-top:8px!important}
+  .sim-ford-map{height:180px!important;min-height:180px!important}
+}
+</style>
+
+<style>
+/* v0.0261: compact controls, nothing overlaps on iPhone */
+.sim-scene-controls{
+  position:static!important;
+  display:grid!important;
+  grid-template-columns:44px minmax(0,1fr) 76px!important;
+  gap:8px!important;
+  align-items:center!important;
+  padding:9px 10px!important;
+}
+.sim-icon-btn{
+  width:42px!important;
+  height:42px!important;
+  min-width:42px!important;
+  padding:0!important;
+  font-size:18px!important;
+  line-height:1!important;
+  white-space:nowrap!important;
+}
+.sim-control-center{min-width:0!important}
+#simStatus{
+  margin:0!important;
+  font-size:12px!important;
+  line-height:1.3!important;
+  overflow-wrap:anywhere!important;
+}
+.sim-speed-wrap{min-width:0!important}
+.sim-speed-wrap span{display:none!important}
+.sim-speed-wrap select{width:100%!important;min-width:0!important;padding:7px!important}
+@media(max-width:600px){
+  .sim-scene-controls{grid-template-columns:42px minmax(0,1fr) 68px!important}
+  .sim-icon-btn{width:40px!important;height:40px!important;min-width:40px!important}
+}
+</style>
+
+<style>
+.sim-condition-bar{display:flex;gap:5px;flex-wrap:wrap;padding:6px 9px;background:#08111d;border-bottom:1px solid #263650}
+.sim-condition-bar span{font-size:10px;padding:4px 7px;border-radius:999px;background:#132238;border:1px solid #2b405e;color:#dbeafe}
+.sim-condition-bar .warn{border-color:#f59e0b;color:#fde68a}.sim-condition-bar .good{border-color:#22c55e;color:#bbf7d0}.sim-condition-bar .bad{border-color:#ef4444;color:#fecaca}
+.sim-dnf-banner{position:absolute;inset:0;z-index:30;display:none;align-items:center;justify-content:center;background:rgba(2,6,23,.82)}
+.sim-dnf-banner.show{display:flex}.sim-dnf-box{width:min(320px,84%);padding:22px;border:2px solid #ef4444;border-radius:18px;background:#091220;text-align:center}
+.sim-dnf-box b{display:block;font-size:38px;color:#f87171;margin-bottom:8px}.sim-dnf-box span{color:#e2e8f0}
+</style>
+
+<style>
+/* v0.0261 */
+.sim-fords-card{display:none!important}
+.sim-mid-grid{grid-template-columns:1fr!important}
+</style>
+
+<style>
+/* v0.0261 — map is shown in route analysis, hidden only in simulation */
+#route .ford-map-panel,
+[data-tabpanel="route"] .ford-map-panel,
+#tab-route .ford-map-panel{
+  display:block!important;
+}
+#fordSchemeCanvas{
+  display:block!important;
+  width:100%!important;
+}
+#fordLeafletMap{
+  display:block!important;
+}
+#simulation .sim-fords-card,
+[data-tabpanel="simulation"] .sim-fords-card{
+  display:none!important;
+}
+</style>
+
+<style>
+/* v0.0261 — guaranteed GPX scheme in Analysis map block */
+#mapAnalysisResults .ford-map-panel{
+  display:block!important;
+  visibility:visible!important;
+  min-height:390px!important;
+  background:#081321!important;
+}
+#mapAnalysisResults #fordSchemeCanvas{
+  display:block!important;
+  visibility:visible!important;
+  width:100%!important;
+  height:350px!important;
+  min-height:350px!important;
+  opacity:1!important;
+}
+@media(max-width:800px){
+  #mapAnalysisResults .ford-map-layout{
+    display:grid!important;
+    grid-template-columns:minmax(0,44%) minmax(0,56%)!important;
+    gap:8px!important;
+    align-items:start!important;
+  }
+  #mapAnalysisResults .ford-map-panel{min-width:0!important;padding:7px!important}
+  #mapAnalysisResults #fordLeafletMap{display:none!important}
+  #mapAnalysisResults .ford-map-caption{display:none!important}
+}
+</style>
+
+<style>
+/* v0.0261 — analysis progress UI */
+.map-analyze-running{
+  margin-top:12px;padding:14px;border:1px solid #2a405d;border-radius:15px;
+  background:#0b1727;display:grid;grid-template-columns:42px minmax(0,1fr);
+  gap:12px;align-items:center;position:relative;overflow:hidden
+}
+.map-analyze-spinner{
+  width:30px;height:30px;border:5px solid #23476c;border-top-color:#3b9df5;
+  border-radius:50%;animation:mapSpin99 .85s linear infinite
+}
+.map-analyze-running-text{display:grid;gap:4px;min-width:0}
+.map-analyze-running-text b{font-size:16px;color:#e5edf7}
+.map-analyze-running-text span{font-size:13px;color:#aebdd0;line-height:1.35}
+.map-analyze-running-text small{font-size:11px;color:#7fb9ee}
+.map-analyze-indeterminate{
+  grid-column:1/-1;height:8px;background:#20344d;border-radius:999px;overflow:hidden
+}
+.map-analyze-indeterminate i{
+  display:block;height:100%;width:35%;border-radius:999px;
+  background:#3b9df5;animation:mapSlide99 1.2s ease-in-out infinite
+}
+@keyframes mapSpin99{to{transform:rotate(360deg)}}
+@keyframes mapSlide99{
+  0%{transform:translateX(-110%)}
+  50%{transform:translateX(190%)}
+  100%{transform:translateX(330%)}
+}
+</style>
+
+
+
+
+
+
+<style>
+.sim-scene-card{position:relative}
+.sim-first-place-badge{
+  position:absolute;
+  left:50%;
+  top:56%;
+  z-index:12;
+  display:none;
+  min-width:118px;
+  max-width:155px;
+  transform:translate(-50%,-100%);
+  padding:7px 9px 6px;
+  border-radius:12px;
+  border:1px solid #fbbf24;
+  background:rgba(7,18,31,.93);
+  box-shadow:0 5px 18px rgba(0,0,0,.5),0 0 12px rgba(245,158,11,.18);
+  text-align:center;
+  pointer-events:none;
+}
+.sim-first-place-badge.show{
+  display:block;
+  animation:firstPlaceBadgePop .28s ease-out both;
+}
+.sim-first-place-crown{font-size:25px;line-height:1;margin-bottom:2px}
+.sim-first-place-badge b{
+  display:block;
+  color:#fde68a;
+  font-size:15px;
+  line-height:1.05;
+}
+.sim-first-place-badge span{
+  display:block;
+  margin-top:3px;
+  color:#4ade80;
+  font-size:10px;
+  line-height:1.15;
+}
+@keyframes firstPlaceBadgePop{
+  from{opacity:0;transform:translate(-50%,-85%) scale(.72)}
+  to{opacity:1;transform:translate(-50%,-100%) scale(1)}
+}
+@media(max-width:600px){
+  .sim-first-place-badge{
+    top:58%;
+    min-width:108px;
+    max-width:140px;
+    padding:6px 8px 5px;
+  }
+  .sim-first-place-crown{font-size:22px}
+  .sim-first-place-badge b{font-size:14px}
+  .sim-first-place-badge span{font-size:9px}
+}
+</style>
+
+
+<style>
+.sim-equipment-card{
+  margin:0 0 12px;padding:12px;border:1px solid #263b55;border-radius:16px;
+  background:#091525
+}
+.sim-equipment-head{display:flex;gap:10px;align-items:center;justify-content:space-between}
+.sim-equipment-head b{display:block;font-size:18px;color:#f3f7fb}
+.sim-equipment-head span{display:block;margin-top:3px;font-size:12px;color:#93a4bb}
+#equipmentCheckBtn,#equipmentCheckOk{
+  border:0;border-radius:11px;background:#38bdf8;color:#06111e;font-weight:800;
+  padding:10px 15px;font-size:14px
+}
+.sim-equipment-items{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:10px}
+.sim-equipment-items span{
+  padding:8px 7px;border:1px solid #263b55;border-radius:10px;background:#0c1829;
+  font-size:12px;text-align:center;color:#c8d4e3
+}
+.sim-equipment-items .ok{border-color:#166534;color:#86efac}
+.sim-equipment-items .miss{border-color:#991b1b;color:#fca5a5}
+.sim-equipment-summary{margin-top:8px;font-size:12px;color:#93a4bb}
+.equipment-check-modal{
+  position:fixed;inset:0;z-index:100100;display:none;align-items:center;justify-content:center;
+  padding:18px;background:rgba(1,8,16,.72)
+}
+.equipment-check-modal.show{display:flex}
+.equipment-check-dialog{
+  position:relative;width:min(390px,92vw);padding:14px;border-radius:18px;
+  border:1px solid #34506d;background:#071525;box-shadow:0 18px 55px #000b;text-align:center
+}
+.equipment-check-dialog h3{margin:2px 34px 10px;font-size:20px}
+.equipment-check-dialog img{display:block;width:100%;max-height:245px;object-fit:cover;border-radius:13px}
+.equipment-check-result{margin:12px 0;font-size:15px;line-height:1.35}
+.equipment-check-result.good{color:#4ade80}.equipment-check-result.bad{color:#fbbf24}
+.equipment-check-close{position:absolute;right:9px;top:8px;border:0;background:transparent;color:#94a3b8;font-size:28px}
+@media(max-width:600px){
+  .sim-equipment-items{grid-template-columns:1fr 1fr}
+  .sim-equipment-head b{font-size:16px}
+  #equipmentCheckBtn{padding:9px 12px}
+}
+</style>
+
+<style>
+.top-actions{position:sticky;top:0;z-index:999;display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:6px 10px 0 auto;width:fit-content}
+.top-actions .app-version{position:static;margin:0}
+.support-project-btn{display:inline-flex;align-items:center;justify-content:center;padding:5px 10px;border-radius:999px;border:1px solid #2563eb;background:#0f172a;color:#7dd3fc;text-decoration:none;font-size:12px;font-weight:800;white-space:nowrap}
+.support-project-btn:active{transform:scale(.98)}
+@media(max-width:430px){.support-project-btn{font-size:11px;padding:5px 8px}.top-actions{gap:6px}}
+</style>
 </head>
 <body>
-<div id="app">
-
-  <header class="topbar">
-    <div class="brand">
-      <h1>СИМУЛЯТОР ТРЕЙЛРАННЕРА: АРМАГЕДДОН</h1>
-      <span class="ver">v1.03</span>
+<div class="top-actions"><div class="app-version">v0.0262</div><a class="support-project-btn" href="https://www.tbank.ru/cf/49SEnJlLa0Y" target="_blank" rel="noopener noreferrer">❤️ Поддержать проект</a></div>
+  <header class="app-header">
+    <div>
+      <div class="eyebrow">Прогноз и анализ трейловых гонок</div>
+      <h1>Гонка → ПЛАН → ФИНИШ</h1>
     </div>
-    <div class="topbtns">
-      <a class="support-btn" href="https://www.tbank.ru/cf/49SEnJlLa0Y" target="_blank" rel="noopener">❤️ ПОДДЕРЖАТЬ</a>
-      <button class="icon-btn" id="btnSettings" aria-label="Настройки">⚙️</button>
-      <button class="help-btn" id="btnHelp">❓ Помощь</button>
-    </div>
+    <button id="installBtn" class="ghost" hidden>Установить</button>
   </header>
 
-  <section class="statbar" id="statbar"></section>
-
-  <main id="views">
-
-    <section id="view-profile" class="card">
-      <h2>🎽 Текущее</h2>
-      <input id="profileName" type="text" maxlength="40" placeholder="Имя и фамилия">
-      <p class="hint">Введите имя — оно будет использовано в результатах и таблицах.</p>
-      <div id="currentGearSummary" class="current-gear"></div>
+  <main>
+    <section class="card hero">
+      <h2>Новая гонка</h2>
+      <p>Загрузи GPX трассы, стартовый список и три GPX-эталона в разделе прогноза. Приложение рассчитает стратегию, прогноз финиша и шансы против соперников.</p>
     </section>
 
-    <section id="view-race" class="card">
-      <h2 id="raceLevelTitle">Текущая гонка</h2>
-      <p id="raceLevelMeta" class="hint"></p>
-      <div id="raceRisks" class="risks"></div>
-      <div id="sponsorTaskBox"></div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="route">1. Трек гонки</button>
+      <button class="tab" data-tab="forecast">2. Прогноз гонки</button>
+      <button class="tab" data-tab="roster">3. Стартовый список и баллы ITRA</button>
+      <button class="tab" data-tab="result">4. Прогноз места в TOP-100</button>
+      <button class="tab" data-tab="simulation">5. Симуляция гонки</button>
+    </nav>
 
-      <div class="race-controls">
-        <label>Скорость:
-          <select id="speedSelect">
-            <option value="1">1×</option>
-            <option value="2">2×</option>
-            <option value="10">10×</option>
-            <option value="50">50×</option>
-            <option value="100" selected>100×</option>
-            <option value="300">300×</option>
-            <option value="600">600×</option>
-          </select>
-        </label>
-        <button id="btnGuarana">🫘 Гуарана <span id="guaranaCount"></span></button>
-        <span id="gelInRace">🍯 Гели в гонке: 0 / 0</span>
-      </div>
+    <section id="route" class="tabpanel active">
+      <div class="card">
+        <h2>Трек гонки</h2>
+        <div class="gpx-pace-row">
+  <div class="gpx-upload-column"><div class="upload">
+          <strong>GPX трассы</strong>
+          <input id="gpxFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml,*/*">
+          <span id="gpxName"><span id="gpxCheck" class="file-check">○</span> Файл не выбран</span>
+          <button id="gpxLoadBtn" type="button" class="primary" disabled>Загрузить и обработать GPX</button>
+          <span id="gpxStatus">1. Выберите файл GPX.</span>
+          <progress id="gpxProgress" value="0" max="100" style="width:100%;display:none"></progress>
 
-      <div id="raceMap" class="race-map">
-        <div id="scene3d" class="scene3d"></div>
-        <div class="map-fade"></div>
-        <div id="top7" class="top7"></div>
-        <div id="raceOverlayHost" class="overlay-host"></div>
-        <div class="race-map-spacer"></div>
-        <div class="track-wrap">
-          <div class="track">
-            <div id="trackFill" class="track-fill"></div>
-            <div id="groupBand" class="group-band"></div>
-            <div id="snailLayer" class="snail-layer"></div>
-            <div id="playerDot" class="player-dot">🐌</div>
+          <div class="flat-route-builder">
+            <strong>Нет GPX трассы?</strong>
+            <div class="flat-route-row">
+              <div class="flat-route-inputs">
+                <label>
+                  <span>Километраж, км</span>
+                  <input id="flatRouteKm" type="number" inputmode="decimal" min="0.1" max="600" step="0.1" value="10">
+                </label>
+                <label>
+                  <span>Набор высоты, м</span>
+                  <input id="flatRouteGain" type="number" inputmode="numeric" min="0" max="50000" step="1" value="0">
+                </label>
+              </div>
+              <button id="flatRouteBtn" type="button" class="secondary">Асфальтовый трек</button>
+            </div>
+            <span id="flatRouteStatus" class="muted">Создаёт ровный асфальтовый маршрут без GPX, от 0.1 до 600 км.</span>
           </div>
-          <div id="trackLegend" class="track-legend"></div>
+        </div></div>
+  <div class="pace-inline-column"><label class="field">
+            <span>Рассчитать время для темпа, мин/км</span>
+            <input id="basePace" value="5:30">
+          </label></div>
+</div>
+
+        <div class="field traversal-time-block">
+          <span>Фактическое время прохождения</span>
+          <div class="metrics">
+            <div><span>Без пауз</span><b id="movingTimeMetric">—</b><small id="movingPaceMetric">— мин/км</small></div>
+            <div><span>С паузами</span><b id="elapsedTimeMetric">—</b><small id="elapsedPaceMetric">— мин/км</small></div>
+          </div>
+          <div class="muted">Время берётся из временных меток GPX: без пауз — только движение, с паузами — от первой до последней точки.</div>
+        </div>
+
+        <div class="field">
+          <span>Анализ карты</span>
+          <button id="mapAnalyzeBtn" type="button" class="primary action-idle" disabled>Анализ карты</button>
+        <div id="mapTimingNote" class="map-info-note">
+  <b>Зачем нужен анализ карты?</b><br>
+  Он улучшает прогноз по треку: определяет <b>тропы, грунт, асфальт, воду и броды</b> и использует эти данные для более точной коррекции темпа и итогового времени.
+  <br><span class="muted">Если анализ не завершится за 20 секунд, он автоматически остановится. Обычный прогноз по GPX останется доступен.</span>
+</div>
+
+<div id="mapAnalyzeRunningCard" class="map-analyze-running" style="display:none">
+  <div class="map-analyze-spinner" aria-hidden="true"></div>
+  <div class="map-analyze-running-text">
+    <b id="mapAnalyzeRunningTitle">Анализ карты запущен…</b>
+    <span id="mapAnalyzeRunningText">Пожалуйста, подождите. Идёт полный анализ трека.</span>
+    <small id="mapAnalyzeRetryText"></small>
+  </div>
+  <div class="map-analyze-indeterminate"><i></i></div>
+</div>
+
+          <div id="mapAnalyzeStatus" class="muted">Сначала загрузите и обработайте GPX.</div>
+          <progress id="mapAnalyzeProgress" value="0" max="100" style="width:100%;display:none"></progress>
+        </div>
+
+        <div id="mapAnalysisResults" class="field" style="display:none">
+          <span>Покрытие маршрута по OSM</span>
+          <div class="metrics">
+            <div><span>Классифицировано</span><b id="coverageMetric">—</b></div>
+            <div><span>Болото</span><b id="wetlandMetric">—</b></div>
+            <div><span>Вода</span><b id="waterCrossMetric">—</b></div><div class="metric">
+              <div class="k">Броды</div>
+              <div class="v" id="fordCountMetric">—</div><div class="ford-km-list" id="fordKmList">Броды: —</div>
+          <div class="ford-km-list bridge-km-list" id="bridgeFordKmList">По мосту: —</div>
+            </div>
+          </div>
+          <div class="metrics">
+            <div><span>Тропа</span><b id="trailMetric">—</b></div>
+            <div><span>Грунт</span><b id="dirtMetric">—</b></div>
+            <div><span>Асфальт</span><b id="pavedMetric">—</b></div>
+          </div>
+          <div class="ford-map-layout">
+  <div class="ford-map-info">
+    <div class="muted" id="mapAnalysisNote">—</div>
+    <canvas id="surfaceStripCanvas" height="90"></canvas>
+  </div>
+  <div class="ford-map-panel">
+    <div class="ford-map-title">Схема трека и броды</div>
+    <canvas id="fordSchemeCanvas" class="ford-scheme-canvas"></canvas>
+    <div id="fordLeafletMap" class="ford-leaflet-map"></div>
+    <div class="muted ford-map-caption">Красная линия — GPX трек. 🌊 — вероятный брод, ✅ — подтверждённый OSM, 🌉 — мост. Карта фиксированная, без зума.</div>
+  </div>
+</div>
+          <div class="surface-legend" aria-label="Легенда покрытия">
+            <div><span class="surface-swatch sw-wetland"></span><span>Болото / wetland</span></div>
+            <div><span class="surface-swatch sw-water"></span><span>Вода / река</span></div>
+            <div><span class="surface-swatch sw-trail"></span><span>Тропа</span></div>
+            <div><span class="surface-swatch sw-dirt"></span><span>Грунт / гравий / земля</span></div>
+            <div><span class="surface-swatch sw-paved"></span><span>Асфальт / твёрдое покрытие</span></div>
+            <div><span class="surface-swatch sw-unknown"></span><span>Неизвестно / нет данных OSM</span></div>
+          </div>
+        </div>
+
+        <div class="profiles-main">
+          <div class="field">
+          <span>Профиль высоты по километражу</span>
+          <canvas id="elevationDistanceCanvas" height="220"></canvas>
+        </div>
+          <div class="field">
+          <span>Профиль высоты по расчётному времени</span>
+          <canvas id="elevationTimeCanvas" height="220"></canvas>
+          <div class="muted">Время строится по базовому темпу, набору высоты и текущей модели сложности.</div>
+        </div>
+        </div>
+
+        
+        <div class="grid2">
+          
+          <div class="field">
+            <span>ITRA Km-effort / Endurance Points</span>
+            <div class="metrics" style="margin:0">
+              <div><span>Km-effort</span><b id="itraKmEffort">—</b></div>
+              <div><span>ITRA Points</span><b id="itraPoints">—</b></div>
+              <div><span>Trail-adjusted Points</span><b id="itraAdjustedPoints">—</b></div>
+            </div>
+            <div class="muted">ITRA Points — официальный расчёт по Km-effort. Trail-adjusted Points — внутренняя оценка приложения для очень вертикальных трасс.</div>
+
+          <div class="field">
+            <span>Сложность рельефа по GPX</span>
+            <div class="metrics" style="margin:0">
+              <div><span>Trail Difficulty</span><b id="trailDifficulty">—</b></div>
+              <div><span>&gt;15% уклона</span><b id="steep15Metric">—</b></div>
+              <div><span>Вертикаль / км</span><b id="vertPerKmMetric">—</b></div>
+            </div>
+            <div class="muted" id="trailDifficultyLabel">—</div>
+          </div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div><span>Дистанция</span><b id="distMetric">—</b></div>
+          <div><span>Набор</span><b id="gainMetric">—</b></div>
+          <div><span>Сброс</span><b id="lossMetric">—</b></div>
+        </div>
+
+        
+
+        
+</div>
+    </section>
+
+    <div id="legacyTrainingFields" hidden>
+      <input id="refDist" value="">
+      <input id="refMinutes" value="">
+      <input id="refPace" value="">
+      <input id="refAvgHr" value="">
+      <input id="refGain" value="0">
+      <input id="refMaxHr" value="0">
+      <input id="lthr" value="0">
+    </div>
+
+    <section id="forecast" class="tabpanel">
+      <div class="card">
+        <h2>Прогноз на гонку</h2>
+        <p class="muted">
+          Прогноз строится общей моделью по трём отдельным тренировкам: Силовой трейловой GPX, Быстрой трейловой GPX и Скоростной плоской GPX. Для расчёта нужны все три файла. После выбора GPX он загружается автоматически.
+        </p>
+
+        
+        <div class="forecast-ref-grid">
+          <div class="upload">
+            <strong>1. Силовая трейловая GPX</strong>
+            <div class="muted">Большой набор и крутые подъёмы. Из неё модель учит, как уклон меняет скорость, и оценивает запас выносливости по длительности и набору.</div>
+            <input id="strengthActivityFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml,*/*">
+            <span id="strengthActivityName"><span class="file-check">○</span> Файл не выбран</span>
+            <button id="strengthActivityLoadBtn" type="button" class="primary action-idle" disabled>Загрузить Силовую трейловую GPX</button>
+            <span id="strengthActivityStatus">Не загружена.</span>
+          </div>
+
+          <div class="upload">
+            <strong>2. Быстрая трейловая GPX</strong>
+            <div class="muted">Быстрый трейл с высоким устойчивым усилием. Даёт рабочую скорость, реакцию на умеренный рельеф и дополнительную оценку выносливости.</div>
+            <input id="fastTrailActivityFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml,*/*">
+            <span id="fastTrailActivityName"><span class="file-check">○</span> Файл не выбран</span>
+            <button id="fastTrailActivityLoadBtn" type="button" class="primary action-idle" disabled>Загрузить Быструю трейловую GPX</button>
+            <span id="fastTrailActivityStatus">Не загружена.</span>
+          </div>
+
+          <div class="upload">
+            <strong>3. Скоростная плоская GPX — минимум 5 км</strong>
+            <div class="muted">Минимальная длина файла — 5 км. Например, быстрая плоская десятка. Даёт базовый темп и скорость без большого влияния рельефа. Если файл заметно медленнее консервативной оценки по VO₂max, скоростной якорь автоматически частично корректируется по VO₂max. Плоская гоночная GPX становится главным скоростным эталоном: её реальное время масштабируется на дистанцию гонки, а затем применяются рельеф, покрытие, броды и физиологические ограничения. Для короткой гонки, близкой по длине к скоростному GPX, используется фактически показанный темп этого файла без искусственного ускорения по быстрым отрезкам или VO₂max.</div>
+            <input id="flatRaceActivityFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml,*/*">
+            <span id="flatRaceActivityName"><span class="file-check">○</span> Файл не выбран</span>
+            <div class="forecast-action-separator" aria-hidden="true"></div>
+<button id="flatRaceActivityLoadBtn" type="button" class="primary action-idle" disabled>Загрузить Скоростную плоскую GPX</button>
+            <span id="flatRaceActivityStatus">Не загружена.</span>
+          </div>
+        </div>
+
+        <div id="calcAvailabilityStatus" class="muted">Сначала рассчитайте прогноз во вкладке «Прогноз».</div>
+        <div class="metrics big">
+          <div><span>Эталонов загружено</span><b id="referenceCount">0 / 3</b></div>
+          <div><span>Общая модель</span><b id="combinedModelState">ожидает 3 GPX</b></div>
+        </div>
+
+
+        <div class="grid2">
+          <label class="field">
+            <span>Относительная мощность / усилие, %</span>
+            <input id="raceEffortPct" type="number" min="70" max="130" step="1" value="100">
+          </label>
+          <label class="field">
+            <span>Шаг таблицы, км — необязательно</span>
+            <input id="forecastStepKm" type="number" min="1" max="10" step="0.5" value="" placeholder="авто">
+            <small class="muted">Пусто = авто: если «Анализ трассы» выполнен, границы берутся по покрытию и бродам; мост считается как обычный участок покрытия (например, асфальт) и отдельную строку не создаёт. Если анализ не выполнен — таблица строится по 5 км. После нового анализа трассы ручной шаг автоматически сбрасывается на «авто».</small>
+            <button id="recalcForecastStepBtn" type="button" class="secondary action-idle" disabled>Перерасчитать по шагу</button>
+          </label>
+          <label class="field">
+            <span>VO₂max, мл/кг/мин — обязательно</span>
+            <input id="vo2max" value="52" type="number" min="20" max="90" step="0.1" placeholder="например 55" required>
+          </label>
+        </div>
+
+        <button id="raceForecastBtn" class="primary action-ready" type="button">Рассчитать прогноз по трассе</button>
+        <button id="raceForecastGpxBtn" class="primary action-idle" type="button" disabled>Рассчитать прогноз по трассе с анализом GPX</button>
+        <div id="raceForecastGpxNote" class="muted">Калибровка v0.25 зависит только от данных выбранных GPX: дистанции, времени, темпа, набора, уклонов и структуры скорости. Название файла на расчёт не влияет. После калибровки остальной прогноз считается по общей формуле.<br><br>При прогнозе с анализом GPX учитывается покрытие: каждый обнаруженный брод добавляет +40 секунд; каждый километр OSM-тропы — +1:00 мин/км; каждый километр грунта — +0:30 мин/км; каждый километр «неизвестно» — +1:00 мин/км к расчётному времени.</div>
+        <div id="raceForecastStatus" class="muted">Сначала загрузите GPX трассы во вкладке «Трасса».</div>
+
+        <div class="metrics big">
+          <div><span>Прогноз движения</span><b id="raceForecastTime">—</b><small id="raceForecastDistance" class="forecast-distance">— км</small></div>
+          <div><span>Средний темп</span><b id="raceForecastPace">—</b></div>
+          <div><span>Реалистичный диапазон</span><b id="raceForecastRange">—</b></div>
+          <div><span>Калибровка</span><b id="raceModelSource">нужно 3 GPX + VO₂max</b></div>
+        </div>
+
+        <div class="metrics big">
+          <div><span>Коэффициент длительности</span><b id="raceDurationFactor">—</b></div>
+          <div><span>Ограничение по пульсу</span><b id="raceHrFactor">—</b></div>
+          <div><span>Расчётное время до закисления</span><b id="raceAcidTime">—</b></div>
+          <div><span>Влияние VO₂max</span><b id="raceVo2Factor">—</b><small id="raceVo2Value" class="muted">VO₂max: — мл/кг/мин</small></div>
+        </div>
+        <div class="muted">«Время до закисления» — модельная оценка: при наличии HR/LTHR используется пульс, без них — VO₂max и длительность. Это не измерение лактата.</div>
+
+        <div class="field">
+          <span>Формула модели</span>
+          <div id="raceModelFormula" class="formula-box">—</div>
+          <div class="muted">
+            Это не Garmin Running Power в ваттах. «Мощность / усилие, %» — относительное усилие общей модели трёх тренировок: 100% = базовый расчёт, 95% = экономнее, 105% = агрессивнее.
+          </div>
+        </div>
+
+        <h3>Время прохождения участков</h3>
+        <div id="recommendedPaceNote" class="muted">
+          Темп и пульс в таблице — рекомендуемые, а не максимальные. Целевой пульс рассчитывается по распределению HR внутри загруженных тренировочных GPX: среднему, медиане, верхним квартилям и максимуму. Скоростная тренировка задаёт верхний рабочий/пороговый ориентир, длительные тренировки — устойчивый пульс. Далее учитываются предполагаемый темп, уклон, длительность и стадия гонки. Если HR в GPX нет, используется ручной средний пульс/LTHR; если нет и их — выводится «—». По умолчанию границы участков берутся из «Анализа трассы»: асфальт, тропа, грунт, вода/болото и броды. Мост считается как обычное покрытие и отдельно участок не делит. Вода и неизвестное покрытие не могут иметь темп быстрее 6:30/км. Каждый непрерывный водный участок от 2 м считается бродом, если OSM не определил мост. Ручной шаг используется только если поле заполнено.
+        </div>
+        <div class="table-wrap">
+          <table id="raceForecastTable">
+            <thead>
+              <tr>
+                <th>Км</th>
+                <th>+ / −</th>
+                <th>Уклон</th>
+                <th>Рек. темп</th>
+                <th>Целевой пульс</th>
+                <th>Участок</th>
+                <th>Сумма</th>
+                <th>Усилие</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
         </div>
       </div>
+    </section>
 
-      <div class="race-actions">
-        <button id="btnStart" class="btn-primary pulse">▶ Старт</button>
-        <button id="btnBuySlot" class="btn-warn" style="display:none">Купить слот</button>
+    <section id="roster" class="tabpanel">
+      <div class="card">
+        <h2>Стартовый список и баллы ITRA</h2>
+        <p class="muted roster-intro">Сначала можно загрузить обычный стартовый список. Если у вас есть отдельный XLSX / CSV с баллами ITRA, загрузите его ниже — он заменит обычный список для расчёта.</p>
+        <div>
+        <h2>Стартовый список</h2>
+        <div class="upload">
+          <strong>Стартовый список XLSX / CSV — можно уже с баллами ITRA</strong>
+          <input id="rosterFile" type="file" accept=".xlsx,.xls,.csv,text/csv">
+          <span id="rosterName"><span class="file-check">○</span> Файл не выбран</span>
+          <button id="rosterLoadBtn" type="button" class="primary" disabled>Загрузить и обработать стартовый список</button>
+          <span id="rosterStatus">1. Выберите файл стартового списка.</span>
+          <progress id="rosterProgress" value="0" max="100" style="width:100%;display:none"></progress>
+        </div>
+        <div class="grid2">
+          
+
+        <div class="itra-online-box">
+          <input id="itraRosterFile" type="file" accept=".xlsx,.xls,.csv,text/csv" hidden>
+          <button id="itraLookupBtn" type="button" class="secondary action-ready">Загрузить список с баллами ITRA</button>
+          <div id="itraLookupStatus" class="muted">Отдельный список с ITRA заменит обычный стартовый список. После загрузки появится уведомление.</div>
+          <button id="resetItraRosterBtn" type="button" class="secondary mini-action" style="display:none">Вернуться к обычному списку</button>
+          <div id="itraRosterActiveNotice" class="itra-active-notice" style="display:none"></div>
+          <button id="saveItraRosterBtn" type="button" class="secondary action-idle" disabled>Рассчитать прогноз гонки по баллам ITRA</button>
+          <div id="saveItraRosterStatus" class="muted">Введите свой ITRA PI и рассчитайте прогноз относительно загруженного стартового списка.</div>
+        </div>
+        <label class="field">
+          <span>Мой ITRA PI</span>
+          <input id="itraPi" type="number" min="0" max="1000" step="1" value="0" inputmode="numeric" placeholder="Например, 545">
+        </label>
+        <label class="field">
+            <span>Зачёт</span>
+            <select id="genderFilter">
+              <option>Все</option>
+              <option selected>Женщины</option>
+              <option>Мужчины</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Непредсказуемость</span>
+            <input id="sigma" type="number" min="5" max="45" value="20">
+          </label>
+        </div>
+        <p class="muted">XLSX и CSV читаются прямо на iPhone. Для прогноза по ITRA загрузите список, где у участников уже заполнены баллы PI.</p>
+        <div class="table-wrap">
+          <table id="rosterTable">
+            <thead><tr><th>Спортсмен</th><th>PI</th><th>Техника</th><th>Выносливость</th><th>Форма</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        </div>
+      </div>
+    </section>
+
+
+    <section id="result" class="tabpanel">
+      <div class="card">
+        <div class="row between">
+          <h2>Итог</h2>
+          <button id="calcBtn" class="primary action-idle" disabled>Рассчитать</button>
+        </div>
+        <div class="metrics big">
+          <div><span>Прогноз финиша</span><b id="finishMetric">—</b></div>
+          <div><span>TOP‑3</span><b id="podiumMetric">—</b></div>
+          <div><span>TOP‑10</span><b id="top10Metric">—</b></div>
+          <div><span>TOP‑30</span><b id="top30Metric">—</b></div>
+          <div><span>TOP‑50</span><b id="top50Metric">—</b></div>
+          <div><span>Победа</span><b id="winMetric">—</b></div>
+          <div><span>Место модели</span><b id="rankMetric">—</b></div>
+        </div>
+
+        <h3>Пульс по участкам</h3>
+        <div class="table-wrap">
+          <table id="planTable">
+            <thead><tr><th>Км</th><th>Пульс</th><th>Режим</th><th>Темп</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        
+        <h3>Пульсовая стратегия</h3>
+        <p class="muted" id="hrStrategySummary">Стратегия появится после анализа трассы и расчёта прогноза.</p>
+        <div class="table-wrap">
+          <table id="hrStrategyTable">
+            <thead>
+              <tr>
+                <th>Участок</th>
+                <th>Целевой пульс</th>
+                <th>Как бежать</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+<h3>Главные соперники</h3>
+        <div class="table-wrap">
+          <table id="rivalsTable">
+            <thead><tr><th>#</th><th>Спортсмен</th><th>PI</th><th>Сила</th><th>Угроза</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <button id="saveBtn" class="secondary">Сохранить расчёт на iPhone</button>
+        <div id="saveStatus" class="muted"></div>
+      </div>
+    </section>
+
+    
+<section id="simulation" class="tabpanel">
+  <div class="sim-reference-shell">
+    <div class="virtual-track-box">
+      <button id="simVirtual20Btn" type="button" class="primary">Виртуальная гонка</button>
+      <button id="simRealTrackBtn" type="button" class="secondary">Симуляция реального трека</button>
+      <span id="simVirtual20Status">Выберите виртуальную гонку или реальный загруженный трек.</span>
+    </div>
+
+    <div id="virtualCampaignPanel" class="virtual-campaign-panel">
+      <div class="virtual-campaign-head">
+        <div>
+          <b>🏆 Виртуальный чемпионат</b>
+          <span id="virtualCampaignHint">Для старта нужно пройти проверку обязательной экипировки. Чтобы занять 1 место, нужно финишировать быстрее времени прогноза.</span>
+        </div>
+        <div class="virtual-lives">Жизни: <b id="virtualLives">❤️❤️❤️</b></div>
+      </div>
+      <div class="virtual-levels">
+        <div id="virtualLevel1" class="virtual-level current"><b>1 уровень</b><span>20 км · +500 м</span></div>
+        <div id="virtualLevel2" class="virtual-level locked"><b>2 уровень</b><span>60 км · +2500 м · 4 ПП</span></div>
+        <div id="virtualLevel3" class="virtual-level locked"><b>3 уровень</b><span>100 км · +6000 м</span></div>
+      </div>
+      <button id="virtualCampaignRestart" class="secondary virtual-restart" type="button">↻ Начать чемпионат заново</button>
+    </div>
+
+    <div id="virtualChampionOverlay" class="virtual-champion-overlay" aria-hidden="true">
+      <div class="virtual-champion-box">
+        <div>🏆👑🏆</div>
+        <b>ТЫ ЧЕМПИОН!</b>
+        <span>Все три уровня пройдены с первым местом.</span>
+      </div>
+    </div>
+    <div class="sim-top-metrics">
+      <div><span>Дистанция</span><b id="simDistance">—</b></div>
+      <div><span>Набор высоты</span><b id="simGain">—</b></div>
+      <div><span>Исходный прогноз</span><b id="simBaseTimeMain">—</b><small id="simProgressTime">Текущее время: —</small></div>
+      <div><span>Темп (средний)</span><b id="simAvgPace">—</b></div>
+      <div><span>События (этой симуляции)</span><b id="simEventsCount">0 / 0</b></div>
+      <div><span>ФИНИШНОЕ ВРЕМЯ</span><b id="simResultFinish">—</b><small id="simPenalty">Поправка: +0:00</small></div>
+    </div>
+
+    
+<div class="sim-equipment-card">
+  <div class="sim-equipment-head">
+    <div>
+      <b>Обязательная экипировка</b>
+      <span>Аптечка · вода · мембранка · фонарик</span>
+    </div>
+    <button id="equipmentCheckBtn" type="button">Проверить</button>
+  </div>
+  <div class="sim-equipment-items">
+    <span id="eqMedkit">🩹 Аптечка: ?</span>
+    <span id="eqWater">💧 Вода: ?</span>
+    <span id="eqMembrane">🧥 Мембранка: ?</span>
+    <span id="eqFlashlight">🔦 Фонарик: ?</span>
+  </div>
+  <div id="equipmentCheckSummary" class="sim-equipment-summary">Перед каждой новой гонкой нажмите «Проверить».</div>
+</div>
+
+<div id="equipmentCheckModal" class="equipment-check-modal" aria-hidden="true">
+  <div class="equipment-check-dialog">
+    <button id="equipmentCheckClose" class="equipment-check-close" type="button">×</button>
+    <h3>Проверка экипировки</h3>
+    <img src="equipment_check_fox_owl.png" alt="Лиса и сова проверяют снаряжение на столе">
+    <div id="equipmentCheckResult" class="equipment-check-result"></div>
+    <button id="equipmentCheckOk" type="button">Понятно</button>
+  </div>
+</div>
+
+<div class="sim-scene-card">
+      <div class="sim-scene-title">СИМУЛЯЦИЯ ГОНКИ</div>
+<div id="simConditionBar" class="sim-condition-bar">
+<span id="simFatigueState">💪 без усталости</span>
+<span id="simLuckState">🍀 обычная удача</span>
+<span id="simMotivationState">🔥 мотивация стабильна</span>
+</div>
+<div id="simEventChip" class="sim-event-chip">
+  <span id="simEventChipIcon">😲</span>
+  <b id="simEventChipTitle"></b>
+  <strong id="simEventChipDelta"></strong>
+</div>
+<div id="simFirstPlaceBadge" class="sim-first-place-badge" aria-hidden="true">
+  <div class="sim-first-place-crown">🏆</div>
+  <b>1 МЕСТО!</b>
+  <span id="simFirstPlaceText">Быстрее прогноза</span>
+</div>
+
+<canvas id="simCourseCanvas"></canvas>
+
+      <div id="simEventCard" class="event-card">
+        <b id="simEventTitle"></b>
+        <span id="simEventText"></span>
+        <strong id="simEventDelta"></strong>
       </div>
 
-      <div class="race-metrics" id="raceMetrics"></div>
-
-      <div id="raceResultHost" class="result-host"></div>
-
-      <details class="log-details">
-        <summary>📜 События этой гонки</summary>
-        <div id="eventsLog" class="events-log"><p class="hint">События появятся по ходу гонки.</p></div>
-      </details>
-
-      <details class="log-details">
-        <summary>🏆 ТОП-14 гонки</summary>
-        <div id="top14" class="top14"></div>
-      </details>
-    </section>
-
-    <section id="view-carry" class="card">
-      <h2>🎒 С собой на гонку</h2>
-      <div id="carryList"></div>
-    </section>
-
-    <section id="view-campaign" class="card">
-      <h2>🏁 Кампания из 21 гонки</h2>
-      <div class="campaign-toolbar">
-        <span id="campaignProgress"></span>
-        <button id="btnLatestLevel">⏭ К последнему уровню</button>
-        <button id="btnResetCampaign" class="btn-danger">Сбросить прогресс</button>
+      <div id="simDnfBanner" class="sim-dnf-banner"><div class="sim-dnf-box"><b>DNF</b><span>Три отрицательных события за гонку. Демотивация победила — симуляция завершена.</span></div></div>
+<div id="simPauseBadge" class="sim-pause-badge">
+        😲 Событие! Пауза <b id="simPauseCountdown">3</b> сек.
       </div>
-      <div id="campaignList" class="campaign-list"></div>
-    </section>
 
-    <section id="view-equipment" class="card">
-      <h2>👕 Магазин экипировки</h2>
-      <div id="equipmentTabs" class="eq-tabs"></div>
-      <div id="equipmentShop"></div>
-    </section>
+      <div class="sim-scene-controls">
+        <button id="simStart" class="sim-icon-btn" aria-label="Старт/пауза" title="Старт/пауза">▶</button>
+        <div class="sim-control-center">
+          <div id="simStatus">⚠️ Для запуска сначала рассчитайте «Прогноз гонки» в разделе 2.</div>
+          <div class="sim-progress"><i id="simProgress"></i></div>
+        </div>
+        <div class="sim-speed-wrap">
+          <span>Скорость</span>
+          <span class="sim-speed-label">Ускорить гонку</span>
+<select id="simSpeed">
+            <option value="1">1×</option>
+            <option value="2" selected>2×</option>
+            <option value="4">4×</option>
+          </select>
+        </div>
+      </div>
+    </div>
 
-    <section id="view-repair" class="card">
-      <h2>🛠️ Моя экипировка</h2>
-      <button id="btnRepairAll">🔧 Починить всё</button>
-      <div id="repairList"></div>
-    </section>
-
-    <section id="view-resources" class="card">
-      <h2>🧃 Расходники и аптечка</h2>
-      <div id="resourcesShop"></div>
-    </section>
-
-    <section id="view-lamp" class="card">
-      <h2>🔦 Питание фонаря</h2>
-      <div id="lampPanel"></div>
-    </section>
-
-    <section id="view-rest" class="card">
-      <h2>😴 Отдых и больница</h2>
-      <div id="restPanel"></div>
-      <div id="hospitalPanel"></div>
-    </section>
-
-    <section id="view-training" class="card">
-      <h2>🏃 Тренировка</h2>
-      <div id="trainingPanel"></div>
-    </section>
-
-    <section id="view-coach" class="card">
-      <h2>🏋️ Тренер</h2>
-      <div id="coachList"></div>
-    </section>
-
-    <section id="view-itra" class="card">
-      <h2>📈 ITRA-лига игры</h2>
-      <div id="itraTable"></div>
-    </section>
-
-    <section id="view-achievements" class="card">
-      <h2>🏆 Редкие ачивки</h2>
-      <div id="achList"></div>
-    </section>
-
-    <section id="view-about" class="card">
-      <h2>ℹ️ Об игре</h2>
-      <p>Trail Runner: Armageddon — игровой симулятор трейлраннера. Расчёты носят исключительно информационно-ознакомительный характер и не являются гарантией результата или рекомендацией к действию.</p>
-      <p><a class="support-btn" href="https://www.tbank.ru/cf/49SEnJlLa0Y" target="_blank" rel="noopener">❤️ Поддержать проект</a></p>
-      <p>Обратная связь: <a href="mailto:sim_trail@mail.ru">sim_trail@mail.ru</a><br>
-      Telegram: <a href="https://t.me/trail_armageddon" target="_blank" rel="noopener">@trail_armageddon</a></p>
-      <p class="footer">Trail Runner: Armageddon v1.03 · игровая симуляция · 2026<br>Павел Сидоренко (с) 2006</p>
-    </section>
+    
+<div class="sim-mid-grid">
+      <div class="sim-events-card">
+        <h3>Случайные события <span class="muted">(этой симуляции)</span></h3>
+        <div class="sim-log-header" aria-hidden="true"><span></span><span></span><b>Ко времени гонки</b></div>
+        <div id="simLog" class="sim-log"></div>
+        <div class="muted sim-events-note">События влияют только на текущую симуляцию и не меняют исходный прогноз. Положительные уменьшают время, отрицательные увеличивают. По длительности: 1 час — 3 события; 2 часа — 4–6; 4 часа — 6–8; 6 часов — 8–10.</div>
+      </div>
+</div>
+<div class="sim-bottom-grid">
+      <div class="sim-result-box">
+        <h3>Итоги симуляции</h3>
+        <div><span>Базовый прогноз</span><b id="simResultBase">—</b></div>
+        <div><span>Поправка событий</span><b id="simResultDelta">+0:00</b></div>
+        <div><span>Пройдено</span><b id="simResultProgress">0%</b></div>
+        <div class="sim-result-total"><span>Виртуальное время</span><b id="simResultFinishMirror">—</b></div>
+      </div>
+      <div class="sim-reset-box">
+        <button id="simReset" class="secondary">↻ Сбросить симуляцию</button>
+      </div>
+    </div>
+  </div>
+</section>
 
   </main>
 
-  <nav id="bottomNav" class="bottom-nav">
-    <button class="nav-toggle" id="navToggle">⌄</button>
-    <div class="nav-items" id="navItems">
-      <button data-view="race">▶️<span>Старт гонки</span></button>
-      <button data-view="carry">🎒<span>С собой</span></button>
-      <button data-view="campaign">🏁<span>Кампания</span></button>
-      <button data-view="equipment">👕<span>Экипировка</span></button>
-      <button data-view="resources">🧃<span>Расходники</span></button>
-      <button data-view="achievements">🏆<span>Редкие ачивки</span></button>
-      <button data-view="lamp">🔦<span>Фонарь</span></button>
-      <button data-view="rest">😴<span>Отдых</span></button>
-      <button data-view="itra">📈<span>ITRA</span></button>
-      <button data-view="coach">🏋️<span>Тренер</span></button>
-      <button data-view="repair">🛠️<span>Ремонт экипа</span></button>
-      <button data-view="profile">🎽<span>Текущее</span></button>
-      <button data-view="training">🏃<span>Тренировка</span></button>
-      <button data-view="about">ℹ️<span>Об игре</span></button>
-    </div>
-    <button id="bottomStart" class="bottom-start pulse">▶️ СТАРТ ГОНКИ</button>
-  </nav>
+  <footer>
+    Модель является оценочной. Броды, погода, питание, состояние покрытия, самочувствие и другие факторы могут существенно повлиять на фактический результат. Расчёты носят исключительно информационно-ознакомительный характер, не являются гарантией результата или рекомендацией к действию. Автор не несёт ответственности за решения, принятые на основании расчётов приложения.
+  </footer>
 
-  <div id="helpModal" class="modal">
-    <div class="modal-box">
-      <button class="modal-close" id="btnHelpClose">✕</button>
-      <h2>СИМУЛЯТОР ТРЕЙЛРАННЕРА: АРМАГЕДДОН · СПРАВОЧНИК</h2>
-      <div id="helpContent"></div>
-    </div>
+  <script src="app.js?v=261-itra-file-replace"></script>
+<footer class="app-footer">Сидоренко Павел (c) 2026</footer>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+<div id="mishaStartSendoff" class="misha-start-sendoff" aria-hidden="true">
+  <div class="misha-start-inner">
+    <img src="misha_simple.png" alt="Миша с топором">
+    <div><b>🐻 Миша с топором провожает тебя со старта!</b><span>Удачной гонки! 🪓</span></div>
   </div>
-
-  <div id="settingsModal" class="modal">
-    <div class="modal-box">
-      <button class="modal-close" id="btnSettingsClose">✕</button>
-      <h2>⚙️ Настройки</h2>
-      <div class="settings-group">
-        <label class="settings-row">
-          <span>Размер текста</span>
-          <select id="prefTextSize">
-            <option value="normal">Обычный</option>
-            <option value="large">Крупный</option>
-          </select>
-        </label>
-        <label class="settings-row">
-          <span>Уменьшить анимацию</span>
-          <input type="checkbox" id="prefReduceMotion">
-        </label>
-        <label class="settings-row">
-          <span>Высокий контраст</span>
-          <input type="checkbox" id="prefHighContrast">
-        </label>
-      </div>
-      <p class="hint">Настройки сохраняются на этом устройстве и не влияют на игровой прогресс.</p>
-    </div>
-  </div>
-
 </div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="race3d.js"></script>
-<script src="app.js"></script>
+<style>
+.misha-start-sendoff{position:fixed;inset:0;z-index:99999;display:none;align-items:center;justify-content:center;pointer-events:none;background:rgba(2,9,18,.18)}
+.misha-start-sendoff.show{display:flex}
+.misha-start-inner{width:min(330px,82vw);padding:12px;border-radius:18px;background:rgba(5,16,30,.95);border:1px solid #ffb52b;box-shadow:0 14px 38px #0009;text-align:center;animation:mishaSendoff 3s ease both}
+.misha-start-inner img{width:150px;height:125px;object-fit:cover;border-radius:13px;display:block;margin:0 auto 8px}
+.misha-start-inner b{display:block;font-size:18px}.misha-start-inner span{display:block;margin-top:4px;color:#aebbd0}
+@keyframes mishaSendoff{0%{opacity:0;transform:translateX(35px) scale(.92)}12%,78%{opacity:1;transform:translateX(0) scale(1)}100%{opacity:0;transform:translateX(-45px) scale(.96)}}
+@media(max-width:600px){.misha-start-inner{width:250px}.misha-start-inner img{width:125px;height:105px}.misha-start-inner b{font-size:15px}}
+</style>
+
+<div id="mishaFinishWelcome" class="misha-start-sendoff" aria-hidden="true">
+  <div class="misha-start-inner misha-finish-inner">
+    <img src="misha_simple.png" alt="Миша с топором">
+    <div><b>🏁 Миша с топором встречает тебя на финише!</b><span>Финиш! 🐻🪓</span></div>
+  </div>
+</div>
 </body>
 </html>
