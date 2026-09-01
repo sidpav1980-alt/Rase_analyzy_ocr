@@ -626,3 +626,12 @@ button.action-error:disabled {
 .threshold-photo-status.ok{color:#69e39e}
 .threshold-photo-status.warn{color:#ffc66d}
 .threshold-photo-status.err{color:#ff7676}
+
+/* OCR image preview */
+.threshold-photo-preview-wrap{margin:0 0 12px;border:1px solid #27435e;border-radius:12px;background:#0b1727;overflow:hidden}
+.threshold-photo-preview-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;color:#a9bed1;font-size:13px;font-weight:700}
+.threshold-photo-preview-toggle{min-height:36px;padding:6px 10px;border:1px solid #365b86;border-radius:9px;background:#142541;color:#dcecff;font-weight:800;font-size:13px}
+.threshold-photo-preview-body{padding:0 8px 8px}
+.threshold-photo-preview{display:block;width:100%;max-height:360px;object-fit:contain;border-radius:9px;background:#050a11}
+.threshold-photo-preview-wrap.collapsed .threshold-photo-preview-body{display:none}
+@media (max-width:480px){.threshold-photo-preview{max-height:300px}.threshold-photo-preview-head{align-items:center}.threshold-photo-preview-toggle{font-size:12px}}

@@ -1112,6 +1112,15 @@
               <input id="thresholdPhotoInput1" type="file" accept="image/*" hidden>
               <span id="thresholdPhotoStatus1" class="threshold-photo-status">Фото Garmin/Strava</span>
             </div>
+            <div id="thresholdPhotoPreviewWrap1" class="threshold-photo-preview-wrap" hidden>
+              <div class="threshold-photo-preview-head">
+                <span>Загруженное фото</span>
+                <button type="button" class="threshold-photo-preview-toggle" data-threshold-preview-toggle="1" aria-expanded="true">Свернуть фото</button>
+              </div>
+              <div id="thresholdPhotoPreviewBody1" class="threshold-photo-preview-body">
+                <img id="thresholdPhotoPreview1" class="threshold-photo-preview" alt="Превью загруженного изображения для отрезка 1">
+              </div>
+            </div>
             <div class="threshold-input-grid">
               <label class="field"><span>Дистанция, км <small>или темп ↓</small></span><input id="thresholdDistance1" type="number" inputmode="decimal" min="1.5" max="4" step="0.01" placeholder="2.88"></label>
               <label class="field"><span>Темп, мин/км <small>или дистанция ↑</small></span><input id="thresholdPaceInput1" inputmode="numeric" placeholder="410 = 4:10"></label>
@@ -1127,6 +1136,15 @@
               <input id="thresholdPhotoInput2" type="file" accept="image/*" hidden>
               <span id="thresholdPhotoStatus2" class="threshold-photo-status">Фото Garmin/Strava</span>
             </div>
+            <div id="thresholdPhotoPreviewWrap2" class="threshold-photo-preview-wrap" hidden>
+              <div class="threshold-photo-preview-head">
+                <span>Загруженное фото</span>
+                <button type="button" class="threshold-photo-preview-toggle" data-threshold-preview-toggle="2" aria-expanded="true">Свернуть фото</button>
+              </div>
+              <div id="thresholdPhotoPreviewBody2" class="threshold-photo-preview-body">
+                <img id="thresholdPhotoPreview2" class="threshold-photo-preview" alt="Превью загруженного изображения для отрезка 2">
+              </div>
+            </div>
             <div class="threshold-input-grid">
               <label class="field"><span>Дистанция, км <small>или темп ↓</small></span><input id="thresholdDistance2" type="number" inputmode="decimal" min="1.5" max="4" step="0.01" placeholder="2.78"></label>
               <label class="field"><span>Темп, мин/км <small>или дистанция ↑</small></span><input id="thresholdPaceInput2" inputmode="numeric" placeholder="420 = 4:20"></label>
@@ -1141,6 +1159,15 @@
               <button type="button" class="threshold-photo-btn" data-threshold-photo="3">📷 Распознать фото</button>
               <input id="thresholdPhotoInput3" type="file" accept="image/*" hidden>
               <span id="thresholdPhotoStatus3" class="threshold-photo-status">Фото Garmin/Strava</span>
+            </div>
+            <div id="thresholdPhotoPreviewWrap3" class="threshold-photo-preview-wrap" hidden>
+              <div class="threshold-photo-preview-head">
+                <span>Загруженное фото</span>
+                <button type="button" class="threshold-photo-preview-toggle" data-threshold-preview-toggle="3" aria-expanded="true">Свернуть фото</button>
+              </div>
+              <div id="thresholdPhotoPreviewBody3" class="threshold-photo-preview-body">
+                <img id="thresholdPhotoPreview3" class="threshold-photo-preview" alt="Превью загруженного изображения для отрезка 3">
+              </div>
             </div>
             <div class="threshold-input-grid">
               <label class="field"><span>Дистанция, км <small>или темп ↓</small></span><input id="thresholdDistance3" type="number" inputmode="decimal" min="1.5" max="4" step="0.01" placeholder="2.72"></label>
@@ -1390,7 +1417,7 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="app.js?v=262-ocr-hr-sanitize3"></script>
+  <script src="app.js?v=262-ocr-preview-toggle1"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 

@@ -7373,10 +7373,38 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     return out;
   }
 
+  const thresholdPhotoObjectUrls={};
+  function showThresholdPhotoPreview(i,file){
+    const wrap=byId(`thresholdPhotoPreviewWrap${i}`);
+    const body=byId(`thresholdPhotoPreviewBody${i}`);
+    const img=byId(`thresholdPhotoPreview${i}`);
+    const toggle=document.querySelector(`[data-threshold-preview-toggle="${i}"]`);
+    if(!wrap||!img||!file) return;
+    if(thresholdPhotoObjectUrls[i]){ try{URL.revokeObjectURL(thresholdPhotoObjectUrls[i]);}catch{} }
+    const url=URL.createObjectURL(file);
+    thresholdPhotoObjectUrls[i]=url;
+    img.src=url;
+    wrap.hidden=false;
+    wrap.classList.remove('collapsed');
+    if(body) body.hidden=false;
+    if(toggle){ toggle.textContent='Свернуть фото'; toggle.setAttribute('aria-expanded','true'); }
+  }
+  function toggleThresholdPhotoPreview(i){
+    const wrap=byId(`thresholdPhotoPreviewWrap${i}`);
+    const toggle=document.querySelector(`[data-threshold-preview-toggle="${i}"]`);
+    if(!wrap||wrap.hidden) return;
+    const collapsed=wrap.classList.toggle('collapsed');
+    if(toggle){
+      toggle.textContent=collapsed?'Развернуть фото':'Свернуть фото';
+      toggle.setAttribute('aria-expanded',collapsed?'false':'true');
+    }
+  }
+
   async function recognizeThresholdPhoto(i,file){
     const status=byId(`thresholdPhotoStatus${i}`);
     const btn=document.querySelector(`[data-threshold-photo="${i}"]`);
     if(!file) return;
+    showThresholdPhotoPreview(i,file);
     if(status){ status.textContent='Распознаю фото на iPhone… 0%'; status.className='threshold-photo-status'; }
     if(btn) btn.disabled=true;
     try{
@@ -7460,8 +7488,10 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
   for(let i=1;i<=3;i++){
     const photoBtn=document.querySelector(`[data-threshold-photo="${i}"]`);
     const photoInput=byId(`thresholdPhotoInput${i}`);
+    const previewToggle=document.querySelector(`[data-threshold-preview-toggle="${i}"]`);
     photoBtn?.addEventListener('click',()=>photoInput?.click());
     photoInput?.addEventListener('change',()=>recognizeThresholdPhoto(i,photoInput.files?.[0]));
+    previewToggle?.addEventListener('click',()=>toggleThresholdPhotoPreview(i));
   }
 
   restore();
