@@ -1186,7 +1186,13 @@
         <p class="muted">Укажите дистанцию и целевое общее время, затем выберите единицу: <b>минуты</b> или <b>часы</b>. Например: 10 км + 50 минут или 100 км + 7 часов. Можно добавить до 7 остановок — приложение вычтет их из общего времени и рассчитает темп движения.</p>
 
         <div class="pacecalc-main-grid">
-          <label class="field"><span>Дистанция, км</span><input id="paceCalcDistance" type="number" inputmode="decimal" min="0.1" max="340" step="0.1" placeholder="100"></label>
+          <div class="pacecalc-distance-wrap">
+            <label class="field"><span id="paceCalcDistanceLabel">Дистанция, км</span><input id="paceCalcDistance" type="number" inputmode="decimal" min="0.1" max="340" step="0.1" placeholder="100"></label>
+            <div class="pacecalc-distanceunit" role="group" aria-label="Единица дистанции">
+              <button type="button" class="pacecalc-distance-unit active" data-distance-unit="km">Километры</button>
+              <button type="button" class="pacecalc-distance-unit" data-distance-unit="m">Метры</button>
+            </div>
+          </div>
           <label class="field"><span>Общее время</span><input id="paceCalcTotalTime" inputmode="decimal" placeholder="50"></label>
           <div class="pacecalc-timeunit" role="group" aria-label="Единица общего времени">
             <button type="button" class="pacecalc-unit active" data-pace-unit="min">Минуты</button>
@@ -1445,4 +1451,6 @@
 .threshold-physiology-warning{color:#fbbf24!important}
 .threshold-physiology-bad{color:#fb7185!important}
 .threshold-physiology-good{color:#4ade80!important}
+
+.pacecalc-distance-wrap{display:grid;gap:6px}.pacecalc-distanceunit{display:flex;gap:6px;align-items:center}.pacecalc-distance-unit{border:1px solid #2b4569;background:#0a1730;color:#cbd5e1;border-radius:12px;padding:8px 14px;font-weight:800}.pacecalc-distance-unit.active{background:#38bdf8;color:#062033;border-color:#38bdf8}@media(max-width:700px){.pacecalc-distance-unit{padding:7px 12px;font-size:13px}}
 </style>

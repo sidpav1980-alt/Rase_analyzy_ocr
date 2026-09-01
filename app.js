@@ -6852,17 +6852,21 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       }
     }
 
-    // Average HR is the main LT2 anchor. Peak HR of the 12-minute reps
-    // adds a small correction because HR often rises through the interval.
-    let lthr=Number.isFinite(avgHr)?avgHr:null;
-    if(Number.isFinite(lthr) && Number.isFinite(peakHr) && peakHr>avgHr){
-      // Peak HR now has a visible but bounded effect on estimated LTHR.
-      // A 12-minute rep that finishes much closer to HRmax should raise the
-      // estimated threshold HR, but we cap the correction so one spike cannot dominate.
-      const peakLift=Math.min(6, Math.max(0, (peakHr-avgHr)*0.30));
-      lthr = avgHr + peakLift;
+    // Average HR is the main LT2 anchor, but peak HR of EACH 12-minute rep
+    // must visibly affect the result. Estimate interval-specific LTHR from
+    // average HR plus part of the rise to peak, then combine with late-rep weights.
+    let lthr=null;
+    const intervalLthr=segs.map(s=>{
+      if(!Number.isFinite(s.hr)) return null;
+      if(!Number.isFinite(s.hrMax) || s.hrMax<=s.hr) return s.hr;
+      const rise=s.hrMax-s.hr;
+      return s.hr + Math.min(10, Math.max(0, rise*0.35));
+    });
+    lthr=weightedMean(intervalLthr,weights);
+    if(Number.isFinite(lthr)){
+      if(Number.isFinite(hrmax)) lthr=Math.min(lthr,hrmax*0.97);
+      lthr=Math.round(lthr);
     }
-    if(Number.isFinite(lthr)) lthr=Math.round(lthr);
     if(Number.isFinite(hrmax) && Number.isFinite(avgHr)){
       const hrFraction=avgHr/hrmax;
       // Do not use a universal HR percentage as a hard gate. Trained athletes can
@@ -6903,6 +6907,30 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       }
       segs.push(s);
     }
+    // Check consistency between consecutive 12-minute intervals.
+    // With only ~2 minutes recovery, a later interval at a similar pace should not
+    // suddenly have an average HR tens of beats lower. That is usually a sensor/input error.
+    for(let i=1;i<segs.length;i++){
+      const prev=segs[i-1], cur=segs[i];
+      const paceRatio=cur.pace/prev.pace; // >1 = slower
+      const hrDrop=prev.hr-cur.hr;
+      const hugeRelativeDrop=cur.hr < prev.hr*0.80;
+      const suspiciousDrop=(hrDrop>=15 || hugeRelativeDrop) && paceRatio<=1.15;
+      if(suspiciousDrop){
+        const segNo=i+1;
+        setActiveSegmentTab(segNo);
+        clearThresholdInvalid();
+        const hrEl=byId(`thresholdHr${segNo}`);
+        const tab=document.querySelector(`[data-threshold-tab="${segNo}"]`);
+        if(hrEl){hrEl.classList.add('threshold-invalid');hrEl.scrollIntoView({behavior:'smooth',block:'center'});}
+        if(tab) tab.classList.add('threshold-invalid');
+        byId('thresholdStatus').textContent=`⚠️ Пульс отрезка ${segNo} выглядит нереалистично: ${Math.round(cur.hr)} против ${Math.round(prev.hr)} уд/мин при близком темпе. Проверьте средний пульс/датчик.`;
+        byId('thresholdQuickResult').hidden=true;
+        byId('thresholdResult').hidden=true;
+        return;
+      }
+    }
+
     const vo2Input=readGlobalVo2();
     if(!Number.isFinite(vo2Input)){
       const el=byId('thresholdVo2max');
@@ -7082,8 +7110,15 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     byId(`thresholdDistance${i}`)?.addEventListener('input',()=>{byId(`thresholdDistance${i}`)?.classList.remove('threshold-invalid');syncFromDistance(i);});
     byId(`thresholdPaceInput${i}`)?.addEventListener('input',()=>{byId(`thresholdPaceInput${i}`)?.classList.remove('threshold-invalid');syncFromPace(i);});
     byId(`thresholdPaceInput${i}`)?.addEventListener('blur',()=>{formatPaceInput(byId(`thresholdPaceInput${i}`));syncFromPace(i);});
-    byId(`thresholdHr${i}`)?.addEventListener('input',()=>{byId(`thresholdHr${i}`)?.classList.remove('threshold-invalid');updateLivePaces();});
-    byId(`thresholdHrMax${i}`)?.addEventListener('input',updateLivePaces);
+    const markThresholdDirty=()=>{
+      byId(`thresholdHr${i}`)?.classList.remove('threshold-invalid');
+      updateLivePaces();
+      if(byId('thresholdQuickResult')) byId('thresholdQuickResult').hidden=true;
+      if(byId('thresholdResult')) byId('thresholdResult').hidden=true;
+      if(byId('thresholdStatus')) byId('thresholdStatus').textContent='Данные изменены — нажмите «Рассчитать порог».';
+    };
+    byId(`thresholdHr${i}`)?.addEventListener('input',markThresholdDirty);
+    byId(`thresholdHrMax${i}`)?.addEventListener('input',markThresholdDirty);
   }
   byId('thresholdRecovery')?.addEventListener('blur',()=>formatRaceTimeInput(byId('thresholdRecovery')));
   byId('threshold5k')?.addEventListener('blur',()=>formatRaceTimeInput(byId('threshold5k')));
@@ -7101,7 +7136,9 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
   if(!$('paceCalcBtn')) return;
   const stopsEl=$('paceCalcStops');
   const unitBtns=[...document.querySelectorAll('[data-pace-unit]')];
+  const distanceUnitBtns=[...document.querySelectorAll('[data-distance-unit]')];
   let paceTimeUnit='min';
+  let paceDistanceUnit='km';
   let stopCount=0;
 
   function parseHms(raw){
@@ -7199,9 +7236,15 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
   }
   function calculate(){
     document.querySelectorAll('.pacecalc-invalid').forEach(e=>e.classList.remove('pacecalc-invalid'));
-    const dist=Number(String($('paceCalcDistance').value).replace(',','.'));
+    const distRaw=Number(String($('paceCalcDistance').value).replace(',','.'));
+    const dist=paceDistanceUnit==='m' ? distRaw/1000 : distRaw;
     const total=parseTotalTime($('paceCalcTotalTime').value);
-    if(!(dist>0&&dist<=340)){$('paceCalcDistance').classList.add('pacecalc-invalid');$('paceCalcStatus').textContent='Введите дистанцию от 0,1 до 340 км.';$('paceCalcDistance').scrollIntoView({behavior:'smooth',block:'center'});return;}
+    const distValid=paceDistanceUnit==='m' ? (distRaw>=10 && distRaw<1000) : (distRaw>=0.1 && distRaw<=340);
+    if(!distValid){
+      $('paceCalcDistance').classList.add('pacecalc-invalid');
+      $('paceCalcStatus').textContent=paceDistanceUnit==='m' ? 'Введите дистанцию от 10 до 999 метров.' : 'Введите дистанцию от 0,1 до 340 км.';
+      $('paceCalcDistance').scrollIntoView({behavior:'smooth',block:'center'});return;
+    }
     if(!(total>0)){$('paceCalcTotalTime').classList.add('pacecalc-invalid');$('paceCalcStatus').textContent='Введите целевое общее время.';$('paceCalcTotalTime').scrollIntoView({behavior:'smooth',block:'center'});return;}
     let stopTotal=0, bad=null;
     [...stopsEl.querySelectorAll('.pace-stop-time')].forEach(el=>{const v=parseStop(el.value);if(v===null){bad=bad||el;}else stopTotal+=v;});
@@ -7255,9 +7298,24 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     paceTimeUnit=btn.dataset.paceUnit==='hour'?'hour':'min';
     unitBtns.forEach(b=>b.classList.toggle('active',b===btn));
     $('paceCalcTotalTime').placeholder=paceTimeUnit==='hour'?'7':'50';
-    // Clear an old calculated result when the unit changes, so it cannot look valid.
     $('paceCalcResult').hidden=true;
     $('paceCalcStatus').textContent=`Режим общего времени: ${paceTimeUnit==='hour'?'часы':'минуты'}. Нажмите «Рассчитать темп».`;
+  }));
+  distanceUnitBtns.forEach(btn=>btn.addEventListener('click',()=>{
+    paceDistanceUnit=btn.dataset.distanceUnit==='m'?'m':'km';
+    distanceUnitBtns.forEach(b=>b.classList.toggle('active',b===btn));
+    const input=$('paceCalcDistance');
+    const label=$('paceCalcDistanceLabel');
+    input.value='';
+    if(paceDistanceUnit==='m'){
+      label.textContent='Дистанция, м';
+      input.min='10'; input.max='999'; input.step='1'; input.placeholder='400';
+    }else{
+      label.textContent='Дистанция, км';
+      input.min='0.1'; input.max='340'; input.step='0.1'; input.placeholder='100';
+    }
+    $('paceCalcResult').hidden=true;
+    $('paceCalcStatus').textContent=`Режим дистанции: ${paceDistanceUnit==='m'?'метры':'километры'}. Нажмите «Рассчитать темп».`;
   }));
   $('paceCalcAddStop').addEventListener('click',()=>addStop());
   $('paceCalcBtn').addEventListener('click',calculate);
