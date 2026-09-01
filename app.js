@@ -6914,6 +6914,8 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
   const $=id=>document.getElementById(id);
   if(!$('paceCalcBtn')) return;
   const stopsEl=$('paceCalcStops');
+  const unitBtns=[...document.querySelectorAll('[data-pace-unit]')];
+  let paceTimeUnit='min';
   let stopCount=0;
 
   function parseHms(raw){
@@ -6927,15 +6929,24 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       return null;
     }
     if(!/^\d+$/.test(raw)) return null;
-    // HHMMSS shorthand: 120000 => 12:00:00. <=4 digits => HHMM.
+    // Удобный ввод без двоеточия:
+    // 50 => 50 минут; 130 => 1:30:00; 700 => 7:00:00; 120000 => 12:00:00.
     const d=raw.replace(/^0+(?=\d)/,'');
-    if(d.length<=2) return Number(d)*3600;
+    if(d.length<=2) return Number(d)*60;
     if(d.length<=4){
       const h=Number(d.slice(0,-2)), m=Number(d.slice(-2));
       return m<60 ? h*3600+m*60 : null;
     }
     const h=Number(d.slice(0,-4)), m=Number(d.slice(-4,-2)), s=Number(d.slice(-2));
     return m<60&&s<60 ? h*3600+m*60+s : null;
+  }
+  function parseTotalTime(raw){
+    raw=String(raw||'').trim().replace(',','.');
+    if(!raw) return null;
+    if(raw.includes(':')) return parseHms(raw);
+    const n=Number(raw);
+    if(!Number.isFinite(n)||n<=0) return null;
+    return paceTimeUnit==='hour' ? n*3600 : n*60;
   }
   function parseStop(raw){
     raw=String(raw||'').trim();
@@ -6985,7 +6996,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
   function calculate(){
     document.querySelectorAll('.pacecalc-invalid').forEach(e=>e.classList.remove('pacecalc-invalid'));
     const dist=Number(String($('paceCalcDistance').value).replace(',','.'));
-    const total=parseHms($('paceCalcTotalTime').value);
+    const total=parseTotalTime($('paceCalcTotalTime').value);
     if(!(dist>0&&dist<=340)){$('paceCalcDistance').classList.add('pacecalc-invalid');$('paceCalcStatus').textContent='Введите дистанцию от 0,1 до 340 км.';$('paceCalcDistance').scrollIntoView({behavior:'smooth',block:'center'});return;}
     if(!(total>0)){$('paceCalcTotalTime').classList.add('pacecalc-invalid');$('paceCalcStatus').textContent='Введите целевое общее время.';$('paceCalcTotalTime').scrollIntoView({behavior:'smooth',block:'center'});return;}
     let stopTotal=0, bad=null;
@@ -7006,6 +7017,11 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
   function reset(){
     $('paceCalcDistance').value='';$('paceCalcTotalTime').value='';stopsEl.innerHTML='';stopCount=0;$('paceCalcResult').hidden=true;$('paceCalcStatus').textContent='Введите дистанцию и общее время.';$('paceCalcAddStop').disabled=false;
   }
+  unitBtns.forEach(btn=>btn.addEventListener('click',()=>{
+    paceTimeUnit=btn.dataset.paceUnit==='hour'?'hour':'min';
+    unitBtns.forEach(b=>b.classList.toggle('active',b===btn));
+    $('paceCalcTotalTime').placeholder=paceTimeUnit==='hour'?'7':'50';
+  }));
   $('paceCalcAddStop').addEventListener('click',()=>addStop());
   $('paceCalcBtn').addEventListener('click',calculate);
   $('paceCalcReset').addEventListener('click',reset);

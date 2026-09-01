@@ -1170,11 +1170,15 @@
     <section id="pacecalc" class="tabpanel">
       <div class="card pacecalc-card">
         <h2>Расчёт темпа до 340 км</h2>
-        <p class="muted">Укажите дистанцию и целевое общее время. Можно добавить до 7 остановок — приложение вычтет их из общего времени и рассчитает темп движения.</p>
+        <p class="muted">Укажите дистанцию и целевое общее время, затем выберите единицу: <b>минуты</b> или <b>часы</b>. Например: 10 км + 50 минут или 100 км + 7 часов. Можно добавить до 7 остановок — приложение вычтет их из общего времени и рассчитает темп движения.</p>
 
         <div class="pacecalc-main-grid">
           <label class="field"><span>Дистанция, км</span><input id="paceCalcDistance" type="number" inputmode="decimal" min="0.1" max="340" step="0.1" placeholder="100"></label>
-          <label class="field"><span>Общее время</span><input id="paceCalcTotalTime" inputmode="numeric" placeholder="120000 = 12:00:00"></label>
+          <label class="field"><span>Общее время</span><input id="paceCalcTotalTime" inputmode="decimal" placeholder="50"></label>
+          <div class="pacecalc-timeunit" role="group" aria-label="Единица общего времени">
+            <button type="button" class="pacecalc-unit active" data-pace-unit="min">Минуты</button>
+            <button type="button" class="pacecalc-unit" data-pace-unit="hour">Часы</button>
+          </div>
         </div>
 
         <div class="pacecalc-stops-head">
@@ -1182,7 +1186,7 @@
           <button id="paceCalcAddStop" type="button" class="secondary">+ Добавить остановку</button>
         </div>
         <div id="paceCalcStops" class="pacecalc-stops"></div>
-        <div class="muted">Максимум 7 остановок. Для каждой укажите длительность; название необязательно.</div>
+        <div class="muted">Максимум 7 остановок. Для каждой укажите длительность в минутах; название необязательно.</div>
 
         <div class="threshold-actions">
           <button id="paceCalcBtn" type="button" class="primary">Рассчитать темп</button>
@@ -1195,7 +1199,7 @@
           <div class="pacecalc-result-grid">
             <div><span>Средний темп с остановками</span><b id="paceCalcElapsedPace">—</b></div>
             <div><span>Время движения</span><b id="paceCalcMovingTime">—</b></div>
-            <div><span>Остановки всего</span><b id="paceCalcStopsTotal">—</b></div>
+            <div><span>Остановки всего, мин</span><b id="paceCalcStopsTotal">—</b></div>
             <div><span>Средняя скорость движения</span><b id="paceCalcSpeed">—</b></div>
           </div>
         </div>
@@ -1415,4 +1419,9 @@
   .pacecalc-stops-head h3{font-size:20px!important;margin:0!important}
   #paceCalcAddStop{padding:8px 11px!important;font-size:14px!important;min-height:40px!important}
 }
+
+.pacecalc-timeunit{display:flex;gap:6px;align-items:end;grid-column:1/-1;margin-top:-4px}
+.pacecalc-unit{border:1px solid #2b4569;background:#0a1730;color:#cbd5e1;border-radius:12px;padding:8px 14px;font-weight:800}
+.pacecalc-unit.active{background:#38bdf8;color:#062033;border-color:#38bdf8}
+@media(max-width:700px){.pacecalc-timeunit{margin-top:-8px}.pacecalc-unit{padding:7px 12px;font-size:13px}}
 </style>
