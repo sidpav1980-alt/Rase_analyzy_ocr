@@ -6978,6 +6978,16 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;
     return h>0?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${m}:${String(s).padStart(2,'0')}`;
   }
+  function movementTimeText(sec){
+    sec=Math.max(0,Math.round(sec));
+    const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }
+  function stopTimeText(sec){
+    sec=Math.max(0,Math.round(sec));
+    const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;
+    return h>0?`${h} ч ${String(m).padStart(2,'0')} мин`:`${m}:${String(s).padStart(2,'0')}`;
+  }
   function paceText(secPerKm){
     if(!Number.isFinite(secPerKm)||secPerKm<=0)return '—';
     let m=Math.floor(secPerKm/60),s=Math.round(secPerKm%60);if(s===60){m++;s=0;}
@@ -7013,8 +7023,8 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     const movingPace=moving/dist, elapsedPace=total/dist;
     $('paceCalcMovingPace').textContent=paceText(movingPace);
     $('paceCalcElapsedPace').textContent=paceText(elapsedPace);
-    $('paceCalcMovingTime').textContent=timeText(moving);
-    $('paceCalcStopsTotal').textContent=timeText(stopTotal);
+    $('paceCalcMovingTime').textContent=movementTimeText(moving);
+    $('paceCalcStopsTotal').textContent=stopTimeText(stopTotal);
     $('paceCalcSpeed').textContent=`${(3600/movingPace).toFixed(2)} км/ч`;
     $('paceCalcResult').hidden=false;
     $('paceCalcStatus').textContent='✓ Темп рассчитан.';
