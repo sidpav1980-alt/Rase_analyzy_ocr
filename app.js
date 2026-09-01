@@ -6940,13 +6940,19 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     const h=Number(d.slice(0,-4)), m=Number(d.slice(-4,-2)), s=Number(d.slice(-2));
     return m<60&&s<60 ? h*3600+m*60+s : null;
   }
+  function getPaceTimeUnit(){
+    const active=document.querySelector('[data-pace-unit].active');
+    return active?.dataset.paceUnit==='hour' ? 'hour' : 'min';
+  }
   function parseTotalTime(raw){
     raw=String(raw||'').trim().replace(',','.');
     if(!raw) return null;
     if(raw.includes(':')) return parseHms(raw);
     const n=Number(raw);
     if(!Number.isFinite(n)||n<=0) return null;
-    return paceTimeUnit==='hour' ? n*3600 : n*60;
+    // Read the currently highlighted switch directly from the UI.
+    // This avoids stale state/cache causing “3 minutes” to be treated as 3 hours.
+    return getPaceTimeUnit()==='hour' ? n*3600 : n*60;
   }
   function parseStop(raw){
     raw=String(raw||'').trim();
@@ -7021,6 +7027,9 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     paceTimeUnit=btn.dataset.paceUnit==='hour'?'hour':'min';
     unitBtns.forEach(b=>b.classList.toggle('active',b===btn));
     $('paceCalcTotalTime').placeholder=paceTimeUnit==='hour'?'7':'50';
+    // Clear an old calculated result when the unit changes, so it cannot look valid.
+    $('paceCalcResult').hidden=true;
+    $('paceCalcStatus').textContent=`Режим общего времени: ${paceTimeUnit==='hour'?'часы':'минуты'}. Нажмите «Рассчитать темп».`;
   }));
   $('paceCalcAddStop').addEventListener('click',()=>addStop());
   $('paceCalcBtn').addEventListener('click',calculate);
