@@ -1142,7 +1142,7 @@
           <label class="field"><span>5 км · время</span><input id="threshold5k" inputmode="numeric" placeholder="1959 = 19:59"></label>
           <label class="field"><span>10 км · время</span><input id="threshold10k" inputmode="numeric" placeholder="4150 = 41:50"></label>
         </div>
-        <p class="muted">Если есть свежий результат 10 км, он имеет приоритет для калибровки. Это помогает не занижать порог из-за усталости на поздних отрезках.</p>
+        <p class="muted"><strong>Укажите свежий результат на 5 или 10 км — это повысит точность и достоверность прогноза.</strong> Если есть свежий результат 10 км, он имеет приоритет для калибровки. Это помогает не занижать порог из-за усталости на поздних отрезках.</p>
 
         <div class="threshold-actions">
           <button id="thresholdCalcBtn" type="button" class="primary">Рассчитать порог</button>
@@ -1168,12 +1168,14 @@
           <div><span>Качество теста</span><b id="thresholdQuality">—</b></div>
           <div><span>Физиологическая проверка</span><b id="thresholdPhysiologyStatus">—</b><small id="thresholdPhysiologyDetail">—</small></div>
         </div>
-        <div class="metrics threshold-predictions">
-          <div><span>Прогноз 5 км</span><b id="threshold5kPrediction">—</b><small id="threshold5kPace">—</small><small id="threshold5kHr">Средний пульс: —</small></div>
-          <div><span>Прогноз 10 км</span><b id="threshold10kPrediction">—</b><small id="threshold10kPace">—</small><small id="threshold10kHr">Средний пульс: —</small></div>
-          <div><span>Прогноз полумарафон</span><b id="thresholdHalfPrediction">—</b><small id="thresholdHalfPace">—</small><small id="thresholdHalfHr">Средний пульс: —</small></div>
-          <div><span>Прогноз марафон</span><b id="thresholdMarathonPrediction">—</b><small id="thresholdMarathonPace">—</small><small id="thresholdMarathonHr">Средний пульс: —</small></div>
+        <div class="metrics threshold-predictions" id="thresholdPredictions">
+          <div class="threshold-prediction-card" data-plan-race="5k"><span>Прогноз 5 км</span><b id="threshold5kPrediction">—</b><small id="threshold5kPace">—</small><small id="threshold5kHr">Средний пульс: —</small></div>
+          <div class="threshold-prediction-card" data-plan-race="10k"><span>Прогноз 10 км</span><b id="threshold10kPrediction">—</b><small id="threshold10kPace">—</small><small id="threshold10kHr">Средний пульс: —</small></div>
+          <div class="threshold-prediction-card" data-plan-race="half"><span>Прогноз полумарафон</span><b id="thresholdHalfPrediction">—</b><small id="thresholdHalfPace">—</small><small id="thresholdHalfHr">Средний пульс: —</small></div>
+          <div class="threshold-prediction-card" data-plan-race="marathon"><span>Прогноз марафон</span><b id="thresholdMarathonPrediction">—</b><small id="thresholdMarathonPace">—</small><small id="thresholdMarathonHr">Средний пульс: —</small></div>
         </div>
+        <div class="threshold-plan-hint">Нажмите на прогноз 5 км, 10 км, полумарафона или марафона — откроется план подготовки на 4 недели.</div>
+        <div id="threshold4WeekPlan" class="threshold-4week-plan" hidden></div>
         <div id="thresholdExplanation" class="threshold-explanation"></div>
         <p class="muted"><b>Использование:</b> рассчитанный пороговый пульс автоматически используется как LTHR в других расчётах Race Analyzer. Пороговый темп сохраняется как текущий расчётный порог и восстанавливается после перезапуска.</p>
         <p class="muted threshold-disclaimer">Оценка предназначена для спортивного планирования и не является лабораторным измерением лактатного порога.</p>
@@ -1193,7 +1195,7 @@
               <button type="button" class="pacecalc-distance-unit" data-distance-unit="m">Метры</button>
             </div>
           </div>
-          <label class="field"><span>Общее время</span><input id="paceCalcTotalTime" inputmode="decimal" placeholder="50"></label>
+          <label class="field"><span id="paceCalcTotalTimeLabel">Общее время, мин</span><input id="paceCalcTotalTime" inputmode="decimal" placeholder="50"></label>
           <div class="pacecalc-timeunit" role="group" aria-label="Единица общего времени">
             <button type="button" class="pacecalc-unit active" data-pace-unit="min">Минуты</button>
             <button type="button" class="pacecalc-unit" data-pace-unit="hour">Часы</button>

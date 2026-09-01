@@ -7066,6 +7066,63 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     $('paceCalcStatus').textContent='Данные изменены — нажмите «Рассчитать темп».';
     document.querySelectorAll('.pacecalc-invalid').forEach(e=>e.classList.remove('pacecalc-invalid'));
   }
+
+  function parseShownPace(id){
+    const raw=String(byId(id)?.textContent||'').replace('/км','').trim();
+    const m=raw.match(/^(\d+):(\d{2})$/);
+    if(!m) return null;
+    return Number(m[1])*60+Number(m[2]);
+  }
+  function planPace(sec){ return paceText(Math.max(150,sec)); }
+  function racePlan4Weeks(race){
+    const cfg={
+      '5k':{name:'5 км',paceId:'threshold5kPace'},
+      '10k':{name:'10 км',paceId:'threshold10kPace'},
+      'half':{name:'полумарафон',paceId:'thresholdHalfPace'},
+      'marathon':{name:'марафон',paceId:'thresholdMarathonPace'}
+    }[race];
+    if(!cfg) return;
+    const rp=parseShownPace(cfg.paceId);
+    const box=byId('threshold4WeekPlan');
+    if(!box || !rp){ return; }
+    const easyLo=rp+(race==='marathon'?55:75), easyHi=rp+(race==='marathon'?90:115);
+    const threshold=Number(state.thresholdPaceSec)||rp+(race==='5k'?22:race==='10k'?12:race==='half'?-5:-18);
+    let weeks=[];
+    if(race==='5k') weeks=[
+      ['Неделя 1',`Интервалы: 6 × 800 м по ${planPace(rp-4)}, отдых 2 мин.`,`Порог: 3 × 10 мин по ${planPace(threshold)}.`,`Длинная: 75–90 мин легко ${planPace(easyLo)}–${planPace(easyHi)}.`],
+      ['Неделя 2',`Интервалы: 5 × 1 км по ${planPace(rp)}, отдых 2–2:30.`,`Порог: 2 × 15 мин по ${planPace(threshold)}.`,`Лёгкие дни: ${planPace(easyLo)}–${planPace(easyHi)}.`],
+      ['Неделя 3',`Специфика: 3 × 1600 м по ${planPace(rp+2)}, отдых 3 мин.`,`Коротко: 6 × 400 м по ${planPace(rp-12)}, полный контроль.`,`Длинная: 65–80 мин легко.`],
+      ['Неделя 4',`Снижение объёма на 35–45%.`,`За 4–5 дней: 3 × 1 км по ${planPace(rp)}, отдых 3 мин.`,`Старт: первые 2 км около ${planPace(rp+2)}, затем выходить на ${planPace(rp)}.`]
+    ];
+    else if(race==='10k') weeks=[
+      ['Неделя 1',`Порог: 3 × 12 мин по ${planPace(threshold)}.`,`Интервалы: 5 × 1 км по ${planPace(rp-8)}, отдых 2 мин.`,`Длинная: 90–105 мин легко ${planPace(easyLo)}–${planPace(easyHi)}.`],
+      ['Неделя 2',`Специфика: 3 × 2 км по ${planPace(rp)}, отдых 3 мин.`,`Темповая: 25 мин по ${planPace(threshold)}.`,`Лёгкие дни без выхода к порогу.`],
+      ['Неделя 3',`Специфика: 2 × 3 км по ${planPace(rp)}, отдых 4 мин.`,`6 × 400 м по ${planPace(rp-15)} легко и технично.`,`Длинная: 75–90 мин.`],
+      ['Неделя 4',`Объём −35–45%.`,`За 4–5 дней: 3 × 1 км по ${planPace(rp)}, отдых 3 мин.`,`Старт: первые 3 км ${planPace(rp+2)}–${planPace(rp+4)}, потом целевой темп.`]
+    ];
+    else if(race==='half') weeks=[
+      ['Неделя 1',`Порог: 3 × 15 мин по ${planPace(threshold)}.`,`Специфика: 2 × 4 км по ${planPace(rp)}, отдых 1 км легко.`,`Длинная: 18–22 км, последние 4–5 км по ${planPace(rp+10)}.`],
+      ['Неделя 2',`Специфика: 3 × 4 км по ${planPace(rp)}, отдых 1 км легко.`,`Лёгкий объём: ${planPace(easyLo)}–${planPace(easyHi)}.`,`Длинная: 20–24 км спокойно.`],
+      ['Неделя 3',`Темповая: 8–10 км непрерывно по ${planPace(rp+3)}–${planPace(rp+6)}.`,`Коротко: 5 × 1 км по ${planPace(rp-12)}, отдых 2 мин.`,`Длинная: 16–19 км.`],
+      ['Неделя 4',`Объём −40–50%.`,`За 5 дней: 3 × 2 км по ${planPace(rp)}, отдых 3 мин.`,`Старт: первые 5 км на 3–5 сек/км медленнее цели, затем ${planPace(rp)}.`]
+    ];
+    else weeks=[
+      ['Неделя 1',`Марафонский темп: 3 × 4 км по ${planPace(rp)}, между блоками 1 км легко.`,`Лёгкий бег: ${planPace(easyLo)}–${planPace(easyHi)}.`,`Длинная: 26–30 км; последние 8 км по ${planPace(rp+5)}–${planPace(rp+10)}.`],
+      ['Неделя 2',`Марафонский темп: 2 × 5 км по ${planPace(rp)}, между блоками 1 км легко.`,`Порог: 2 × 12 мин по ${planPace(threshold)} без максимума.`,`Длинная: 20–24 км спокойно.`],
+      ['Неделя 3',`Специфика: 10–12 км суммарно по ${planPace(rp)} внутри лёгкой тренировки.`,`Остальное легко; не накапливать усталость.`,`Длинная: 16–20 км, без тяжёлого финиша.`],
+      ['Неделя 4',`Объём −45–55%.`,`За 5–6 дней: 3 × 2 км по ${planPace(rp)}, отдых 2–3 мин.`,`Старт: первые 5 км по ${planPace(rp+3)}–${planPace(rp+5)}, затем целевой ${planPace(rp)}.`]
+    ];
+    box.innerHTML=`<h3>План на 4 недели · ${cfg.name}</h3><p class="threshold-plan-summary">Целевой прогнозный темп: <b>${planPace(rp)}</b>. План строится от текущего порога и прогноза; между ключевыми тренировками оставляйте лёгкий день или отдых.</p>`+
+      weeks.map(w=>`<div class="threshold-plan-week"><b>${w[0]}</b>${w.slice(1).map(x=>`<p>${x}</p>`).join('')}</div>`).join('')+
+      `<button type="button" class="threshold-plan-close" id="thresholdPlanClose">Свернуть план</button>`;
+    box.hidden=false;
+    byId('thresholdPlanClose')?.addEventListener('click',()=>{box.hidden=true;});
+    box.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+  document.querySelectorAll('[data-plan-race]').forEach(card=>{
+    card.addEventListener('click',()=>racePlan4Weeks(card.dataset.planRace));
+  });
+
   function reset(){
     for(let i=1;i<=3;i++){
       ['Distance','PaceInput','Hr','HrMax'].forEach(k=>{const el=byId(`threshold${k}${i}`);if(el)el.value='';});
@@ -7338,7 +7395,11 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     paceTimeUnit=unit==='sec'?'sec':(unit==='hour'?'hour':'min');
     unitBtns.forEach(b=>b.classList.toggle('active',b.dataset.paceUnit===paceTimeUnit));
     const input=$('paceCalcTotalTime');
+    const totalTimeLabel=$('paceCalcTotalTimeLabel');
     if(input){ input.value=''; input.placeholder=paceTimeUnit==='sec'?'60':(paceTimeUnit==='hour'?'7':'50'); }
+    if(totalTimeLabel){
+      totalTimeLabel.textContent=paceTimeUnit==='sec'?'Общее время, сек':(paceTimeUnit==='hour'?'Общее время, ч':'Общее время, мин');
+    }
     $('paceCalcResult').hidden=true;
     const label=paceTimeUnit==='sec'?'секунды':(paceTimeUnit==='hour'?'часы':'минуты');
     $('paceCalcStatus').textContent=`Режим общего времени: ${label}. Нажмите «Рассчитать темп».`;
