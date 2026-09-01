@@ -7508,7 +7508,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
           const pEl=byId(`thresholdPaceInput${row.index}`);
           if(dEl) dEl.value=Number(row.distance_km).toFixed(2);
           if(pEl) pEl.value=row.pace;
-          updateThresholdLivePace?.(row.index);
+          updateLivePaces();
         }
         const own=data.interval_rows.find(r=>r.index===i);
         if(own){
