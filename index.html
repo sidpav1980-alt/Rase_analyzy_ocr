@@ -665,7 +665,8 @@
       <button class="tab" data-tab="roster" hidden>3. Стартовый список и баллы ITRA</button>
       <button class="tab" data-tab="result" hidden>4. Прогноз места в TOP-100</button>
       <button class="tab" data-tab="threshold">3. Пороговый тест</button>
-      <button class="tab" data-tab="simulation">4. Симуляция гонки</button>
+      <button class="tab" data-tab="pacecalc">4. Расчёт темпа</button>
+      <button class="tab" data-tab="simulation">5. Симуляция гонки</button>
     </nav>
 
     <section id="route" class="tabpanel active">
@@ -1166,6 +1167,41 @@
       </div>
     </section>
 
+    <section id="pacecalc" class="tabpanel">
+      <div class="card pacecalc-card">
+        <h2>Расчёт темпа до 340 км</h2>
+        <p class="muted">Укажите дистанцию и целевое общее время. Можно добавить до 7 остановок — приложение вычтет их из общего времени и рассчитает темп движения.</p>
+
+        <div class="pacecalc-main-grid">
+          <label class="field"><span>Дистанция, км</span><input id="paceCalcDistance" type="number" inputmode="decimal" min="0.1" max="340" step="0.1" placeholder="100"></label>
+          <label class="field"><span>Общее время</span><input id="paceCalcTotalTime" inputmode="numeric" placeholder="120000 = 12:00:00"></label>
+        </div>
+
+        <div class="pacecalc-stops-head">
+          <h3>Остановки</h3>
+          <button id="paceCalcAddStop" type="button" class="secondary">+ Добавить остановку</button>
+        </div>
+        <div id="paceCalcStops" class="pacecalc-stops"></div>
+        <div class="muted">Максимум 7 остановок. Для каждой укажите длительность; название необязательно.</div>
+
+        <div class="threshold-actions">
+          <button id="paceCalcBtn" type="button" class="primary">Рассчитать темп</button>
+          <button id="paceCalcReset" type="button" class="secondary">Сбросить</button>
+        </div>
+        <div id="paceCalcStatus" class="threshold-status threshold-status-hint">Введите дистанцию и общее время.</div>
+
+        <div id="paceCalcResult" class="pacecalc-result" hidden>
+          <div class="pacecalc-result-main"><span>Темп движения без остановок</span><b id="paceCalcMovingPace">—</b></div>
+          <div class="pacecalc-result-grid">
+            <div><span>Средний темп с остановками</span><b id="paceCalcElapsedPace">—</b></div>
+            <div><span>Время движения</span><b id="paceCalcMovingTime">—</b></div>
+            <div><span>Остановки всего</span><b id="paceCalcStopsTotal">—</b></div>
+            <div><span>Средняя скорость движения</span><b id="paceCalcSpeed">—</b></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
 <section id="simulation" class="tabpanel">
   <div class="sim-reference-shell">
     <div class="virtual-track-box">
@@ -1348,6 +1384,8 @@
 .threshold-help-header{display:flex;justify-content:flex-end;margin:4px 0 8px}
 .threshold-help-toggle{border:1px solid #2d5d87;background:#0b1830;color:#9bdcff;border-radius:12px;padding:8px 12px;font-weight:800;font-size:14px}
 #thresholdHelpBlock[hidden]{display:none!important}
+
+.pacecalc-main-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.pacecalc-stops-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:18px}.pacecalc-stops{display:grid;gap:10px;margin:10px 0}.pacecalc-stop{display:grid;grid-template-columns:minmax(0,1fr) 180px 44px;gap:10px;align-items:end;padding:10px;border:1px solid #263650;border-radius:14px;background:#081425}.pacecalc-stop .field{margin:0}.pacecalc-stop-remove{height:46px;border:1px solid #7f1d1d;background:#2a1116;color:#fca5a5;border-radius:10px;font-size:20px}.pacecalc-result{margin-top:16px}.pacecalc-result-main{border:1px solid #38bdf8;border-radius:18px;padding:18px;text-align:center;background:#10263b}.pacecalc-result-main span,.pacecalc-result-grid span{display:block;color:#94a3b8}.pacecalc-result-main b{display:block;font-size:40px;margin-top:4px}.pacecalc-result-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}.pacecalc-result-grid>div{padding:14px;border:1px solid #263650;border-radius:14px;background:#08111f}.pacecalc-result-grid b{display:block;font-size:22px;margin-top:5px}.pacecalc-invalid{border-color:#ef4444!important;box-shadow:0 0 0 1px rgba(239,68,68,.45)!important}@media(max-width:620px){.pacecalc-main-grid{grid-template-columns:1fr 1fr}.pacecalc-stop{grid-template-columns:minmax(0,1fr) 125px 42px}.pacecalc-result-grid{grid-template-columns:1fr 1fr}.pacecalc-result-main b{font-size:34px}}
 </style>
 
 <div id="mishaFinishWelcome" class="misha-start-sendoff" aria-hidden="true">

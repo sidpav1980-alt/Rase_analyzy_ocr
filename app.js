@@ -6908,3 +6908,105 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
   byId('thresholdResetBtn').addEventListener('click',reset);
   restore();
 })();;
+
+// v0.0262: pace calculator up to 340 km with up to 7 stops.
+(function initPaceCalculator(){
+  const $=id=>document.getElementById(id);
+  if(!$('paceCalcBtn')) return;
+  const stopsEl=$('paceCalcStops');
+  let stopCount=0;
+
+  function parseHms(raw){
+    raw=String(raw||'').trim();
+    if(!raw) return null;
+    if(raw.includes(':')){
+      const p=raw.split(':').map(Number);
+      if(p.some(v=>!Number.isFinite(v)||v<0)) return null;
+      if(p.length===2 && p[1]<60) return p[0]*60+p[1];
+      if(p.length===3 && p[1]<60 && p[2]<60) return p[0]*3600+p[1]*60+p[2];
+      return null;
+    }
+    if(!/^\d+$/.test(raw)) return null;
+    // HHMMSS shorthand: 120000 => 12:00:00. <=4 digits => HHMM.
+    const d=raw.replace(/^0+(?=\d)/,'');
+    if(d.length<=2) return Number(d)*3600;
+    if(d.length<=4){
+      const h=Number(d.slice(0,-2)), m=Number(d.slice(-2));
+      return m<60 ? h*3600+m*60 : null;
+    }
+    const h=Number(d.slice(0,-4)), m=Number(d.slice(-4,-2)), s=Number(d.slice(-2));
+    return m<60&&s<60 ? h*3600+m*60+s : null;
+  }
+  function parseStop(raw){
+    raw=String(raw||'').trim();
+    if(!raw) return 0;
+    if(raw.includes(':')){
+      const p=raw.split(':').map(Number);
+      if(p.length===2&&p[1]<60) return p[0]*60+p[1]; // mm:ss
+      if(p.length===3&&p[1]<60&&p[2]<60) return p[0]*3600+p[1]*60+p[2];
+      return null;
+    }
+    if(!/^\d+$/.test(raw)) return null;
+    const d=raw.replace(/^0+(?=\d)/,'');
+    if(d.length<=2) return Number(d)*60; // 15 => 15 min
+    if(d.length<=4){
+      const m=Number(d.slice(0,-2)), s=Number(d.slice(-2));
+      return s<60?m*60+s:null; // 1530 => 15:30
+    }
+    const h=Number(d.slice(0,-4)),m=Number(d.slice(-4,-2)),s=Number(d.slice(-2));
+    return m<60&&s<60?h*3600+m*60+s:null;
+  }
+  function timeText(sec){
+    sec=Math.max(0,Math.round(sec));
+    const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;
+    return h>0?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${m}:${String(s).padStart(2,'0')}`;
+  }
+  function paceText(secPerKm){
+    if(!Number.isFinite(secPerKm)||secPerKm<=0)return '—';
+    let m=Math.floor(secPerKm/60),s=Math.round(secPerKm%60);if(s===60){m++;s=0;}
+    return `${m}:${String(s).padStart(2,'0')}/км`;
+  }
+  function addStop(data={}){
+    if(stopCount>=7) return;
+    stopCount++;
+    const row=document.createElement('div');
+    row.className='pacecalc-stop'; row.dataset.stop='1';
+    row.innerHTML=`<label class="field"><span>Остановка ${stopCount} · название</span><input class="pace-stop-name" placeholder="ПП ${stopCount}" value="${String(data.name||'').replace(/"/g,'&quot;')}"></label><label class="field"><span>Длительность</span><input class="pace-stop-time" inputmode="numeric" placeholder="15 = 15 мин" value="${data.time||''}"></label><button type="button" class="pacecalc-stop-remove" aria-label="Удалить">×</button>`;
+    row.querySelector('.pacecalc-stop-remove').addEventListener('click',()=>{row.remove(); renumberStops();});
+    stopsEl.appendChild(row);
+    renumberStops();
+  }
+  function renumberStops(){
+    const rows=[...stopsEl.querySelectorAll('.pacecalc-stop')];
+    stopCount=rows.length;
+    rows.forEach((r,i)=>{r.querySelector('.field span').textContent=`Остановка ${i+1} · название`;});
+    $('paceCalcAddStop').disabled=stopCount>=7;
+  }
+  function calculate(){
+    document.querySelectorAll('.pacecalc-invalid').forEach(e=>e.classList.remove('pacecalc-invalid'));
+    const dist=Number(String($('paceCalcDistance').value).replace(',','.'));
+    const total=parseHms($('paceCalcTotalTime').value);
+    if(!(dist>0&&dist<=340)){$('paceCalcDistance').classList.add('pacecalc-invalid');$('paceCalcStatus').textContent='Введите дистанцию от 0,1 до 340 км.';$('paceCalcDistance').scrollIntoView({behavior:'smooth',block:'center'});return;}
+    if(!(total>0)){$('paceCalcTotalTime').classList.add('pacecalc-invalid');$('paceCalcStatus').textContent='Введите целевое общее время.';$('paceCalcTotalTime').scrollIntoView({behavior:'smooth',block:'center'});return;}
+    let stopTotal=0, bad=null;
+    [...stopsEl.querySelectorAll('.pace-stop-time')].forEach(el=>{const v=parseStop(el.value);if(v===null){bad=bad||el;}else stopTotal+=v;});
+    if(bad){bad.classList.add('pacecalc-invalid');$('paceCalcStatus').textContent='Проверьте длительность остановки.';bad.scrollIntoView({behavior:'smooth',block:'center'});return;}
+    const moving=total-stopTotal;
+    if(moving<=0){$('paceCalcStatus').textContent='Сумма остановок не может быть больше общего времени.';return;}
+    const movingPace=moving/dist, elapsedPace=total/dist;
+    $('paceCalcMovingPace').textContent=paceText(movingPace);
+    $('paceCalcElapsedPace').textContent=paceText(elapsedPace);
+    $('paceCalcMovingTime').textContent=timeText(moving);
+    $('paceCalcStopsTotal').textContent=timeText(stopTotal);
+    $('paceCalcSpeed').textContent=`${(3600/movingPace).toFixed(2)} км/ч`;
+    $('paceCalcResult').hidden=false;
+    $('paceCalcStatus').textContent='✓ Темп рассчитан.';
+    $('paceCalcResult').scrollIntoView({behavior:'smooth',block:'center'});
+  }
+  function reset(){
+    $('paceCalcDistance').value='';$('paceCalcTotalTime').value='';stopsEl.innerHTML='';stopCount=0;$('paceCalcResult').hidden=true;$('paceCalcStatus').textContent='Введите дистанцию и общее время.';$('paceCalcAddStop').disabled=false;
+  }
+  $('paceCalcAddStop').addEventListener('click',()=>addStop());
+  $('paceCalcBtn').addEventListener('click',calculate);
+  $('paceCalcReset').addEventListener('click',reset);
+})();
