@@ -23,14 +23,14 @@
     return `${min}:${s.toFixed(1).padStart(4,'0')}`;
   }
   function normalizeRunWord(line){
-    return line.replace(/\b(?:ber|6er|6ег|бeг|бег|beg)\b/ig,'Бег');
+    return line.replace(/(?:ber|6er|6ег|бeг|бег|beg|6eг|беr|bег)/ig,'Бег');
   }
   function parseRows(text){
     const out=[];
     const lines=String(text||'').split(/\n+/).map(x=>normalizeRunWord(x.trim())).filter(Boolean);
     for(const raw of lines){
       // Strictly require a numbered work row: "N Бег ...". Never infer an interval from "Всего".
-      const head=raw.match(/^\s*(\d{1,2})\s+Бег\b\s*(.*)$/i);
+      const head=raw.match(/^\s*(\d{1,2})\s*[.)-]?\s*Бег(?=\s|$)\s*(.*)$/i);
       if(!head) continue;
       const index=Number(head[1]); if(index<1||index>99) continue;
       const tail=head[2].replace(/,/g,'.').replace(/[|]/g,' ');
