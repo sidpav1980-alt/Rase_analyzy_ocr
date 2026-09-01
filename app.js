@@ -6852,8 +6852,12 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     // Average HR is the main LT2 anchor. Peak HR of the 12-minute reps
     // adds a small correction because HR often rises through the interval.
     let lthr=Number.isFinite(avgHr)?avgHr:null;
-    if(Number.isFinite(lthr) && Number.isFinite(peakHr) && peakHr>lthr){
-      lthr += Math.min(3, Math.max(0, (peakHr-lthr)*0.15));
+    if(Number.isFinite(lthr) && Number.isFinite(peakHr) && peakHr>avgHr){
+      // Peak HR now has a visible but bounded effect on estimated LTHR.
+      // A 12-minute rep that finishes much closer to HRmax should raise the
+      // estimated threshold HR, but we cap the correction so one spike cannot dominate.
+      const peakLift=Math.min(6, Math.max(0, (peakHr-avgHr)*0.30));
+      lthr = avgHr + peakLift;
     }
     if(Number.isFinite(lthr)) lthr=Math.round(lthr);
     if(Number.isFinite(hrmax) && Number.isFinite(avgHr)){
@@ -7008,6 +7012,8 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       ['Distance','PaceInput','Hr','HrMax'].forEach(k=>{const el=byId(`threshold${k}${i}`);if(el)el.value='';});
     }
     byId('threshold5k').value='';byId('threshold10k').value='';byId('thresholdRecovery').value='2:00';
+    if(byId('thresholdVo2max')) byId('thresholdVo2max').value='';
+    if(byId('thresholdAthleteHrMax')) byId('thresholdAthleteHrMax').value='';
     segmentCount.value='2';syncSegments();byId('thresholdResult').hidden=true;byId('thresholdQuickResult').hidden=true;
     byId('thresholdQuickPace').textContent='—';byId('thresholdQuickHr').textContent='—';
     byId('thresholdStatus').textContent='Введите минимум два 12-минутных отрезка.';
