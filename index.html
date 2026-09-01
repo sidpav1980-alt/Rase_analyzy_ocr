@@ -10,7 +10,7 @@
   <title>Прогноз и анализ трейловых гонок</title>
   <link rel="manifest" href="manifest.webmanifest?v=075">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=261-itra-file-replace">
+  <link rel="stylesheet" href="styles.css?v=262-threshold-test">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynBv0TtP4JpC5dQF3Vqv2tLIbV0w=" crossorigin="">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
@@ -664,7 +664,8 @@
       <button class="tab" data-tab="forecast">2. Прогноз гонки</button>
       <button class="tab" data-tab="roster">3. Стартовый список и баллы ITRA</button>
       <button class="tab" data-tab="result">4. Прогноз места в TOP-100</button>
-      <button class="tab" data-tab="simulation">5. Симуляция гонки</button>
+      <button class="tab" data-tab="threshold">5. Пороговый тест</button>
+      <button class="tab" data-tab="simulation">6. Симуляция гонки</button>
     </nav>
 
     <section id="route" class="tabpanel active">
@@ -1052,6 +1053,91 @@
     </section>
 
     
+
+    <section id="threshold" class="tabpanel">
+      <div class="card threshold-card">
+        <h2>Пороговый тест · 2–3 × 12 минут</h2>
+        <p class="muted threshold-intro">Введите дистанцию каждого 12-минутного рабочего отрезка и пульс. Восстановление между отрезками — по умолчанию 2 минуты. Алгоритм учитывает не только средний темп, но и просадку скорости к последнему отрезку. Контрольный результат на 5/10 км можно добавить для калибровки.</p>
+
+        <div class="threshold-settings">
+          <label class="field">
+            <span>Количество отрезков</span>
+            <select id="thresholdSegmentCount">
+              <option value="2">2 × 12 мин</option>
+              <option value="3">3 × 12 мин</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Отдых между отрезками</span>
+            <input id="thresholdRecovery" value="2:00" inputmode="numeric" placeholder="2:00">
+          </label>
+        </div>
+
+        <div id="thresholdSegments" class="threshold-segments">
+          <div class="threshold-segment" data-threshold-segment="1">
+            <div class="threshold-segment-title"><b>Отрезок 1</b><span>12:00</span></div>
+            <div class="threshold-input-grid">
+              <label class="field"><span>Дистанция, км</span><input id="thresholdDistance1" type="number" inputmode="decimal" min="1.5" max="4" step="0.01" placeholder="2.88"></label>
+              <label class="field"><span>Средний пульс</span><input id="thresholdHr1" type="number" inputmode="numeric" min="80" max="230" step="1" placeholder="172"></label>
+              <label class="field"><span>Макс. пульс (необяз.)</span><input id="thresholdHrMax1" type="number" inputmode="numeric" min="80" max="240" step="1" placeholder="178"></label>
+            </div>
+            <div id="thresholdPace1" class="threshold-live-pace">Темп: —</div>
+          </div>
+          <div class="threshold-segment" data-threshold-segment="2">
+            <div class="threshold-segment-title"><b>Отрезок 2</b><span>12:00</span></div>
+            <div class="threshold-input-grid">
+              <label class="field"><span>Дистанция, км</span><input id="thresholdDistance2" type="number" inputmode="decimal" min="1.5" max="4" step="0.01" placeholder="2.78"></label>
+              <label class="field"><span>Средний пульс</span><input id="thresholdHr2" type="number" inputmode="numeric" min="80" max="230" step="1" placeholder="174"></label>
+              <label class="field"><span>Макс. пульс (необяз.)</span><input id="thresholdHrMax2" type="number" inputmode="numeric" min="80" max="240" step="1" placeholder="180"></label>
+            </div>
+            <div id="thresholdPace2" class="threshold-live-pace">Темп: —</div>
+          </div>
+          <div class="threshold-segment" data-threshold-segment="3" hidden>
+            <div class="threshold-segment-title"><b>Отрезок 3</b><span>12:00</span></div>
+            <div class="threshold-input-grid">
+              <label class="field"><span>Дистанция, км</span><input id="thresholdDistance3" type="number" inputmode="decimal" min="1.5" max="4" step="0.01" placeholder="2.72"></label>
+              <label class="field"><span>Средний пульс</span><input id="thresholdHr3" type="number" inputmode="numeric" min="80" max="230" step="1" placeholder="175"></label>
+              <label class="field"><span>Макс. пульс (необяз.)</span><input id="thresholdHrMax3" type="number" inputmode="numeric" min="80" max="240" step="1" placeholder="181"></label>
+            </div>
+            <div id="thresholdPace3" class="threshold-live-pace">Темп: —</div>
+          </div>
+        </div>
+
+        <h3>Контрольный результат (необязательно)</h3>
+        <div class="threshold-control-grid">
+          <label class="field"><span>5 км · время</span><input id="threshold5k" inputmode="numeric" placeholder="19:59"></label>
+          <label class="field"><span>10 км · время</span><input id="threshold10k" inputmode="numeric" placeholder="41:50"></label>
+        </div>
+        <p class="muted">Если есть свежий результат 10 км, он имеет приоритет для калибровки. Это помогает не занижать порог из-за усталости на поздних отрезках.</p>
+
+        <div class="threshold-actions">
+          <button id="thresholdCalcBtn" type="button" class="primary">Рассчитать порог</button>
+          <button id="thresholdResetBtn" type="button" class="secondary">Сбросить</button>
+        </div>
+        <div id="thresholdStatus" class="muted threshold-status">Введите минимум два 12-минутных отрезка.</div>
+      </div>
+
+      <div id="thresholdResult" class="card threshold-result" hidden>
+        <h2>Результат</h2>
+        <div class="threshold-main-result">
+          <span>Расчётный пороговый темп</span>
+          <b id="thresholdMainPace">—</b>
+          <small id="thresholdPaceRange">—</small>
+        </div>
+        <div class="metrics threshold-metrics">
+          <div><span>Пороговый пульс</span><b id="thresholdHrResult">—</b></div>
+          <div><span>Просадка темпа</span><b id="thresholdDrift">—</b></div>
+          <div><span>Качество теста</span><b id="thresholdQuality">—</b></div>
+        </div>
+        <div class="metrics threshold-predictions">
+          <div><span>Прогноз 5 км</span><b id="threshold5kPrediction">—</b><small id="threshold5kPace">—</small></div>
+          <div><span>Прогноз 10 км</span><b id="threshold10kPrediction">—</b><small id="threshold10kPace">—</small></div>
+        </div>
+        <div id="thresholdExplanation" class="threshold-explanation"></div>
+        <p class="muted threshold-disclaimer">Оценка предназначена для спортивного планирования и не является лабораторным измерением лактатного порога.</p>
+      </div>
+    </section>
+
 <section id="simulation" class="tabpanel">
   <div class="sim-reference-shell">
     <div class="virtual-track-box">
@@ -1199,7 +1285,7 @@
     Модель является оценочной. Броды, погода, питание, состояние покрытия, самочувствие и другие факторы могут существенно повлиять на фактический результат. Расчёты носят исключительно информационно-ознакомительный характер, не являются гарантией результата или рекомендацией к действию. Автор не несёт ответственности за решения, принятые на основании расчётов приложения.
   </footer>
 
-  <script src="app.js?v=261-itra-file-replace"></script>
+  <script src="app.js?v=262-threshold-test"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 

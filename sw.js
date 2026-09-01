@@ -1,9 +1,9 @@
-const CACHE='trail-analyzer-web-v098';
+const CACHE='trail-analyzer-web-v0262-threshold';
 const CORE=[
   './',
   './index.html',
-  './styles.css?v=240levels',
-  './app.js?v=240levels',
+  './styles.css?v=262-threshold-test',
+  './app.js?v=262-threshold-test',
   './manifest.webmanifest?v=075',
   './icon-192.png',
   './icon-512.png'

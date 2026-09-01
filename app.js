@@ -6541,3 +6541,159 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
   const calc=$('calcBtn');
   if(calc){ calc.disabled=false; calc.click(); }
 },true);
+
+
+// v0.0262: standalone threshold estimator from 2–3 × 12-minute intervals.
+(function initThresholdTest(){
+  const byId=id=>document.getElementById(id);
+  const segmentCount=byId('thresholdSegmentCount');
+  if(!segmentCount) return;
+
+  function paceText(sec){
+    if(!Number.isFinite(sec)||sec<=0) return '—';
+    let m=Math.floor(sec/60), s=Math.round(sec-m*60);
+    if(s===60){m+=1;s=0;}
+    return `${m}:${String(s).padStart(2,'0')}/км`;
+  }
+  function timeText(sec){
+    if(!Number.isFinite(sec)||sec<=0) return '—';
+    sec=Math.round(sec);
+    const h=Math.floor(sec/3600); sec-=h*3600;
+    const m=Math.floor(sec/60), s=sec-m*60;
+    return h>0?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${m}:${String(s).padStart(2,'0')}`;
+  }
+  function parseTime(v){
+    const p=String(v||'').trim().replace(',', '.').split(':').map(Number);
+    if(!p.length||p.some(x=>!Number.isFinite(x)||x<0)) return null;
+    if(p.length===2) return p[0]*60+p[1];
+    if(p.length===3) return p[0]*3600+p[1]*60+p[2];
+    return null;
+  }
+  function readSegment(i){
+    const d=Number(byId(`thresholdDistance${i}`)?.value||0);
+    const hr=Number(byId(`thresholdHr${i}`)?.value||0);
+    const hrMax=Number(byId(`thresholdHrMax${i}`)?.value||0);
+    if(!(d>0)) return null;
+    return {i,d,pace:720/d,hr:hr>0?hr:null,hrMax:hrMax>0?hrMax:null};
+  }
+  function updateLivePaces(){
+    for(let i=1;i<=3;i++){
+      const s=readSegment(i), el=byId(`thresholdPace${i}`);
+      if(el) el.textContent='Темп: '+(s?paceText(s.pace):'—');
+    }
+  }
+  function syncSegments(){
+    const n=Number(segmentCount.value||2);
+    const third=document.querySelector('[data-threshold-segment="3"]');
+    if(third) third.hidden=n!==3;
+    updateLivePaces();
+  }
+  function weightedMean(values,weights){
+    let n=0,d=0;
+    values.forEach((v,i)=>{if(Number.isFinite(v)){n+=v*weights[i];d+=weights[i];}});
+    return d?n/d:null;
+  }
+  function predictFromThreshold(thresholdPace){
+    // Practical approximation: current 10 km race pace is commonly ~6–10 s/km faster than LT2 pace.
+    const tenPace=Math.max(150,thresholdPace-8);
+    const tenTime=tenPace*10;
+    const fiveTime=tenTime*Math.pow(0.5,1.06);
+    return {tenPace,tenTime,fiveTime,fivePace:fiveTime/5};
+  }
+  function calculate(){
+    const n=Number(segmentCount.value||2);
+    const segs=[];
+    for(let i=1;i<=n;i++){
+      const s=readSegment(i);
+      if(!s){
+        byId('thresholdStatus').textContent=`Введите дистанцию для отрезка ${i}.`;
+        return;
+      }
+      segs.push(s);
+    }
+    const weights=n===2?[0.45,0.55]:[0.25,0.35,0.40];
+    const avgPace=weightedMean(segs.map(s=>s.pace),weights);
+    const first=segs[0].pace,last=segs[segs.length-1].pace;
+    const driftPct=((last-first)/first)*100;
+
+    // Progressive drift correction: the faster the fade, the more conservative the sustainable threshold estimate.
+    let correction=2;
+    if(driftPct>2) correction=3.5;
+    if(driftPct>4) correction=5;
+    if(driftPct>7) correction=7;
+    if(driftPct<0) correction=1;
+    let threshold=avgPace+correction;
+
+    const t10=parseTime(byId('threshold10k').value);
+    const t5=parseTime(byId('threshold5k').value);
+    let calibration=null,calLabel='';
+    if(t10 && t10>1200 && t10<7200){ calibration=t10/10+7; calLabel='10 км'; }
+    else if(t5 && t5>600 && t5<3600){ calibration=t5/5+18; calLabel='5 км'; }
+    if(calibration){
+      // Keep the interval test primary, but use a fresh race result to guard against fatigue-driven underestimation.
+      threshold=threshold*0.60+calibration*0.40;
+    }
+
+    const hrVals=segs.map(s=>s.hr);
+    let thresholdHr=weightedMean(hrVals,weights);
+    if(Number.isFinite(thresholdHr)) thresholdHr=Math.round(thresholdHr);
+
+    const rangeLo=Math.max(1,threshold-4), rangeHi=threshold+3;
+    const pred=predictFromThreshold(threshold);
+    let quality='Хорошее';
+    if(n===3 && Math.abs(driftPct)<=5 && hrVals.every(Boolean)) quality='Высокое';
+    if(Math.abs(driftPct)>7) quality='Среднее';
+    if(Math.abs(driftPct)>12) quality='Низкое';
+
+    byId('thresholdMainPace').textContent=paceText(threshold);
+    byId('thresholdPaceRange').textContent=`Рабочий диапазон: ${paceText(rangeLo)} – ${paceText(rangeHi)}`;
+    byId('thresholdHrResult').textContent=Number.isFinite(thresholdHr)?`${thresholdHr} уд/мин`:'—';
+    byId('thresholdDrift').textContent=`${driftPct>=0?'+':''}${driftPct.toFixed(1)}%`;
+    byId('thresholdQuality').textContent=quality;
+    byId('threshold5kPrediction').textContent=timeText(pred.fiveTime);
+    byId('threshold5kPace').textContent=paceText(pred.fivePace);
+    byId('threshold10kPrediction').textContent=timeText(pred.tenTime);
+    byId('threshold10kPace').textContent=paceText(pred.tenPace);
+
+    const segText=segs.map(s=>`${s.i}: ${s.d.toFixed(2)} км → ${paceText(s.pace)}`).join(' · ');
+    const calText=calibration?` Добавлена калибровка по свежему результату ${calLabel}.`:'';
+    byId('thresholdExplanation').innerHTML=`<b>Отрезки:</b> ${segText}<br><b>Как рассчитано:</b> поздние отрезки имеют больший вес; отдельно учитывается изменение темпа от первого к последнему.${calText}`;
+    byId('thresholdStatus').textContent='✓ Порог рассчитан.';
+    byId('thresholdResult').hidden=false;
+
+    try{
+      localStorage.setItem('trailThresholdTest',JSON.stringify({n,recovery:byId('thresholdRecovery').value,segs:segs.map(s=>({d:s.d,hr:s.hr,hrMax:s.hrMax})),t5:byId('threshold5k').value,t10:byId('threshold10k').value}));
+    }catch(e){}
+    byId('thresholdResult').scrollIntoView({behavior:'smooth',block:'start'});
+  }
+  function reset(){
+    for(let i=1;i<=3;i++){
+      ['Distance','Hr','HrMax'].forEach(k=>{const el=byId(`threshold${k}${i}`);if(el)el.value='';});
+    }
+    byId('threshold5k').value='';byId('threshold10k').value='';byId('thresholdRecovery').value='2:00';
+    segmentCount.value='2';syncSegments();byId('thresholdResult').hidden=true;
+    byId('thresholdStatus').textContent='Введите минимум два 12-минутных отрезка.';
+    try{localStorage.removeItem('trailThresholdTest');}catch(e){}
+  }
+  function restore(){
+    try{
+      const x=JSON.parse(localStorage.getItem('trailThresholdTest')||'null');
+      if(!x) return;
+      segmentCount.value=String(x.n===3?3:2);
+      byId('thresholdRecovery').value=x.recovery||'2:00';
+      (x.segs||[]).forEach((s,j)=>{
+        const i=j+1;
+        if(byId(`thresholdDistance${i}`)) byId(`thresholdDistance${i}`).value=s.d||'';
+        if(byId(`thresholdHr${i}`)) byId(`thresholdHr${i}`).value=s.hr||'';
+        if(byId(`thresholdHrMax${i}`)) byId(`thresholdHrMax${i}`).value=s.hrMax||'';
+      });
+      byId('threshold5k').value=x.t5||'';byId('threshold10k').value=x.t10||'';
+    }catch(e){}
+    syncSegments();
+  }
+  segmentCount.addEventListener('change',syncSegments);
+  document.querySelectorAll('#threshold input').forEach(el=>el.addEventListener('input',updateLivePaces));
+  byId('thresholdCalcBtn').addEventListener('click',calculate);
+  byId('thresholdResetBtn').addEventListener('click',reset);
+  restore();
+})();
