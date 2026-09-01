@@ -1396,3 +1396,23 @@
 </div>
 </body>
 </html>
+<style>
+/* compact stop rows on phone */
+@media(max-width:620px){
+  .pacecalc-stops{gap:6px!important;margin:7px 0!important}
+  .pacecalc-stop{
+    grid-template-columns:minmax(0,1.15fr) minmax(90px,.7fr) 38px!important;
+    gap:6px!important;
+    padding:6px!important;
+    border-radius:11px!important;
+    align-items:end!important
+  }
+  .pacecalc-stop .field{gap:3px!important;margin:0!important}
+  .pacecalc-stop .field>span{font-size:11px!important;line-height:1.1!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pacecalc-stop input{height:40px!important;min-height:40px!important;padding:6px 10px!important;font-size:17px!important;border-radius:9px!important}
+  .pacecalc-stop-remove{width:38px!important;height:40px!important;min-height:40px!important;padding:0!important;font-size:18px!important;border-radius:9px!important}
+  .pacecalc-stops-head{margin-top:12px!important;gap:8px!important}
+  .pacecalc-stops-head h3{font-size:20px!important;margin:0!important}
+  #paceCalcAddStop{padding:8px 11px!important;font-size:14px!important;min-height:40px!important}
+}
+</style>
