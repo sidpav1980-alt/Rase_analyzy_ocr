@@ -6981,12 +6981,14 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
   function movementTimeText(sec){
     sec=Math.max(0,Math.round(sec));
     const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;
-    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    if(h>0) return `${h} ч ${String(m).padStart(2,'0')} мин ${String(s).padStart(2,'0')} сек`;
+    return `${m} мин ${String(s).padStart(2,'0')} сек`;
   }
   function stopTimeText(sec){
     sec=Math.max(0,Math.round(sec));
     const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60;
-    return h>0?`${h} ч ${String(m).padStart(2,'0')} мин`:`${m}:${String(s).padStart(2,'0')}`;
+    if(h>0) return `${h} ч ${String(m).padStart(2,'0')} мин ${String(s).padStart(2,'0')} сек`;
+    return `${m} мин ${String(s).padStart(2,'0')} сек`;
   }
   function paceText(secPerKm){
     if(!Number.isFinite(secPerKm)||secPerKm<=0)return '—';
@@ -7021,13 +7023,22 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     const moving=total-stopTotal;
     if(moving<=0){$('paceCalcStatus').textContent='Сумма остановок не может быть больше общего времени.';return;}
     const movingPace=moving/dist, elapsedPace=total/dist;
+    const speedKmh=3600/movingPace;
+    // Sanity check: reject obviously impossible running inputs instead of displaying absurd pace.
+    if(movingPace < 120 || speedKmh > 30){
+      $('paceCalcStatus').textContent='😄 Ты Усэйн Болт, что ли? Такой темп нереалистичен — проверь дистанцию, время и выбранные «Минуты/Часы».';
+      $('paceCalcStatus').classList.add('pacecalc-unrealistic');
+      $('paceCalcResult').hidden=true;
+      return;
+    }
+    $('paceCalcStatus').classList.remove('pacecalc-unrealistic');
     $('paceCalcMovingPace').textContent=paceText(movingPace);
     $('paceCalcElapsedPace').textContent=paceText(elapsedPace);
     $('paceCalcMovingTime').textContent=movementTimeText(moving);
     $('paceCalcStopsTotal').textContent=stopTimeText(stopTotal);
     $('paceCalcSpeed').textContent=`${(3600/movingPace).toFixed(2)} км/ч`;
     $('paceCalcResult').hidden=false;
-    $('paceCalcStatus').textContent='✓ Темп рассчитан.';
+    $('paceCalcStatus').classList.remove('pacecalc-unrealistic');$('paceCalcStatus').textContent='✓ Темп рассчитан.';
     $('paceCalcResult').scrollIntoView({behavior:'smooth',block:'center'});
   }
   function reset(){
