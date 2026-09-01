@@ -646,3 +646,6 @@ button.action-error:disabled {
 .threshold-recognized-raw summary{cursor:pointer;font-weight:700;color:#b8cee2}
 .threshold-recognized-raw pre{margin:7px 0 0;padding:8px;max-height:150px;overflow:auto;white-space:pre-wrap;word-break:break-word;border-radius:7px;background:#07111d;color:#a9bdd0;font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace}
 @media(max-width:420px){.threshold-recognized-grid{grid-template-columns:1fr 1fr}.threshold-recognized-grid b{font-size:14px}}
+
+.threshold-photo-source-hint{display:inline-block;margin-left:10px;color:#8fa3bd;font-size:.92rem;vertical-align:middle}
+@media(max-width:600px){.threshold-photo-source-hint{display:block;margin:8px 0 0 2px;font-size:.88rem}}
