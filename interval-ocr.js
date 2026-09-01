@@ -87,7 +87,7 @@
     const numToken=t=>/^\d{1,2}$/.test(t);
     const decToken=t=>/^\d{1,2}[,.]\d{1,3}$/.test(t);
     const timeToken=t=>/^(?:\d{1,2}:)?\d{1,2}:\d{2}(?:[.,]\d)?$/.test(t);
-    const paceToken=t=>/^([2-9]|1[0-5]):[0-5]\d$/.test(t);
+    const paceToken=t=>/^(?:[2-9]|[1-3]\d):[0-5]\d$/.test(t);
     for(const r of rows){
       const ws=r.ws.sort((a,b)=>a.cx-b.cx);
       const idxW=ws.find(w=>w.cx<W*0.22 && numToken(w.text));
@@ -97,19 +97,41 @@
       const timeW=ws.filter(w=>w.cx>W*0.32&&w.cx<W*0.68&&timeToken(w.text)).sort((a,b)=>Math.abs(a.cx-W*0.52)-Math.abs(b.cx-W*0.52))[0];
       const distW=ws.filter(w=>w.cx>W*0.55&&w.cx<W*0.86&&decToken(w.text)).sort((a,b)=>Math.abs(a.cx-W*0.73)-Math.abs(b.cx-W*0.73))[0];
       const paceW=ws.filter(w=>w.cx>W*0.72&&paceToken(w.text)).sort((a,b)=>b.cx-a.cx)[0];
-      // Geometry fallback deliberately accepts a row even when OCR missed the word "Бег".
-      // Requiring index + at least two numeric columns avoids turning headers/totals into intervals.
+      // Geometry fallback reads EVERY numbered Garmin lap row. Work/recovery is classified later
+      // from the Average Pace column, so OCR does not need to recognize the word "Бег".
       const fieldCount=[timeW,distW,paceW].filter(Boolean).length;
-      if(!hasRun && fieldCount<2) continue;
+      if(fieldCount<2) continue;
       let distance=distW?Number(distW.text.replace(',','.')):null;
       let time=timeW?timeW.text.replace(',','.') : '';
       let pace=paceW?paceW.text:'';
       if(distance!=null && (!Number.isFinite(distance)||distance<=0||distance>100)) distance=null;
-      if(!pace && distance!=null && time){ const sec=parseTimeToken(time); if(sec){ const ps=sec/distance; if(ps>=120&&ps<=900) pace=`${Math.floor(ps/60)}:${String(Math.round(ps%60)).padStart(2,'0')}`; } }
+      if(!pace && distance!=null && time){ const sec=parseTimeToken(time); if(sec){ const ps=sec/distance; if(ps>=120&&ps<=2400) pace=`${Math.floor(ps/60)}:${String(Math.round(ps%60)).padStart(2,'0')}`; } }
       if(!time && distance!=null && pace) time=derivedTime(distance,pace);
-      if(distance!=null && pace) out.push({index,type:'Бег',distance,time,pace,raw:ws.map(w=>w.text).join(' '),geometry:true});
+      if(distance!=null && pace) out.push({index,type:hasRun?'Бег':'Круг',distance,time,pace,raw:ws.map(w=>w.text).join(' '),geometry:true});
     }
     return out;
+  }
+
+  function selectWorkRowsByAveragePace(rows){
+    // Garmin "Круги" alternates work and recovery. Use the Average Pace column as the
+    // authoritative signal: select the fast cluster before the FIRST large pace gap.
+    // Example: 4:11..5:40 are work, then 10:07+ are recovery/warm-up.
+    const usable=(rows||[]).filter(r=>paceSecs(r.pace)!=null).map(r=>({...r,_ps:paceSecs(r.pace)}));
+    if(usable.length<2) return rows||[];
+    const sorted=[...usable].sort((a,b)=>a._ps-b._ps);
+    let cut=null;
+    for(let i=1;i<sorted.length;i++){
+      const gap=sorted[i]._ps-sorted[i-1]._ps;
+      if(i>=2 && gap>=75){ cut=(sorted[i-1]._ps+sorted[i]._ps)/2; break; }
+    }
+    if(cut==null){
+      // Conservative fallback: only clearly-fast running laps. Do not turn easy/recovery laps
+      // into intervals just because OCR missed the label.
+      const fast=sorted.filter(r=>r._ps<=8*60);
+      if(fast.length>=2) cut=8*60+0.5;
+    }
+    if(cut==null) return rows||[];
+    return usable.filter(r=>r._ps<cut).sort((a,b)=>a.index-b.index).map(({_ps,...r})=>({...r,type:'Бег',paceSelected:true}));
   }
 
   function fmtHr(v){ return Number.isFinite(Number(v)) ? Math.round(Number(v))+' уд/мин' : '—'; }
@@ -228,8 +250,14 @@
       const geometric=parseGarminTableGeometry(img,result);
       if(geometric.length){
         const merged=new Map(parsed.map(r=>[r.index,r]));
-        for(const r of geometric){ if(!merged.has(r.index)) merged.set(r.index,r); }
-        parsed=[...merged.values()].sort((a,b)=>a.index-b.index);
+        for(const r of geometric){
+          const old=merged.get(r.index);
+          if(!old || (r.geometry && (!old.pace || !old.distance))) merged.set(r.index,r);
+          else if(!old) merged.set(r.index,r);
+        }
+        // In Garmin "Круги" screenshots, choose working reps by Average Pace instead of
+        // trusting OCR to see the word "Бег" on every row.
+        parsed=selectWorkRowsByAveragePace([...merged.values()].sort((a,b)=>a.index-b.index));
       }
       if(!parsed.length){
         const nextIndex=found.size?Math.max(...found.keys())+1:1;
@@ -241,7 +269,7 @@
         const old=found.get(r.index);
         if(!old || ((r.time?1:0)+(r.distance?1:0)+(r.pace?1:0) > (old.time?1:0)+(old.distance?1:0)+(old.pace?1:0))) found.set(r.index,r);
       }
-      st.textContent=graphMode?`По графику найдено ${parsed.length} рабочих отрезка(ов). Значения приблизительные.`:`Найдены: ${parsed.map(r=>r.index+' Бег').join(', ')}`;
+      st.textContent=graphMode?`По графику найдено ${parsed.length} рабочих отрезка(ов). Значения приблизительные.`:`Найдены по колонке «Средний темп»: ${parsed.map(r=>r.index+' Бег').join(', ')}`;
       st.className='interval-ocr-photo-status '+(graphMode?'approx':'ok'); render();
     }catch(e){ st.textContent=`Ошибка: ${e.message||e}`; st.className='interval-ocr-photo-status err'; }
   }
