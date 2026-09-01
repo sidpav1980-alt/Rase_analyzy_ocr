@@ -7937,6 +7937,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
 // v0.0262: standalone Garmin interval OCR (up to 4 screenshots).
 (function initIntervalOcrBlock(){
   const filesInput=document.getElementById('intervalOcrFiles');
+  const pickBtn=document.getElementById('intervalOcrPickBtn');
   const photoList=document.getElementById('intervalOcrPhotoList');
   const status=document.getElementById('intervalOcrStatus');
   const results=document.getElementById('intervalOcrResults');
@@ -8152,14 +8153,16 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       setTimeout(()=>{ try{filesInput.value='';}catch{} },0);
     }
   }
-  filesInput.addEventListener('change',handleIntervalFiles);
-  filesInput.addEventListener('input',()=>{
-    // Некоторые версии iOS Safari надёжнее присылают input, чем change.
+  // Тот же надёжный механизм, что используется в разделе «Пороговый тест»:
+  // обычная кнопка вызывает скрытый нативный input. Это стабильно работает в iOS Safari.
+  pickBtn?.addEventListener('click',()=>{
+    if(intervalOcrBusy) return;
+    try{ filesInput.value=''; }catch{}
+    filesInput.click();
+  });
+  filesInput.addEventListener('change',()=>{
     if(!intervalOcrBusy && filesInput.files?.length) handleIntervalFiles();
   });
-  // Дополнительный fallback для iOS Safari: прямой обработчик свойства.
-  // Он нужен, если addEventListener не сработал после восстановления страницы из BFCache.
-  filesInput.onchange=()=>{ if(!intervalOcrBusy && filesInput.files?.length) handleIntervalFiles(); };
 
   copyBtn?.addEventListener('click',async()=>{
     const arr=[...found.values()].sort((a,b)=>a.index-b.index);
