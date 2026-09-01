@@ -6551,6 +6551,8 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
 (function initThresholdTest(){
   const byId=id=>document.getElementById(id);
   const segmentCount=byId('thresholdSegmentCount');
+  const helpToggle=byId('thresholdHelpToggle');
+  const helpBlock=byId('thresholdHelpBlock');
   const segmentTabs=[...document.querySelectorAll('[data-threshold-tab]')];
   let activeThresholdTab=1;
   if(!segmentCount) return;
@@ -6874,6 +6876,21 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       }
     }catch(e){}
     syncSegments();
+  }
+  if(helpToggle && helpBlock){
+    helpToggle.addEventListener('click',()=>{
+      const willHide=!helpBlock.hidden;
+      helpBlock.hidden=willHide;
+      helpToggle.setAttribute('aria-expanded',String(!willHide));
+      helpToggle.textContent=willHide?'Развернуть подсказку ▼':'Свернуть подсказку ▲';
+      try{localStorage.setItem('trailThresholdHelpCollapsed',willHide?'1':'0');}catch(e){}
+    });
+    try{
+      const collapsed=localStorage.getItem('trailThresholdHelpCollapsed')==='1';
+      helpBlock.hidden=collapsed;
+      helpToggle.setAttribute('aria-expanded',String(!collapsed));
+      helpToggle.textContent=collapsed?'Развернуть подсказку ▼':'Свернуть подсказку ▲';
+    }catch(e){}
   }
   segmentCount.addEventListener('change',syncSegments);
   segmentTabs.forEach(btn=>btn.addEventListener('click',()=>setActiveSegmentTab(Number(btn.dataset.thresholdTab||1))));

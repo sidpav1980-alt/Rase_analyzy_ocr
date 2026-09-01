@@ -1057,6 +1057,10 @@
     <section id="threshold" class="tabpanel">
       <div class="card threshold-card">
         <h2>Пороговый тест · 2–3 × 12 минут</h2>
+        <div class="threshold-help-header">
+          <button id="thresholdHelpToggle" type="button" class="threshold-help-toggle" aria-expanded="true">Свернуть подсказку ▲</button>
+        </div>
+        <div id="thresholdHelpBlock">
         <div class="threshold-required-box">
           <div class="threshold-required-title">Что нужно ввести для расчёта</div>
           <div class="threshold-required-step"><b>1.</b><span>Выберите <b>2 или 3 отрезка по 12 минут</b>.</span></div>
@@ -1065,6 +1069,7 @@
           <div class="threshold-required-example">Пример: отрезок 1 → <b>4:10/км</b> + <b>172 уд/мин</b>; отрезок 2 → <b>4:20/км</b> + <b>174 уд/мин</b>.</div>
         </div>
         <p class="muted threshold-intro">Если вводите темп, дистанцию можно не заполнять — она рассчитается автоматически. Если вводите дистанцию, темп рассчитается сам. Отдых между отрезками по умолчанию 2 минуты.</p>
+        </div>
 
         <div class="threshold-settings">
           <label class="field">
@@ -1339,6 +1344,10 @@
 .threshold-tab-invalid{border-color:#ef4444!important;box-shadow:0 0 0 2px rgba(239,68,68,.22)!important}
 
 .threshold-drift-help{display:block;margin-top:5px;color:#94a3b8;font-size:12px;line-height:1.25;font-weight:500}
+
+.threshold-help-header{display:flex;justify-content:flex-end;margin:4px 0 8px}
+.threshold-help-toggle{border:1px solid #2d5d87;background:#0b1830;color:#9bdcff;border-radius:12px;padding:8px 12px;font-weight:800;font-size:14px}
+#thresholdHelpBlock[hidden]{display:none!important}
 </style>
 
 <div id="mishaFinishWelcome" class="misha-start-sendoff" aria-hidden="true">
