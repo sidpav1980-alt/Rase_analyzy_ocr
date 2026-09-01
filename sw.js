@@ -1,9 +1,9 @@
-const CACHE='trail-analyzer-web-v234-interval-ocr-fix';
+const CACHE='trail-analyzer-web-v235-interval-graph-ocr';
 const CORE=[
   './',
   './index.html',
-  './styles.css?v=263-interval-ocr-fix',
-  './app.js?v=242-interval-ocr-fix',
+  './styles.css?v=264-interval-graph-ocr',
+  './app.js?v=243-interval-graph-ocr',
   './manifest.webmanifest?v=075',
   './icon-192.png',
   './icon-512.png'

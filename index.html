@@ -10,7 +10,7 @@
   <title>Прогноз и анализ трейловых гонок</title>
   <link rel="manifest" href="manifest.webmanifest?v=075">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=241-ocr-garmin-row-map2">
+  <link rel="stylesheet" href="styles.css?v=264-interval-graph-ocr">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynBv0TtP4JpC5dQF3Vqv2tLIbV0w=" crossorigin="">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
@@ -1322,11 +1322,11 @@
 <section id="intervalocr" class="tabpanel">
   <div class="card interval-ocr-card">
     <h2>Распознавание интервалов</h2>
-    <p class="muted interval-ocr-help">Garmin: <b>Бег → Интервалы</b>. Можно загрузить до 4 скриншотов одной тренировки. Строки «1 Бег», «2 Бег», «9 Бег» и т. д. объединяются по номеру.</p>
+    <p class="muted interval-ocr-help"><b>Garmin: Бег → Интервалы или Графики.</b> Можно загрузить до 4 скриншотов одной тренировки. Таблица «Бег» распознаётся точно по номерам; на экране «Графики» рабочие отрезки, темп и пульс определяются приблизительно по графикам.</p>
 
     <div class="interval-ocr-actions">
-      <label class="btn interval-ocr-upload" for="intervalOcrFiles">
-        📷 Загрузить фото
+      <label class="threshold-photo-btn interval-ocr-upload" for="intervalOcrFiles">
+        📷 Распознать фото
         <input id="intervalOcrFiles" class="interval-ocr-file-input" type="file" accept="image/*" multiple>
       </label>
       <button type="button" class="btn secondary" id="intervalOcrClear">Сбросить</button>
@@ -1343,7 +1343,7 @@
       </div>
       <div class="interval-ocr-table-wrap">
         <table class="interval-ocr-table">
-          <thead><tr><th>№</th><th>Тип</th><th>Дистанция</th><th>Время</th><th>Темп</th></tr></thead>
+          <thead><tr><th>№</th><th>Тип</th><th>Дистанция</th><th>Время</th><th>Темп</th><th>Ср. пульс</th><th>Макс.</th></tr></thead>
           <tbody id="intervalOcrRows"></tbody>
         </table>
       </div>
@@ -1500,7 +1500,7 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="app.js?v=242-interval-ocr-fix"></script>
+  <script src="app.js?v=243-interval-graph-ocr"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
