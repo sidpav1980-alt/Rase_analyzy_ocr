@@ -8046,14 +8046,41 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     }catch(e){ st.textContent=`Ошибка: ${e.message||e}`; st.className='interval-ocr-photo-status err'; }
   }
 
-  filesInput.addEventListener('change',async()=>{
-    const files=[...filesInput.files||[]];
-    if(!files.length) return;
-    if(files.length>4){ status.textContent='Можно загрузить максимум 4 фото за один раз.'; status.className='interval-ocr-status warn'; files.splice(4); }
-    clearAll(); photoList.hidden=false;
-    status.textContent=`Загружено ${files.length} фото. Распознаю интервалы…`; status.className='interval-ocr-status';
-    for(let i=0;i<files.length;i++) await recognizeOne(files[i],i+1);
-    render();
+  let intervalOcrBusy=false;
+  async function handleIntervalFiles(){
+    if(intervalOcrBusy) return;
+    let files=Array.from(filesInput.files||[]);
+    if(!files.length){
+      status.textContent='Фото не выбраны.'; status.className='interval-ocr-status warn';
+      return;
+    }
+    if(files.length>4){
+      status.textContent='Выбрано больше 4 фото — будут обработаны первые 4.';
+      status.className='interval-ocr-status warn';
+      files=files.slice(0,4);
+    }
+    intervalOcrBusy=true;
+    // Не вызываем clearAll(): на iPhone сброс value у file-input в момент change может
+    // обнулить выбор до того, как Safari закончит передавать файлы. Очищаем UI отдельно.
+    found.clear(); rowsEl.innerHTML=''; results.hidden=true; photoList.innerHTML=''; photoList.hidden=false;
+    objectUrls.forEach(u=>{try{URL.revokeObjectURL(u)}catch{}}); objectUrls=[];
+    if(copyStatus) copyStatus.textContent='';
+    status.textContent=`Выбрано ${files.length} фото. Начинаю распознавание…`;
+    status.className='interval-ocr-status';
+    try{
+      // Сначала мгновенно показываем карточки/превью, затем OCR идёт по очереди.
+      for(let i=0;i<files.length;i++) await recognizeOne(files[i],i+1);
+      render();
+    } finally {
+      intervalOcrBusy=false;
+      // Сброс после обработки позволяет повторно выбрать те же изображения.
+      setTimeout(()=>{ try{filesInput.value='';}catch{} },0);
+    }
+  }
+  filesInput.addEventListener('change',handleIntervalFiles);
+  filesInput.addEventListener('input',()=>{
+    // Некоторые версии iOS Safari надёжнее присылают input, чем change.
+    if(!intervalOcrBusy && filesInput.files?.length) handleIntervalFiles();
   });
 
   copyBtn?.addEventListener('click',async()=>{
