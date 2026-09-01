@@ -7529,7 +7529,11 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
         const sec=Number(m[1])*60+Number(m[2]);
         const b=boxOf(wd); if(!Number.isFinite(b.x0)||!Number.isFinite(b.y0))continue;
         const xx=((b.x0+b.x1)/2)*sx, yy=((b.y0+b.y1)/2)*sy;
-        if(xx<w*.3 && yy>py0-80 && yy<py1+80) pacePts.push([yy,sec]);
+        // Only use pace-axis tick labels that are physically inside the pace plot.
+        // Garmin also shows large header values (e.g. 4:48 Average / 3:48 Best)
+        // just above the chart; including them corrupts the y->pace calibration and
+        // can make interval #2 inherit interval #1's pace.
+        if(xx<w*.34 && yy>=py0-6 && yy<=py1+6) pacePts.push([yy,sec]);
       }
       const fit=(pts)=>{
         if(pts.length<2)return null; let n=pts.length,sx1=0,sy1=0,sxy=0,sxx=0;
@@ -7547,9 +7551,13 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
         paceMap=y=>avg + ((y-(py0+py1)/2)/Math.max(1,py1-py0))*150;
       }
       const raw=segs.map(([a,b])=>{
-        const vals=[]; for(let x=a;x<=b;x++)if(topBlue[x]!=null)vals.push(paceMap(topBlue[x]));
-        vals.sort((x,y)=>x-y); const med=vals.length?vals[Math.floor(vals.length/2)]:999;
-        return {a,b,len:b-a+1,paceSec:med};
+        // Average the top edge over the whole block (trim extreme spikes), because
+        // the requested value is the interval's average pace, not its median/fastest plateau.
+        let vals=[]; for(let x=a;x<=b;x++)if(topBlue[x]!=null){ const v=paceMap(topBlue[x]); if(Number.isFinite(v)) vals.push(v); }
+        vals=vals.filter(v=>v>=120&&v<=900).sort((x,y)=>x-y);
+        if(vals.length>=10){ const cut=Math.max(1,Math.floor(vals.length*.08)); vals=vals.slice(cut,vals.length-cut); }
+        const mean=vals.length?vals.reduce((u,v)=>u+v,0)/vals.length:999;
+        return {a,b,len:b-a+1,paceSec:mean};
       }).filter(x=>Number.isFinite(x.paceSec));
       if(raw.length<2)return [];
       // Work blocks are the faster plateaus. Keep substantial blocks within ~35 s/km of the fastest median.
@@ -7575,15 +7583,19 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       const totalText=String(ocrResult?.data?.text||'');
       const times=[...totalText.matchAll(/\b(?:(\d{1,2}):)?(\d{1,2}):(\d{2})\b/g)].map(m=>(Number(m[1]||0)*3600+Number(m[2])*60+Number(m[3]))).filter(v=>v>0&&v<21600);
       const total=times.length?Math.max(...times):null;
-      const xMin=Math.min(...raw.map(x=>x.a)), xMax=Math.max(...raw.map(x=>x.b));
+      // Pace graph spans from the first visible blue sample to the final sample.
+      // Use that whole x-range so each work-block width maps to its own duration/km.
+      const allBlueX=[]; for(let x=0;x<w;x++) if(colCount[x]>=minCol) allBlueX.push(x);
+      const xMin=allBlueX.length?allBlueX[0]:Math.min(...raw.map(x=>x.a));
+      const xMax=allBlueX.length?allBlueX[allBlueX.length-1]:Math.max(...raw.map(x=>x.b));
       return work.map((q,idx)=>{
         const ps=Math.max(120,Math.min(900,q.paceSec));
         let avgHr=null,maxHr=null;
         if(hrMap&&topRed){ const hs=[]; for(let x=q.a;x<=q.b;x++)if(topRed[x]!=null){const v=hrMap(topRed[x]);if(v>=70&&v<=230)hs.push(v);} if(hs.length){avgHr=hs.reduce((a,b)=>a+b,0)/hs.length;maxHr=Math.max(...hs);} }
         let durationSec=null,distance_km=null;
         if(total&&xMax>xMin){durationSec=(q.b-q.a+1)/(xMax-xMin)*total; distance_km=durationSec/ps;}
-        const mm=Math.floor(ps/60), ss=Math.round(ps%60);
-        return {index:idx+1,pace:`${mm}:${String(ss===60?59:ss).padStart(2,'0')}`,avg_hr:avgHr,max_hr:maxHr,distance_km,approx:true};
+        const rounded=Math.round(ps), mm=Math.floor(rounded/60), ss=rounded%60;
+        return {index:idx+1,pace:`${mm}:${String(ss).padStart(2,'0')}`,avg_hr:avgHr,max_hr:maxHr,distance_km,duration_sec:durationSec,approx:true};
       });
     }catch(e){ console.warn('Threshold graph split failed',e); return []; }
     finally{ try{bmp?.close?.();}catch{} }
