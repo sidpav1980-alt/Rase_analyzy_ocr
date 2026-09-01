@@ -6907,6 +6907,27 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       }
       segs.push(s);
     }
+    // A segment maximum HR cannot be lower than its average HR.
+    for(let i=0;i<segs.length;i++){
+      const s=segs[i];
+      if(Number.isFinite(s.hrMax) && Number.isFinite(s.hr) && s.hrMax < s.hr){
+        const segNo=i+1;
+        setActiveSegmentTab(segNo);
+        clearThresholdInvalid();
+        const maxEl=byId(`thresholdHrMax${segNo}`);
+        const tab=document.querySelector(`[data-threshold-tab="${segNo}"]`);
+        if(maxEl){
+          maxEl.classList.add('threshold-invalid');
+          maxEl.scrollIntoView({behavior:'smooth',block:'center'});
+        }
+        if(tab) tab.classList.add('threshold-invalid');
+        byId('thresholdStatus').textContent=`⚠️ Макс. пульс отрезка ${segNo} (${Math.round(s.hrMax)}) не может быть ниже среднего (${Math.round(s.hr)}). Исправьте значение.`;
+        byId('thresholdQuickResult').hidden=true;
+        byId('thresholdResult').hidden=true;
+        return;
+      }
+    }
+
     // Check consistency between consecutive 12-minute intervals.
     // With only ~2 minutes recovery, a later interval at a similar pace should not
     // suddenly have an average HR tens of beats lower. That is usually a sensor/input error.
@@ -7112,6 +7133,8 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     byId(`thresholdPaceInput${i}`)?.addEventListener('blur',()=>{formatPaceInput(byId(`thresholdPaceInput${i}`));syncFromPace(i);});
     const markThresholdDirty=()=>{
       byId(`thresholdHr${i}`)?.classList.remove('threshold-invalid');
+      byId(`thresholdHrMax${i}`)?.classList.remove('threshold-invalid');
+      document.querySelector(`[data-threshold-tab="${i}"]`)?.classList.remove('threshold-invalid');
       updateLivePaces();
       if(byId('thresholdQuickResult')) byId('thresholdQuickResult').hidden=true;
       if(byId('thresholdResult')) byId('thresholdResult').hidden=true;
@@ -7165,7 +7188,8 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
   }
   function getPaceTimeUnit(){
     const active=document.querySelector('[data-pace-unit].active');
-    return active?.dataset.paceUnit==='hour' ? 'hour' : 'min';
+    const u=active?.dataset.paceUnit;
+    return u==='sec' ? 'sec' : (u==='hour' ? 'hour' : 'min');
   }
   function parseTotalTime(raw){
     raw=String(raw||'').trim().replace(',','.');
@@ -7175,7 +7199,8 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     if(!Number.isFinite(n)||n<=0) return null;
     // Read the currently highlighted switch directly from the UI.
     // This avoids stale state/cache causing “3 minutes” to be treated as 3 hours.
-    return getPaceTimeUnit()==='hour' ? n*3600 : n*60;
+    const unit=getPaceTimeUnit();
+    return unit==='sec' ? n : (unit==='hour' ? n*3600 : n*60);
   }
   function parseStop(raw){
     raw=String(raw||'').trim();
@@ -7294,29 +7319,51 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
   function reset(){
     $('paceCalcDistance').value='';$('paceCalcTotalTime').value='';stopsEl.innerHTML='';stopCount=0;$('paceCalcResult').hidden=true;$('paceCalcStatus').textContent='Введите дистанцию и общее время.';$('paceCalcAddStop').disabled=false;
   }
-  unitBtns.forEach(btn=>btn.addEventListener('click',()=>{
-    paceTimeUnit=btn.dataset.paceUnit==='hour'?'hour':'min';
-    unitBtns.forEach(b=>b.classList.toggle('active',b===btn));
-    $('paceCalcTotalTime').placeholder=paceTimeUnit==='hour'?'7':'50';
+  function setTimeUnit(unit){
+    paceTimeUnit=unit==='sec'?'sec':(unit==='hour'?'hour':'min');
+    unitBtns.forEach(b=>b.classList.toggle('active',b.dataset.paceUnit===paceTimeUnit));
+    const input=$('paceCalcTotalTime');
+    if(input){ input.value=''; input.placeholder=paceTimeUnit==='sec'?'60':(paceTimeUnit==='hour'?'7':'50'); }
     $('paceCalcResult').hidden=true;
-    $('paceCalcStatus').textContent=`Режим общего времени: ${paceTimeUnit==='hour'?'часы':'минуты'}. Нажмите «Рассчитать темп».`;
-  }));
-  distanceUnitBtns.forEach(btn=>btn.addEventListener('click',()=>{
-    paceDistanceUnit=btn.dataset.distanceUnit==='m'?'m':'km';
-    distanceUnitBtns.forEach(b=>b.classList.toggle('active',b===btn));
+    const label=paceTimeUnit==='sec'?'секунды':(paceTimeUnit==='hour'?'часы':'минуты');
+    $('paceCalcStatus').textContent=`Режим общего времени: ${label}. Нажмите «Рассчитать темп».`;
+  }
+  function configureTimeButtonsForDistance(){
+    const first=unitBtns[0], second=unitBtns[1];
+    if(!first||!second) return;
+    if(paceDistanceUnit==='m'){
+      first.dataset.paceUnit='sec'; first.textContent='Секунды';
+      second.dataset.paceUnit='min'; second.textContent='Минуты';
+      setTimeUnit('sec');
+    }else{
+      first.dataset.paceUnit='min'; first.textContent='Минуты';
+      second.dataset.paceUnit='hour'; second.textContent='Часы';
+      setTimeUnit('min');
+    }
+  }
+  function setDistanceUnit(unit){
+    paceDistanceUnit=unit==='m'?'m':'km';
+    distanceUnitBtns.forEach(b=>b.classList.toggle('active',b.dataset.distanceUnit===paceDistanceUnit));
     const input=$('paceCalcDistance');
     const label=$('paceCalcDistanceLabel');
-    input.value='';
+    if(input) input.value='';
     if(paceDistanceUnit==='m'){
-      label.textContent='Дистанция, м';
-      input.min='10'; input.max='999'; input.step='1'; input.placeholder='400';
+      if(label) label.textContent='Дистанция, м';
+      if(input){ input.min='10'; input.max='999'; input.step='1'; input.placeholder='400'; }
     }else{
-      label.textContent='Дистанция, км';
-      input.min='0.1'; input.max='340'; input.step='0.1'; input.placeholder='100';
+      if(label) label.textContent='Дистанция, км';
+      if(input){ input.min='0.1'; input.max='340'; input.step='0.1'; input.placeholder='100'; }
     }
+    configureTimeButtonsForDistance();
     $('paceCalcResult').hidden=true;
     $('paceCalcStatus').textContent=`Режим дистанции: ${paceDistanceUnit==='m'?'метры':'километры'}. Нажмите «Рассчитать темп».`;
-  }));
+  }
+  document.addEventListener('click',e=>{
+    const db=e.target.closest?.('[data-distance-unit]');
+    if(db){ e.preventDefault(); setDistanceUnit(db.dataset.distanceUnit); return; }
+    const tb=e.target.closest?.('[data-pace-unit]');
+    if(tb){ e.preventDefault(); setTimeUnit(tb.dataset.paceUnit); }
+  });
   $('paceCalcAddStop').addEventListener('click',()=>addStop());
   $('paceCalcBtn').addEventListener('click',calculate);
   $('paceCalcDistance')?.addEventListener('input',invalidatePaceResult);
