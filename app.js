@@ -6714,14 +6714,23 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     const tenPace=Math.max(150,thresholdPace-8);
     const tenTime=tenPace*10;
     const fiveTime=tenTime*Math.pow(0.5,1.06);
-    return {tenPace,tenTime,fiveTime,fivePace:fiveTime/5};
+    const halfDist=21.0975;
+    const marathonDist=42.195;
+    const halfTime=tenTime*Math.pow(halfDist/10,1.06);
+    const marathonTime=tenTime*Math.pow(marathonDist/10,1.06);
+    return {
+      tenPace,tenTime,
+      fiveTime,fivePace:fiveTime/5,
+      halfTime,halfPace:halfTime/halfDist,
+      marathonTime,marathonPace:marathonTime/marathonDist
+    };
   }
   function calculate(){
     const n=Number(segmentCount.value||2);
     const segs=[];
     for(let i=1;i<=n;i++){
       const s=readSegment(i);
-      if(!s){
+      if(!s || !Number.isFinite(s.hr)){
         byId('thresholdStatus').textContent=`Заполните отрезок ${i}: дистанцию или темп, и средний пульс.`;
         markThresholdMissing(i);
         return;
@@ -6775,6 +6784,10 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     byId('threshold5kPace').textContent=paceText(pred.fivePace);
     byId('threshold10kPrediction').textContent=timeText(pred.tenTime);
     byId('threshold10kPace').textContent=paceText(pred.tenPace);
+    byId('thresholdHalfPrediction').textContent=timeText(pred.halfTime);
+    byId('thresholdHalfPace').textContent=paceText(pred.halfPace);
+    byId('thresholdMarathonPrediction').textContent=timeText(pred.marathonTime);
+    byId('thresholdMarathonPace').textContent=paceText(pred.marathonPace);
 
     const segText=segs.map(s=>`${s.i}: ${paceText(s.pace)} (${s.d.toFixed(2)} км)`).join(' · ');
     const calText=calibration?` Добавлена калибровка по свежему результату ${calLabel}.`:'';
