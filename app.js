@@ -6938,6 +6938,19 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       }
       segs.push(s);
     }
+    const athleteHrMaxRaw=String(byId('thresholdAthleteHrMax')?.value||'').trim();
+    const athleteHrMaxCheck=Number(athleteHrMaxRaw);
+    if(athleteHrMaxRaw && (!Number.isFinite(athleteHrMaxCheck) || athleteHrMaxCheck<100 || athleteHrMaxCheck>240)){
+      const el=byId('thresholdAthleteHrMax');
+      el?.classList.add('threshold-invalid');
+      byId('thresholdStatus').textContent='⚠️ HRmax невалиден. Укажите максимальный пульс 100–240 уд/мин или оставьте поле пустым.';
+      byId('thresholdQuickResult').hidden=true;
+      byId('thresholdResult').hidden=true;
+      el?.scrollIntoView({behavior:'smooth',block:'center'});
+      try{el?.focus({preventScroll:true});}catch(e){}
+      return;
+    }
+
     // Validate heart-rate values before using them in the threshold model.
     // These are 12-minute threshold intervals, so obviously broken OCR/input values
     // such as 17 bpm must never be accepted.
@@ -7296,6 +7309,16 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       else if(el?.value && avg>0 && v<avg){el.classList.add('threshold-invalid'); if(byId('thresholdStatus')) byId('thresholdStatus').textContent='Максимальный пульс не может быть ниже среднего.';}
     });
   }
+  byId('thresholdAthleteHrMax')?.addEventListener('input',()=>{
+    const el=byId('thresholdAthleteHrMax');
+    const raw=String(el?.value||'').trim();
+    const v=Number(raw);
+    const invalid=!!raw && (!Number.isFinite(v) || v<100 || v>240);
+    el?.classList.toggle('threshold-invalid',invalid);
+    if(invalid && byId('thresholdStatus')) byId('thresholdStatus').textContent='HRmax должен быть в диапазоне 100–240 уд/мин.';
+    if(byId('thresholdQuickResult')) byId('thresholdQuickResult').hidden=true;
+    if(byId('thresholdResult')) byId('thresholdResult').hidden=true;
+  });
   byId('thresholdRecovery')?.addEventListener('blur',()=>formatRaceTimeInput(byId('thresholdRecovery')));
   byId('threshold5k')?.addEventListener('blur',()=>formatRaceTimeInput(byId('threshold5k')));
   byId('threshold10k')?.addEventListener('blur',()=>formatRaceTimeInput(byId('threshold10k')));
@@ -7323,8 +7346,8 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     if(paceLabel){ out.pace=`${Number(paceLabel[1])}:${paceLabel[2]}`; }
 
     // HR values. Prefer explicit labels. Garmin/RU variants are covered.
-    const avgHrMatch=text.match(/(?:average\s*(?:heart\s*rate|hr)|avg\.?\s*hr|средн(?:ий|яя)?\s*(?:пульс|чсс)|пульс\s*средн)[^\d]{0,18}(\d{2,3})/i);
-    const maxHrMatch=text.match(/(?:maximum\s*(?:heart\s*rate|hr)|max\.?\s*hr|макс(?:имальн(?:ый|ая))?\.?\s*(?:пульс|чсс)|пульс\s*макс)[^\d]{0,18}(\d{2,3})/i);
+    const avgHrMatch=text.match(/(?:average\s*(?:heart\s*rate|hr)|avg\.?\s*hr|средн(?:ий|яя)?\s*(?:пульс|чсс)|пульс\s*средн)[^\d]{0,18}(\d{2,4})/i);
+    const maxHrMatch=text.match(/(?:maximum\s*(?:heart\s*rate|hr)|max\.?\s*hr|макс(?:имальн(?:ый|ая))?\.?\s*(?:пульс|чсс)|пульс\s*макс)[^\d]{0,18}(\d{2,4})/i);
     if(avgHrMatch){ const v=Number(avgHrMatch[1]); if(v>=70&&v<=230) out.avg_hr=v; }
     if(maxHrMatch){ const v=Number(maxHrMatch[1]); if(v>=70&&v<=240) out.max_hr=v; }
 
@@ -7405,9 +7428,18 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       }
       if(data.pace) syncFromPace(i); else if(Number(data.distance_km)>0) syncFromDistance(i);
       byId(`thresholdDistance${i}`)?.classList.remove('threshold-invalid');
-      byId(`thresholdPaceInput${i}`)?.classList.remove('threshold-invalid');
-      byId(`thresholdHr${i}`)?.classList.remove('threshold-invalid');
-      byId(`thresholdHrMax${i}`)?.classList.remove('threshold-invalid');
+      if(!data.pace || parsePace(String(data.pace).trim())) byId(`thresholdPaceInput${i}`)?.classList.remove('threshold-invalid');
+      const avgNow=Number(byId(`thresholdHr${i}`)?.value||0);
+      const maxNow=Number(byId(`thresholdHrMax${i}`)?.value||0);
+      const avgInvalid=!!byId(`thresholdHr${i}`)?.value && (!Number.isFinite(avgNow) || avgNow<80 || avgNow>230);
+      const maxInvalid=!!byId(`thresholdHrMax${i}`)?.value && (!Number.isFinite(maxNow) || maxNow<80 || maxNow>240 || (Number.isFinite(avgNow) && avgNow>0 && maxNow<avgNow));
+      byId(`thresholdHr${i}`)?.classList.toggle('threshold-invalid',avgInvalid);
+      byId(`thresholdHrMax${i}`)?.classList.toggle('threshold-invalid',maxInvalid);
+      if(avgInvalid){
+        if(status){status.textContent=`Средний пульс «${byId(`thresholdHr${i}`)?.value}» невалиден. Укажите 80–230 уд/мин.`;status.className='threshold-photo-status warn';}
+      }else if(maxInvalid){
+        if(status){status.textContent=(maxNow<avgNow?`Максимальный пульс (${Math.round(maxNow)}) не может быть ниже среднего (${Math.round(avgNow)}).`:`Максимальный пульс «${byId(`thresholdHrMax${i}`)?.value}» невалиден. Укажите 80–240 уд/мин.`);status.className='threshold-photo-status warn';}
+      }
       if(byId('thresholdQuickResult')) byId('thresholdQuickResult').hidden=true;
       if(byId('thresholdResult')) byId('thresholdResult').hidden=true;
       if(status){
