@@ -1080,8 +1080,14 @@
           </label>
         </div>
 
+        <div class="threshold-segment-tabs" id="thresholdSegmentTabs">
+          <button type="button" class="threshold-segment-tab active" data-threshold-tab="1">Отрезок 1</button>
+          <button type="button" class="threshold-segment-tab" data-threshold-tab="2">Отрезок 2</button>
+          <button type="button" class="threshold-segment-tab" data-threshold-tab="3" hidden>Отрезок 3</button>
+        </div>
+
         <div id="thresholdSegments" class="threshold-segments">
-          <div class="threshold-segment" data-threshold-segment="1">
+          <div class="threshold-segment active" data-threshold-segment="1">
             <div class="threshold-segment-title"><b>Отрезок 1 <em class="required-badge">ОБЯЗАТЕЛЬНО</em></b><span>12:00</span></div>
             <div class="threshold-input-grid">
               <label class="field"><span>Дистанция, км <small>или темп ↓</small></span><input id="thresholdDistance1" type="number" inputmode="decimal" min="1.5" max="4" step="0.01" placeholder="2.88"></label>
@@ -1091,7 +1097,7 @@
             </div>
             <div id="thresholdPace1" class="threshold-live-pace">Темп: —</div>
           </div>
-          <div class="threshold-segment" data-threshold-segment="2">
+          <div class="threshold-segment" data-threshold-segment="2" hidden>
             <div class="threshold-segment-title"><b>Отрезок 2 <em class="required-badge">ОБЯЗАТЕЛЬНО</em></b><span>12:00</span></div>
             <div class="threshold-input-grid">
               <label class="field"><span>Дистанция, км <small>или темп ↓</small></span><input id="thresholdDistance2" type="number" inputmode="decimal" min="1.5" max="4" step="0.01" placeholder="2.78"></label>
@@ -1318,6 +1324,12 @@
 .misha-start-inner b{display:block;font-size:18px}.misha-start-inner span{display:block;margin-top:4px;color:#aebbd0}
 @keyframes mishaSendoff{0%{opacity:0;transform:translateX(35px) scale(.92)}12%,78%{opacity:1;transform:translateX(0) scale(1)}100%{opacity:0;transform:translateX(-45px) scale(.96)}}
 @media(max-width:600px){.misha-start-inner{width:250px}.misha-start-inner img{width:125px;height:105px}.misha-start-inner b{font-size:15px}}
+
+.threshold-segment-tabs{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0 12px}
+.threshold-segment-tab{appearance:none;border:1px solid #28517b;background:#0a1730;color:#cfe7ff;border-radius:14px;padding:10px 14px;font-weight:800;cursor:pointer}
+.threshold-segment-tab.active{background:#38bdf8;color:#062033;border-color:#38bdf8;box-shadow:0 0 0 1px rgba(56,189,248,.25) inset}
+.threshold-segment{display:none}
+.threshold-segment.active{display:block}
 </style>
 
 <div id="mishaFinishWelcome" class="misha-start-sendoff" aria-hidden="true">

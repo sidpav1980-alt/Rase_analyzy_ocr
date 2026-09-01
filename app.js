@@ -6551,6 +6551,8 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
 (function initThresholdTest(){
   const byId=id=>document.getElementById(id);
   const segmentCount=byId('thresholdSegmentCount');
+  const segmentTabs=[...document.querySelectorAll('[data-threshold-tab]')];
+  let activeThresholdTab=1;
   if(!segmentCount) return;
 
   function paceText(sec){
@@ -6659,9 +6661,26 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
   }
   function syncSegments(){
     const n=Number(segmentCount.value||2);
-    const third=document.querySelector('[data-threshold-segment="3"]');
-    if(third) third.hidden=n!==3;
+    if(activeThresholdTab>n) activeThresholdTab=n;
+    setActiveSegmentTab(activeThresholdTab);
     updateLivePaces();
+  }
+
+  function setActiveSegmentTab(tab){
+    activeThresholdTab=tab;
+    const n=Number(segmentCount.value||2);
+    document.querySelectorAll('[data-threshold-segment]').forEach(el=>{
+      const seg=Number(el.dataset.thresholdSegment||0);
+      const show=seg===tab && seg<=n;
+      el.hidden=!show;
+      el.classList.toggle('active',show);
+    });
+    segmentTabs.forEach(btn=>{
+      const seg=Number(btn.dataset.thresholdTab||0);
+      const show=seg<=n;
+      btn.hidden=!show;
+      btn.classList.toggle('active',seg===tab && show);
+    });
   }
   function weightedMean(values,weights){
     let n=0,d=0;
@@ -6785,6 +6804,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     syncSegments();
   }
   segmentCount.addEventListener('change',syncSegments);
+  segmentTabs.forEach(btn=>btn.addEventListener('click',()=>setActiveSegmentTab(Number(btn.dataset.thresholdTab||1))));
   for(let i=1;i<=3;i++){
     byId(`thresholdDistance${i}`)?.addEventListener('input',()=>syncFromDistance(i));
     byId(`thresholdPaceInput${i}`)?.addEventListener('input',()=>syncFromPace(i));
