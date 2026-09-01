@@ -1066,7 +1066,7 @@
           <div class="threshold-required-title">Что нужно ввести для расчёта</div>
           <div class="threshold-required-step"><b>1.</b><span>Выберите <b>2 или 3 отрезка по 12 минут</b>.</span></div>
           <div class="threshold-required-step"><b>2.</b><span>Для <b>каждого отрезка</b> обязательно укажите <b>темп ИЛИ дистанцию</b> + <b>средний пульс</b>.</span></div>
-          <div class="threshold-required-step"><b>3.</b><span><b>Максимальный пульс</b> и результат на <b>5/10 км</b> — необязательны, они только уточняют расчёт.</span></div>
+          <div class="threshold-required-step"><b>3.</b><span><b>VO₂max обязателен</b> для физиологической проверки. <b>HRmax</b> и результат на <b>5/10 км</b> дополнительно повышают точность.</span></div>
           <div class="threshold-required-example">Пример: отрезок 1 → <b>4:10/км</b> + <b>172 уд/мин</b>; отрезок 2 → <b>4:20/км</b> + <b>174 уд/мин</b>.</div>
         </div>
         <p class="muted threshold-intro">Если вводите темп, дистанцию можно не заполнять — она рассчитается автоматически. Если вводите дистанцию, темп рассчитается сам. Отдых между отрезками по умолчанию 2 минуты.</p>
@@ -1085,6 +1085,18 @@
             <input id="thresholdRecovery" value="2:00" inputmode="numeric" placeholder="200 = 2:00">
           </label>
         </div>
+
+        <div class="threshold-settings threshold-physiology-settings">
+          <label class="field">
+            <span>VO₂max, мл/кг/мин <b class="req-star">*</b></span>
+            <input id="thresholdVo2max" type="number" inputmode="decimal" min="20" max="95" step="0.1" placeholder="например 55">
+          </label>
+          <label class="field">
+            <span>Максимальный пульс HRmax (необяз.)</span>
+            <input id="thresholdAthleteHrMax" type="number" inputmode="numeric" min="120" max="230" step="1" placeholder="например 190">
+          </label>
+        </div>
+        <div id="thresholdPhysiologyHint" class="threshold-physiology-hint">VO₂max ограничивает физиологически правдоподобный пороговый темп. HRmax позволяет проверить, действительно ли пульс на 12-минутных отрезках был близок к пороговой интенсивности.</div>
 
         <div class="threshold-segment-tabs" id="thresholdSegmentTabs">
           <button type="button" class="threshold-segment-tab active" data-threshold-tab="1">Отрезок 1</button>
@@ -1154,6 +1166,7 @@
           <div><span>Пороговый пульс</span><b id="thresholdHrResult">—</b></div>
           <div><span>Изменение темпа от 1-го к последнему отрезку</span><b id="thresholdDrift">—</b><small class="threshold-drift-help">+4% = последний отрезок был примерно на 4% медленнее первого</small></div>
           <div><span>Качество теста</span><b id="thresholdQuality">—</b></div>
+          <div><span>Физиологическая проверка</span><b id="thresholdPhysiologyStatus">—</b><small id="thresholdPhysiologyDetail">—</small></div>
         </div>
         <div class="metrics threshold-predictions">
           <div><span>Прогноз 5 км</span><b id="threshold5kPrediction">—</b><small id="threshold5kPace">—</small><small id="threshold5kHr">Средний пульс: —</small></div>
@@ -1426,4 +1439,10 @@
 @media(max-width:700px){.pacecalc-timeunit{margin-top:-8px}.pacecalc-unit{padding:7px 12px;font-size:13px}}
 
 .pacecalc-unrealistic{border-color:#f97316!important;background:rgba(124,45,18,.22)!important;color:#fdba74!important;font-weight:800!important}
+
+.threshold-physiology-hint{margin:8px 0 14px;padding:10px 12px;border-radius:12px;background:#0b1b2e;border:1px solid #29415e;color:#9fb3ca;font-size:13px;line-height:1.4}
+.threshold-physiology-settings{margin-top:10px}
+.threshold-physiology-warning{color:#fbbf24!important}
+.threshold-physiology-bad{color:#fb7185!important}
+.threshold-physiology-good{color:#4ade80!important}
 </style>

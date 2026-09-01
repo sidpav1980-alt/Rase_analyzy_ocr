@@ -6746,6 +6746,95 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       marathonTime,marathonPace:marathonTime/marathonDist
     };
   }
+  function oxygenCostAtPace(paceSec){
+    if(!Number.isFinite(paceSec)||paceSec<=0) return null;
+    const speedMMin=60000/paceSec;
+    return 0.2*speedMMin+3.5; // level-running estimate, ml/kg/min
+  }
+  function paceFromOxygenCost(vo2){
+    if(!Number.isFinite(vo2)||vo2<=3.5) return null;
+    const speedMMin=(vo2-3.5)/0.2;
+    return speedMMin>0?60000/speedMMin:null;
+  }
+  function readGlobalVo2(){
+    const local=Number(byId('thresholdVo2max')?.value||0);
+    if(local>=20&&local<=95) return local;
+    const global=Number(byId('vo2max')?.value||0);
+    return global>=20&&global<=95?global:null;
+  }
+  function readAthleteHrMax(){
+    const local=Number(byId('thresholdAthleteHrMax')?.value||0);
+    if(local>=120&&local<=230) return local;
+    const global=Number(byId('refMaxHr')?.value||0);
+    return global>=120&&global<=230?global:null;
+  }
+  function applyPhysiologyModel(rawThreshold,segs,calibration){
+    const vo2max=readGlobalVo2();
+    const hrmax=readAthleteHrMax();
+    const weights=segs.length===2?[0.45,0.55]:[0.25,0.35,0.40];
+    const avgHr=weightedMean(segs.map(x=>x.hr),weights);
+    let adjusted=rawThreshold;
+    let score=100;
+    const notes=[];
+    let status='Подтверждено';
+
+    // VO2max is the aerobic ceiling; threshold fraction is usually below it.
+    // Use a broad athlete range, then allow a fresh race result to calibrate economy.
+    if(Number.isFinite(vo2max)){
+      const cost=oxygenCostAtPace(rawThreshold);
+      const fraction=cost/vo2max;
+      let sustainableFraction=0.90;
+      if(calibration) sustainableFraction=0.92; // race performance gives an individual economy anchor
+      const capCost=vo2max*sustainableFraction;
+      const capPace=paceFromOxygenCost(capCost);
+      if(fraction>0.98){
+        adjusted=Math.max(adjusted,capPace||adjusted);
+        score-=35;
+        status='Не подтверждено';
+        notes.push(`темп требует около ${Math.round(fraction*100)}% VO₂max — слишком высоко для устойчивого LT2`);
+      }else if(fraction>0.93){
+        adjusted=Math.max(adjusted,(capPace||adjusted)-2);
+        score-=20;
+        status='Сомнительно';
+        notes.push(`темп требует около ${Math.round(fraction*100)}% VO₂max — верхняя граница для пороговой работы`);
+      }else if(fraction<0.72){
+        score-=10;
+        notes.push(`темп использует лишь около ${Math.round(fraction*100)}% VO₂max — возможно, тест был не максимальным пороговым`);
+      }else{
+        notes.push(`VO₂max согласуется с темпом (${Math.round(fraction*100)}% расчётной аэробной мощности)`);
+      }
+    }
+
+    let lthr=Number.isFinite(avgHr)?Math.round(avgHr):null;
+    if(Number.isFinite(hrmax) && Number.isFinite(avgHr)){
+      const hrFraction=avgHr/hrmax;
+      if(hrFraction<0.78){
+        score-=40;
+        status='Не подтверждено';
+        notes.push(`средний пульс ${Math.round(hrFraction*100)}% HRmax — слишком низкий для LT2; проверь датчик или интенсивность`);
+        // Don't accept an obviously sub-threshold HR as measured LTHR; report an estimated anchor.
+        lthr=Math.round(hrmax*0.88);
+      }else if(hrFraction<0.83){
+        score-=20;
+        if(status==='Подтверждено') status='Сомнительно';
+        notes.push(`средний пульс ${Math.round(hrFraction*100)}% HRmax — ниже типичного порогового диапазона`);
+        lthr=Math.max(Math.round(avgHr),Math.round(hrmax*0.85));
+      }else if(hrFraction<=0.94){
+        notes.push(`пульс ${Math.round(hrFraction*100)}% HRmax согласуется с пороговой интенсивностью`);
+      }else{
+        score-=15;
+        if(status==='Подтверждено') status='Сомнительно';
+        notes.push(`пульс ${Math.round(hrFraction*100)}% HRmax очень высокий — возможно, работа была выше порога`);
+      }
+    }else if(!Number.isFinite(hrmax)){
+      notes.push('HRmax не указан: проверка пульса выполнена только по самим отрезкам');
+    }
+
+    if(score<55) status='Не подтверждено';
+    else if(score<80 && status==='Подтверждено') status='Сомнительно';
+    return {threshold:adjusted,thresholdHr:lthr,vo2max,hrmax,score,status,notes};
+  }
+
   function calculate(){
     const n=Number(segmentCount.value||2);
     const segs=[];
@@ -6757,6 +6846,13 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
         return;
       }
       segs.push(s);
+    }
+    const vo2Input=readGlobalVo2();
+    if(!Number.isFinite(vo2Input)){
+      const el=byId('thresholdVo2max');
+      if(el){el.classList.add('threshold-invalid');el.scrollIntoView({behavior:'smooth',block:'center'});}
+      byId('thresholdStatus').textContent='Введите VO₂max для физиологической проверки порога.';
+      return;
     }
     const weights=n===2?[0.45,0.55]:[0.25,0.35,0.40];
     const avgPace=weightedMean(segs.map(s=>s.pace),weights);
@@ -6778,8 +6874,9 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     if(calibration) threshold=threshold*0.60+calibration*0.40;
 
     const hrVals=segs.map(s=>s.hr);
-    let thresholdHr=weightedMean(hrVals,weights);
-    if(Number.isFinite(thresholdHr)) thresholdHr=Math.round(thresholdHr);
+    const physiology=applyPhysiologyModel(threshold,segs,calibration);
+    threshold=physiology.threshold;
+    let thresholdHr=physiology.thresholdHr;
 
     // Make the calculated threshold the shared source for the rest of Race Analyzer.
     state.thresholdPaceSec=threshold;
@@ -6792,6 +6889,8 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     if(n===3 && Math.abs(driftPct)<=5 && hrVals.every(Boolean)) quality='Высокое';
     if(Math.abs(driftPct)>7) quality='Среднее';
     if(Math.abs(driftPct)>12) quality='Низкое';
+    if(physiology.score<80 && quality==='Высокое') quality='Хорошее';
+    if(physiology.score<65) quality='Низкое';
 
     byId('thresholdMainPace').textContent=paceText(threshold);
     byId('thresholdPaceRange').textContent=`Рабочий диапазон: ${paceText(rangeLo)} – ${paceText(rangeHi)}`;
@@ -6801,6 +6900,14 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     byId('thresholdQuickResult').hidden=false;
     byId('thresholdDrift').textContent=`${driftPct>=0?'+':''}${driftPct.toFixed(1)}%`;
     byId('thresholdQuality').textContent=quality;
+    const physStatus=byId('thresholdPhysiologyStatus');
+    const physDetail=byId('thresholdPhysiologyDetail');
+    if(physStatus){
+      physStatus.textContent=physiology.status;
+      physStatus.classList.remove('threshold-physiology-good','threshold-physiology-warning','threshold-physiology-bad');
+      physStatus.classList.add(physiology.status==='Подтверждено'?'threshold-physiology-good':physiology.status==='Сомнительно'?'threshold-physiology-warning':'threshold-physiology-bad');
+    }
+    if(physDetail) physDetail.textContent=physiology.notes.join(' · ');
     byId('threshold5kPrediction').textContent=timeText(pred.fiveTime);
     byId('threshold5kPace').textContent=paceText(pred.fivePace);
     byId('threshold10kPrediction').textContent=timeText(pred.tenTime);
@@ -6827,12 +6934,13 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
 
     const segText=segs.map(s=>`${s.i}: ${paceText(s.pace)} (${s.d.toFixed(2)} км)`).join(' · ');
     const calText=calibration?` Добавлена калибровка по свежему результату ${calLabel}.`:'';
-    byId('thresholdExplanation').innerHTML=`<b>Отрезки:</b> ${segText}<br><b>Как рассчитано:</b> поздние отрезки имеют больший вес; отдельно учитывается изменение темпа от первого к последнему.${calText}`;
+    const physText=` VO₂max ${physiology.vo2max.toFixed(1)} учитывается как аэробный потолок${Number.isFinite(physiology.hrmax)?`; HRmax ${Math.round(physiology.hrmax)} — для проверки относительной интенсивности пульса`:''}.`;
+    byId('thresholdExplanation').innerHTML=`<b>Отрезки:</b> ${segText}<br><b>Как рассчитано:</b> поздние отрезки имеют больший вес; учитывается изменение темпа, VO₂max, пульс${Number.isFinite(physiology.hrmax)?'/HRmax':''} и контрольный результат 5/10 км.${calText}${physText}`;
     byId('thresholdStatus').textContent='✓ Порог рассчитан.';
     byId('thresholdResult').hidden=false;
 
     try{
-      localStorage.setItem('trailThresholdTest',JSON.stringify({n,recovery:byId('thresholdRecovery').value,segs:segs.map(s=>({d:Number(s.d.toFixed(2)),pace:paceInputText(s.pace),hr:s.hr,hrMax:s.hrMax})),t5:byId('threshold5k').value,t10:byId('threshold10k').value,thresholdPaceSec:threshold,thresholdHr:Number.isFinite(thresholdHr)?thresholdHr:null}));
+      localStorage.setItem('trailThresholdTest',JSON.stringify({n,recovery:byId('thresholdRecovery').value,segs:segs.map(s=>({d:Number(s.d.toFixed(2)),pace:paceInputText(s.pace),hr:s.hr,hrMax:s.hrMax})),t5:byId('threshold5k').value,t10:byId('threshold10k').value,thresholdPaceSec:threshold,thresholdHr:Number.isFinite(thresholdHr)?thresholdHr:null,vo2max:physiology.vo2max,hrmax:physiology.hrmax}));
     }catch(e){}
     clearThresholdInvalid();
     byId('thresholdQuickResult').scrollIntoView({behavior:'smooth',block:'center'});
@@ -6861,6 +6969,8 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       if(!x) return;
       segmentCount.value=String(x.n===3?3:2);
       byId('thresholdRecovery').value=x.recovery||'2:00';
+      if(byId('thresholdVo2max')) byId('thresholdVo2max').value=x.vo2max||byId('vo2max')?.value||'';
+      if(byId('thresholdAthleteHrMax')) byId('thresholdAthleteHrMax').value=x.hrmax||((Number(byId('refMaxHr')?.value||0)>=120)?byId('refMaxHr').value:'');
       (x.segs||[]).forEach((s,j)=>{
         const i=j+1;
         if(byId(`thresholdDistance${i}`)) byId(`thresholdDistance${i}`).value=(Number(s.d)>0?Number(s.d).toFixed(2):'');
@@ -6913,6 +7023,8 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
   byId('thresholdCalcBtn').addEventListener('click',calculate);
   byId('thresholdResetBtn').addEventListener('click',reset);
   restore();
+  if(byId('thresholdVo2max') && !byId('thresholdVo2max').value && Number(byId('vo2max')?.value||0)>=20) byId('thresholdVo2max').value=byId('vo2max').value;
+  if(byId('thresholdAthleteHrMax') && !byId('thresholdAthleteHrMax').value && Number(byId('refMaxHr')?.value||0)>=120) byId('thresholdAthleteHrMax').value=byId('refMaxHr').value;
 })();;
 
 // v0.0262: pace calculator up to 340 km with up to 7 stops.
