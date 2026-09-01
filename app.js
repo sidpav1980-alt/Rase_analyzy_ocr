@@ -6752,6 +6752,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     }
     const hrmax=Number(physiology?.hrmax);
     const avgHr=Number(physiology?.avgHr);
+    const peakHr=Number(physiology?.peakHr);
     if(Number.isFinite(hrmax) && Number.isFinite(avgHr) && hrmax>0){
       const f=avgHr/hrmax;
       // Heart rate is highly individual. A low absolute HR must not by itself
@@ -6761,6 +6762,17 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       else if(f<=0.94) hrFactor=1.00;
       else if(f<=0.97) hrFactor=1.01;
       else hrFactor=1.02;
+
+      // Peak HR from each 12-minute rep is also useful. At the same pace and
+      // average HR, a higher peak means the athlete was closer to the cardiac
+      // ceiling, so race predictions get a small conservative correction.
+      if(Number.isFinite(peakHr) && peakHr>avgHr){
+        const pf=peakHr/hrmax;
+        if(pf>=0.98) hrFactor*=1.018;
+        else if(pf>=0.95) hrFactor*=1.010;
+        else if(pf>=0.92) hrFactor*=1.004;
+        else if(pf<0.84) hrFactor*=0.992;
+      }
     }
     const physFactor=Math.max(0.86,Math.min(1.14,vo2Factor*hrFactor));
 
@@ -6804,6 +6816,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     const hrmax=readAthleteHrMax();
     const weights=segs.length===2?[0.45,0.55]:[0.25,0.35,0.40];
     const avgHr=weightedMean(segs.map(x=>x.hr),weights);
+    const peakHr=weightedMean(segs.map(x=>x.hrMax),weights);
     let adjusted=rawThreshold;
     let score=100;
     const notes=[];
@@ -6836,7 +6849,13 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       }
     }
 
-    let lthr=Number.isFinite(avgHr)?Math.round(avgHr):null;
+    // Average HR is the main LT2 anchor. Peak HR of the 12-minute reps
+    // adds a small correction because HR often rises through the interval.
+    let lthr=Number.isFinite(avgHr)?avgHr:null;
+    if(Number.isFinite(lthr) && Number.isFinite(peakHr) && peakHr>lthr){
+      lthr += Math.min(3, Math.max(0, (peakHr-lthr)*0.15));
+    }
+    if(Number.isFinite(lthr)) lthr=Math.round(lthr);
     if(Number.isFinite(hrmax) && Number.isFinite(avgHr)){
       const hrFraction=avgHr/hrmax;
       // Do not use a universal HR percentage as a hard gate. Trained athletes can
@@ -6862,7 +6881,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
 
     if(score<55) status='Не подтверждено';
     else if(score<80 && status==='Подтверждено') status='Сомнительно';
-    return {threshold:adjusted,thresholdHr:lthr,vo2max,hrmax,avgHr,score,status,notes};
+    return {threshold:adjusted,thresholdHr:lthr,vo2max,hrmax,avgHr,peakHr,score,status,notes};
   }
 
   function calculate(){
