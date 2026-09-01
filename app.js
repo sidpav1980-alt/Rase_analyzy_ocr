@@ -6555,6 +6555,12 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     if(s===60){m+=1;s=0;}
     return `${m}:${String(s).padStart(2,'0')}/км`;
   }
+  function paceInputText(sec){
+    if(!Number.isFinite(sec)||sec<=0) return '';
+    let m=Math.floor(sec/60), s=Math.round(sec-m*60);
+    if(s===60){m+=1;s=0;}
+    return `${m}:${String(s).padStart(2,'0')}`;
+  }
   function timeText(sec){
     if(!Number.isFinite(sec)||sec<=0) return '—';
     sec=Math.round(sec);
@@ -6563,18 +6569,54 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     return h>0?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${m}:${String(s).padStart(2,'0')}`;
   }
   function parseTime(v){
-    const p=String(v||'').trim().replace(',', '.').split(':').map(Number);
+    const raw=String(v||'').trim().replace(',', '.');
+    if(!raw) return null;
+    const p=raw.split(':').map(Number);
     if(!p.length||p.some(x=>!Number.isFinite(x)||x<0)) return null;
-    if(p.length===2) return p[0]*60+p[1];
-    if(p.length===3) return p[0]*3600+p[1]*60+p[2];
+    if(p.length===2 && p[1]<60) return p[0]*60+p[1];
+    if(p.length===3 && p[1]<60 && p[2]<60) return p[0]*3600+p[1]*60+p[2];
     return null;
+  }
+  function parsePace(v){
+    const sec=parseTime(v);
+    if(!Number.isFinite(sec) || sec<120 || sec>900) return null;
+    return sec;
+  }
+  function syncFromDistance(i){
+    const d=Number(byId(`thresholdDistance${i}`)?.value||0);
+    const paceEl=byId(`thresholdPaceInput${i}`);
+    const live=byId(`thresholdPace${i}`);
+    if(d>0){
+      const pace=720/d;
+      if(paceEl) paceEl.value=paceInputText(pace);
+      if(live) live.textContent='Темп: '+paceText(pace);
+    }else{
+      if(paceEl) paceEl.value='';
+      if(live) live.textContent='Темп: —';
+    }
+  }
+  function syncFromPace(i){
+    const pace=parsePace(byId(`thresholdPaceInput${i}`)?.value);
+    const distEl=byId(`thresholdDistance${i}`);
+    const live=byId(`thresholdPace${i}`);
+    if(pace){
+      const d=720/pace;
+      if(distEl) distEl.value=d.toFixed(2);
+      if(live) live.textContent='Темп: '+paceText(pace);
+    }else{
+      if(live) live.textContent='Темп: —';
+    }
   }
   function readSegment(i){
     const d=Number(byId(`thresholdDistance${i}`)?.value||0);
+    const paceEntered=parsePace(byId(`thresholdPaceInput${i}`)?.value);
     const hr=Number(byId(`thresholdHr${i}`)?.value||0);
     const hrMax=Number(byId(`thresholdHrMax${i}`)?.value||0);
-    if(!(d>0)) return null;
-    return {i,d,pace:720/d,hr:hr>0?hr:null,hrMax:hrMax>0?hrMax:null};
+    let pace=null, distance=null;
+    if(paceEntered){ pace=paceEntered; distance=720/pace; }
+    else if(d>0){ distance=d; pace=720/d; }
+    if(!(distance>0) || !pace) return null;
+    return {i,d:distance,pace,hr:hr>0?hr:null,hrMax:hrMax>0?hrMax:null};
   }
   function updateLivePaces(){
     for(let i=1;i<=3;i++){
@@ -6594,7 +6636,6 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     return d?n/d:null;
   }
   function predictFromThreshold(thresholdPace){
-    // Practical approximation: current 10 km race pace is commonly ~6–10 s/km faster than LT2 pace.
     const tenPace=Math.max(150,thresholdPace-8);
     const tenTime=tenPace*10;
     const fiveTime=tenTime*Math.pow(0.5,1.06);
@@ -6606,7 +6647,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     for(let i=1;i<=n;i++){
       const s=readSegment(i);
       if(!s){
-        byId('thresholdStatus').textContent=`Введите дистанцию для отрезка ${i}.`;
+        byId('thresholdStatus').textContent=`Введите дистанцию или темп для отрезка ${i}.`;
         return;
       }
       segs.push(s);
@@ -6616,7 +6657,6 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     const first=segs[0].pace,last=segs[segs.length-1].pace;
     const driftPct=((last-first)/first)*100;
 
-    // Progressive drift correction: the faster the fade, the more conservative the sustainable threshold estimate.
     let correction=2;
     if(driftPct>2) correction=3.5;
     if(driftPct>4) correction=5;
@@ -6629,10 +6669,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     let calibration=null,calLabel='';
     if(t10 && t10>1200 && t10<7200){ calibration=t10/10+7; calLabel='10 км'; }
     else if(t5 && t5>600 && t5<3600){ calibration=t5/5+18; calLabel='5 км'; }
-    if(calibration){
-      // Keep the interval test primary, but use a fresh race result to guard against fatigue-driven underestimation.
-      threshold=threshold*0.60+calibration*0.40;
-    }
+    if(calibration) threshold=threshold*0.60+calibration*0.40;
 
     const hrVals=segs.map(s=>s.hr);
     let thresholdHr=weightedMean(hrVals,weights);
@@ -6655,20 +6692,20 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     byId('threshold10kPrediction').textContent=timeText(pred.tenTime);
     byId('threshold10kPace').textContent=paceText(pred.tenPace);
 
-    const segText=segs.map(s=>`${s.i}: ${s.d.toFixed(2)} км → ${paceText(s.pace)}`).join(' · ');
+    const segText=segs.map(s=>`${s.i}: ${paceText(s.pace)} (${s.d.toFixed(2)} км)`).join(' · ');
     const calText=calibration?` Добавлена калибровка по свежему результату ${calLabel}.`:'';
     byId('thresholdExplanation').innerHTML=`<b>Отрезки:</b> ${segText}<br><b>Как рассчитано:</b> поздние отрезки имеют больший вес; отдельно учитывается изменение темпа от первого к последнему.${calText}`;
     byId('thresholdStatus').textContent='✓ Порог рассчитан.';
     byId('thresholdResult').hidden=false;
 
     try{
-      localStorage.setItem('trailThresholdTest',JSON.stringify({n,recovery:byId('thresholdRecovery').value,segs:segs.map(s=>({d:s.d,hr:s.hr,hrMax:s.hrMax})),t5:byId('threshold5k').value,t10:byId('threshold10k').value}));
+      localStorage.setItem('trailThresholdTest',JSON.stringify({n,recovery:byId('thresholdRecovery').value,segs:segs.map(s=>({d:s.d,pace:paceInputText(s.pace),hr:s.hr,hrMax:s.hrMax})),t5:byId('threshold5k').value,t10:byId('threshold10k').value}));
     }catch(e){}
     byId('thresholdResult').scrollIntoView({behavior:'smooth',block:'start'});
   }
   function reset(){
     for(let i=1;i<=3;i++){
-      ['Distance','Hr','HrMax'].forEach(k=>{const el=byId(`threshold${k}${i}`);if(el)el.value='';});
+      ['Distance','PaceInput','Hr','HrMax'].forEach(k=>{const el=byId(`threshold${k}${i}`);if(el)el.value='';});
     }
     byId('threshold5k').value='';byId('threshold10k').value='';byId('thresholdRecovery').value='2:00';
     segmentCount.value='2';syncSegments();byId('thresholdResult').hidden=true;
@@ -6684,6 +6721,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       (x.segs||[]).forEach((s,j)=>{
         const i=j+1;
         if(byId(`thresholdDistance${i}`)) byId(`thresholdDistance${i}`).value=s.d||'';
+        if(byId(`thresholdPaceInput${i}`)) byId(`thresholdPaceInput${i}`).value=s.pace||((s.d>0)?paceInputText(720/s.d):'');
         if(byId(`thresholdHr${i}`)) byId(`thresholdHr${i}`).value=s.hr||'';
         if(byId(`thresholdHrMax${i}`)) byId(`thresholdHrMax${i}`).value=s.hrMax||'';
       });
@@ -6692,8 +6730,13 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     syncSegments();
   }
   segmentCount.addEventListener('change',syncSegments);
-  document.querySelectorAll('#threshold input').forEach(el=>el.addEventListener('input',updateLivePaces));
+  for(let i=1;i<=3;i++){
+    byId(`thresholdDistance${i}`)?.addEventListener('input',()=>syncFromDistance(i));
+    byId(`thresholdPaceInput${i}`)?.addEventListener('input',()=>syncFromPace(i));
+    byId(`thresholdHr${i}`)?.addEventListener('input',updateLivePaces);
+    byId(`thresholdHrMax${i}`)?.addEventListener('input',updateLivePaces);
+  }
   byId('thresholdCalcBtn').addEventListener('click',calculate);
   byId('thresholdResetBtn').addEventListener('click',reset);
   restore();
-})();
+})();;
