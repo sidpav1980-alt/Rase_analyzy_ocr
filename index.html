@@ -10,7 +10,7 @@
   <title>Прогноз и анализ трейловых гонок</title>
   <link rel="manifest" href="manifest.webmanifest?v=075">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=262-threshold-keyboard-fix">
+  <link rel="stylesheet" href="styles.css?v=262-threshold-shared-values">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynBv0TtP4JpC5dQF3Vqv2tLIbV0w=" crossorigin="">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
@@ -1137,6 +1137,7 @@
           <div><span>Прогноз 10 км</span><b id="threshold10kPrediction">—</b><small id="threshold10kPace">—</small></div>
         </div>
         <div id="thresholdExplanation" class="threshold-explanation"></div>
+        <p class="muted"><b>Использование:</b> рассчитанный пороговый пульс автоматически используется как LTHR в других расчётах Race Analyzer. Пороговый темп сохраняется как текущий расчётный порог и восстанавливается после перезапуска.</p>
         <p class="muted threshold-disclaimer">Оценка предназначена для спортивного планирования и не является лабораторным измерением лактатного порога.</p>
       </div>
     </section>
@@ -1288,7 +1289,7 @@
     Модель является оценочной. Броды, погода, питание, состояние покрытия, самочувствие и другие факторы могут существенно повлиять на фактический результат. Расчёты носят исключительно информационно-ознакомительный характер, не являются гарантией результата или рекомендацией к действию. Автор не несёт ответственности за решения, принятые на основании расчётов приложения.
   </footer>
 
-  <script src="app.js?v=262-threshold-keyboard-fix"></script>
+  <script src="app.js?v=262-threshold-shared-values"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 

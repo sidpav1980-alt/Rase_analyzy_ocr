@@ -96,7 +96,9 @@ const state = {
   mapAnalysis: null,
   mapAnalysisReadyForCurrentGpx: false,
   syntheticFlatRoute: false,
-  deferredPrompt: null
+  deferredPrompt: null,
+  thresholdPaceSec: null,
+  thresholdHr: null
 };
 
 const $ = id => document.getElementById(id);
@@ -2080,6 +2082,8 @@ function renderRoster(){
 $('genderFilter')?.addEventListener('change',renderRoster);
 
 function estimateLTHR(){
+  // A completed 12-minute threshold test is the primary LTHR source across Race Analyzer.
+  const testHr=Number(state.thresholdHr)||0; if(testHr)return Math.round(testHr);
   const known=+$('lthr').value||0; if(known)return known;
   const hr=+$('refAvgHr').value||0, mins=trainingMovingMinutes()||100;
   if(mins<=50)return Math.round(hr*.98);
@@ -6704,6 +6708,11 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     let thresholdHr=weightedMean(hrVals,weights);
     if(Number.isFinite(thresholdHr)) thresholdHr=Math.round(thresholdHr);
 
+    // Make the calculated threshold the shared source for the rest of Race Analyzer.
+    state.thresholdPaceSec=threshold;
+    state.thresholdHr=Number.isFinite(thresholdHr)?thresholdHr:null;
+    if(byId('lthr') && Number.isFinite(thresholdHr)) byId('lthr').value=String(thresholdHr);
+
     const rangeLo=Math.max(1,threshold-4), rangeHi=threshold+3;
     const pred=predictFromThreshold(threshold);
     let quality='Хорошее';
@@ -6728,7 +6737,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     byId('thresholdResult').hidden=false;
 
     try{
-      localStorage.setItem('trailThresholdTest',JSON.stringify({n,recovery:byId('thresholdRecovery').value,segs:segs.map(s=>({d:s.d,pace:paceInputText(s.pace),hr:s.hr,hrMax:s.hrMax})),t5:byId('threshold5k').value,t10:byId('threshold10k').value}));
+      localStorage.setItem('trailThresholdTest',JSON.stringify({n,recovery:byId('thresholdRecovery').value,segs:segs.map(s=>({d:s.d,pace:paceInputText(s.pace),hr:s.hr,hrMax:s.hrMax})),t5:byId('threshold5k').value,t10:byId('threshold10k').value,thresholdPaceSec:threshold,thresholdHr:Number.isFinite(thresholdHr)?thresholdHr:null}));
     }catch(e){}
     byId('thresholdResult').scrollIntoView({behavior:'smooth',block:'start'});
   }
@@ -6739,6 +6748,8 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     byId('threshold5k').value='';byId('threshold10k').value='';byId('thresholdRecovery').value='2:00';
     segmentCount.value='2';syncSegments();byId('thresholdResult').hidden=true;
     byId('thresholdStatus').textContent='Введите минимум два 12-минутных отрезка.';
+    state.thresholdPaceSec=null; state.thresholdHr=null;
+    if(byId('lthr')) byId('lthr').value='0';
     try{localStorage.removeItem('trailThresholdTest');}catch(e){}
   }
   function restore(){
@@ -6755,6 +6766,11 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
         if(byId(`thresholdHrMax${i}`)) byId(`thresholdHrMax${i}`).value=s.hrMax||'';
       });
       byId('threshold5k').value=x.t5||'';byId('threshold10k').value=x.t10||'';
+      if(Number.isFinite(Number(x.thresholdPaceSec)) && Number(x.thresholdPaceSec)>0) state.thresholdPaceSec=Number(x.thresholdPaceSec);
+      if(Number.isFinite(Number(x.thresholdHr)) && Number(x.thresholdHr)>0){
+        state.thresholdHr=Number(x.thresholdHr);
+        if(byId('lthr')) byId('lthr').value=String(Math.round(Number(x.thresholdHr)));
+      }
     }catch(e){}
     syncSegments();
   }
