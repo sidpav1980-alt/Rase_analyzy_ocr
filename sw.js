@@ -1,9 +1,9 @@
-const CACHE='trail-analyzer-web-v233-ocr-garmin-row-map2';
+const CACHE='trail-analyzer-web-v234-interval-ocr-fix';
 const CORE=[
   './',
   './index.html',
-  './styles.css?v=262-ocr-garmin-row-map2',
-  './app.js?v=262-ocr-garmin-row-map2',
+  './styles.css?v=263-interval-ocr-fix',
+  './app.js?v=242-interval-ocr-fix',
   './manifest.webmanifest?v=075',
   './icon-192.png',
   './icon-512.png'

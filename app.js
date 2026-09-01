@@ -8082,6 +8082,9 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     // Некоторые версии iOS Safari надёжнее присылают input, чем change.
     if(!intervalOcrBusy && filesInput.files?.length) handleIntervalFiles();
   });
+  // Дополнительный fallback для iOS Safari: прямой обработчик свойства.
+  // Он нужен, если addEventListener не сработал после восстановления страницы из BFCache.
+  filesInput.onchange=()=>{ if(!intervalOcrBusy && filesInput.files?.length) handleIntervalFiles(); };
 
   copyBtn?.addEventListener('click',async()=>{
     const arr=[...found.values()].sort((a,b)=>a.index-b.index);
