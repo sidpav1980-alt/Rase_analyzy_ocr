@@ -7407,9 +7407,22 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     // This matters for Strava summary screenshots where OCR often linearizes the header as
     // "Расстояние  Темп  Время  8.03 км  4:47 /км ...". Without the unit-first rule
     // the distance 8.03 could be mistaken for a pace of 8:03/km.
-    const paceWithUnit=text.match(/\b([2-9])[:.]([0-5]\d)\s*(?:\/\s*(?:km|км)|(?:min\/km|мин\/км))\b/i);
-    const paceAfterLabel=text.match(/(?:pace|темп)[^\n\d]{0,12}([2-9])[:.]([0-5]\d)/i);
-    const paceLabel=paceWithUnit || paceAfterLabel;
+    // Garmin «Графики»: верхний блок темпа обычно показывает
+    // «4:48 /км Среднее» и рядом «3:48 /км Лучшее». Для порогового теста
+    // нужен именно СРЕДНИЙ темп. OCR на iPhone иногда заменяет ':' на '.', ';'
+    // или пробел, поэтому принимаем эти варианты, но предпочитаем значение рядом
+    // со словом «Среднее / Average», чтобы не подхватить «Лучшее / Best».
+    const paceTokenRe="([2-9])\\s*[:.;’\'` ]\\s*([0-5]\\d)";
+    let paceLabel=null;
+    const avgPacePatterns=[
+      new RegExp(paceTokenRe+'\\s*(?:\\/\\s*(?:km|км)|(?:min\\/km|мин\\/км))?[^\\n]{0,24}(?:средн(?:ее|ий|яя)|average|avg)', 'i'),
+      new RegExp('(?:средн(?:ее|ий|яя)|average|avg)[^\\d]{0,28}'+paceTokenRe+'\\s*(?:\\/\\s*(?:km|км)|(?:min\\/km|мин\\/км))?', 'i'),
+      new RegExp('(?:pace|темп)[^\\d]{0,40}'+paceTokenRe+'\\s*(?:\\/\\s*(?:km|км)|(?:min\\/km|мин\\/км))?', 'i')
+    ];
+    for(const re of avgPacePatterns){ const m=text.match(re); if(m){ paceLabel=m; break; } }
+    if(!paceLabel){
+      paceLabel=text.match(new RegExp('\\b'+paceTokenRe+'\\s*(?:\\/\\s*(?:km|км)|(?:min\\/km|мин\\/км))\\b','i'));
+    }
     if(out.interval_rows.length===0 && out.detected_run_indices.length===0 && paceLabel){
       const candidate=`${Number(paceLabel[1])}:${paceLabel[2]}`;
       if(parsePace(candidate)) out.pace=candidate;
@@ -7470,6 +7483,134 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     }
   }
 
+  async function parseThresholdGraphIntervals(file, ocrResult){
+    // Garmin «Графики»: split the pace chart into separate fast work blocks.
+    // Values are approximate because Garmin renders them as pixels, not a table.
+    let bmp=null;
+    try{
+      bmp=await createImageBitmap(file);
+      const maxW=900, sc=Math.min(1,maxW/Math.max(1,bmp.width));
+      const w=Math.max(1,Math.round(bmp.width*sc)), h=Math.max(1,Math.round(bmp.height*sc));
+      const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+      const cx=cv.getContext('2d',{willReadFrequently:true}); cx.drawImage(bmp,0,0,w,h);
+      const data=cx.getImageData(0,0,w,h).data;
+      const isBlue=(r,g,b)=>b>105 && b>r*1.18 && b>g*1.03 && (b-r)>35;
+      const isRed=(r,g,b)=>r>120 && r>g*1.35 && r>b*1.18 && (r-g)>35;
+      const rowCount=(pred)=>{
+        const a=new Array(h).fill(0);
+        for(let y=0;y<h;y+=1){ let n=0; for(let x=0;x<w;x+=2){ const k=(y*w+x)*4; if(pred(data[k],data[k+1],data[k+2])) n++; } a[y]=n; }
+        return a;
+      };
+      const bands=(a,minCount,minH=8)=>{ const out=[]; let st=-1; for(let y=0;y<=a.length;y++){ const on=y<a.length&&a[y]>=minCount; if(on&&st<0)st=y; if(!on&&st>=0){ if(y-st>=minH)out.push([st,y-1]); st=-1; } } return out; };
+      const blueBands=bands(rowCount(isBlue),Math.max(8,Math.floor(w*0.035)),18).sort((a,b)=>(b[1]-b[0])-(a[1]-a[0]));
+      if(!blueBands.length) return [];
+      const [py0,py1]=blueBands[0];
+      const colCount=new Array(w).fill(0), topBlue=new Array(w).fill(null);
+      for(let x=0;x<w;x++){
+        let n=0,top=null;
+        for(let y=py0;y<=py1;y++){ const k=(y*w+x)*4; if(isBlue(data[k],data[k+1],data[k+2])){n++; if(top===null)top=y;} }
+        colCount[x]=n; topBlue[x]=top;
+      }
+      const segs=[]; let st=-1; const minCol=Math.max(3,Math.floor((py1-py0)*0.025));
+      for(let x=0;x<=w;x++){
+        const on=x<w&&colCount[x]>=minCol;
+        if(on&&st<0)st=x;
+        if(!on&&st>=0){ if(x-st>=Math.max(10,w*0.018))segs.push([st,x-1]); st=-1; }
+      }
+      if(segs.length<2) return [];
+
+      const words=Array.isArray(ocrResult?.data?.words)?ocrResult.data.words:[];
+      const sx=w/Math.max(1,bmp.width), sy=h/Math.max(1,bmp.height);
+      const boxOf=(wd)=>wd?.bbox||wd?.boundingBox||{};
+      const pacePts=[];
+      for(const wd of words){
+        const t=String(wd?.text||'').trim().replace(/[.;]/g,':');
+        const m=t.match(/^([2-9]):([0-5]\d)$/); if(!m)continue;
+        const sec=Number(m[1])*60+Number(m[2]);
+        const b=boxOf(wd); if(!Number.isFinite(b.x0)||!Number.isFinite(b.y0))continue;
+        const xx=((b.x0+b.x1)/2)*sx, yy=((b.y0+b.y1)/2)*sy;
+        if(xx<w*.3 && yy>py0-80 && yy<py1+80) pacePts.push([yy,sec]);
+      }
+      const fit=(pts)=>{
+        if(pts.length<2)return null; let n=pts.length,sx1=0,sy1=0,sxy=0,sxx=0;
+        for(const [x,y] of pts){sx1+=x;sy1+=y;sxy+=x*y;sxx+=x*x;}
+        const den=n*sxx-sx1*sx1; if(Math.abs(den)<1e-6)return null;
+        const a=(n*sxy-sx1*sy1)/den,b=(sy1-a*sx1)/n; return x=>a*x+b;
+      };
+      let paceMap=fit(pacePts);
+      if(!paceMap){
+        // Garmin pace chart commonly has roughly 50 s between horizontal tick labels.
+        // Anchor to OCR header average pace when available, otherwise use a conservative chart scale.
+        const txt=String(ocrResult?.data?.text||'').replace(/[.;]/g,':');
+        const mm=txt.match(/([2-9]):([0-5]\d)\s*\/\s*(?:км|km)[^\n]{0,18}(?:Среднее|Average|Avg)/i);
+        const avg=mm?Number(mm[1])*60+Number(mm[2]):290;
+        paceMap=y=>avg + ((y-(py0+py1)/2)/Math.max(1,py1-py0))*150;
+      }
+      const raw=segs.map(([a,b])=>{
+        const vals=[]; for(let x=a;x<=b;x++)if(topBlue[x]!=null)vals.push(paceMap(topBlue[x]));
+        vals.sort((x,y)=>x-y); const med=vals.length?vals[Math.floor(vals.length/2)]:999;
+        return {a,b,len:b-a+1,paceSec:med};
+      }).filter(x=>Number.isFinite(x.paceSec));
+      if(raw.length<2)return [];
+      // Work blocks are the faster plateaus. Keep substantial blocks within ~35 s/km of the fastest median.
+      const fastest=Math.min(...raw.map(x=>x.paceSec));
+      const maxLen=Math.max(...raw.map(x=>x.len));
+      let work=raw.filter(x=>x.len>=Math.max(12,maxLen*.28) && x.paceSec<=fastest+35);
+      if(work.length<2) work=[...raw].sort((a,b)=>(a.paceSec-b.paceSec)|| (b.len-a.len)).slice(0,2);
+      work=work.sort((a,b)=>a.a-b.a).slice(0,3);
+
+      // HR chart: map visible 100/150/200 labels to red graph height and average each work interval.
+      const redBands=bands(rowCount(isRed),Math.max(8,Math.floor(w*.028)),16).sort((a,b)=>(b[1]-b[0])-(a[1]-a[0]));
+      let hrMap=null,topRed=null;
+      if(redBands.length){
+        const [hy0,hy1]=redBands[0], hrPts=[];
+        for(const wd of words){ const t=String(wd?.text||'').trim(); if(!/^\d{2,3}$/.test(t))continue; const v=Number(t); if(v<70||v>230)continue;
+          const b=boxOf(wd); if(!Number.isFinite(b.x0)||!Number.isFinite(b.y0))continue; const xx=((b.x0+b.x1)/2)*sx,yy=((b.y0+b.y1)/2)*sy;
+          if(xx<w*.3&&yy>hy0-70&&yy<hy1+70)hrPts.push([yy,v]); }
+        hrMap=fit(hrPts);
+        if(!hrMap) hrMap=y=>200-(y-hy0)/Math.max(1,hy1-hy0)*110;
+        topRed=new Array(w).fill(null);
+        for(let x=0;x<w;x++)for(let y=hy0;y<=hy1;y++){const k=(y*w+x)*4;if(isRed(data[k],data[k+1],data[k+2])){topRed[x]=y;break;}}
+      }
+      const totalText=String(ocrResult?.data?.text||'');
+      const times=[...totalText.matchAll(/\b(?:(\d{1,2}):)?(\d{1,2}):(\d{2})\b/g)].map(m=>(Number(m[1]||0)*3600+Number(m[2])*60+Number(m[3]))).filter(v=>v>0&&v<21600);
+      const total=times.length?Math.max(...times):null;
+      const xMin=Math.min(...raw.map(x=>x.a)), xMax=Math.max(...raw.map(x=>x.b));
+      return work.map((q,idx)=>{
+        const ps=Math.max(120,Math.min(900,q.paceSec));
+        let avgHr=null,maxHr=null;
+        if(hrMap&&topRed){ const hs=[]; for(let x=q.a;x<=q.b;x++)if(topRed[x]!=null){const v=hrMap(topRed[x]);if(v>=70&&v<=230)hs.push(v);} if(hs.length){avgHr=hs.reduce((a,b)=>a+b,0)/hs.length;maxHr=Math.max(...hs);} }
+        let durationSec=null,distance_km=null;
+        if(total&&xMax>xMin){durationSec=(q.b-q.a+1)/(xMax-xMin)*total; distance_km=durationSec/ps;}
+        const mm=Math.floor(ps/60), ss=Math.round(ps%60);
+        return {index:idx+1,pace:`${mm}:${String(ss===60?59:ss).padStart(2,'0')}`,avg_hr:avgHr,max_hr:maxHr,distance_km,approx:true};
+      });
+    }catch(e){ console.warn('Threshold graph split failed',e); return []; }
+    finally{ try{bmp?.close?.();}catch{} }
+  }
+
+  function renderThresholdGraphIntervals(sourceSlot, intervals, rawText){
+    const host=byId(`thresholdRecognizedIntervals${sourceSlot}`);
+    if(!host) return;
+    if(!Array.isArray(intervals)||!intervals.length){host.hidden=true;host.innerHTML='';return;}
+    host.hidden=false;
+    host.innerHTML=intervals.map((r,n)=>{
+      const d=Number(r.distance_km);
+      const ah=Number(r.avg_hr), mh=Number(r.max_hr);
+      return `<div class="threshold-recognized-interval"><div class="threshold-recognized-interval-title">Интервал ${n+1} ≈</div><div class="threshold-recognized-interval-grid"><div><span>Километраж</span><b>${Number.isFinite(d)&&d>0?d.toFixed(2)+' км':'—'}</b></div><div><span>Средний темп</span><b>${r.pace?r.pace+'/км':'—'}</b></div><div><span>Средний пульс</span><b>${Number.isFinite(ah)?Math.round(ah)+' уд/мин':'—'}</b></div><div><span>Макс. пульс</span><b>${Number.isFinite(mh)?Math.round(mh)+' уд/мин':'—'}</b></div></div></div>`;
+    }).join('');
+    // One Garmin graph can contain several work intervals: populate the matching test rows at once.
+    intervals.slice(0,3).forEach((r,n)=>{
+      const idx=n+1;
+      const seg=document.querySelector(`.threshold-segment[data-threshold-segment="${idx}"]`); if(seg)seg.hidden=false;
+      if(Number.isFinite(Number(r.distance_km))&&Number(r.distance_km)>0) byId(`thresholdDistance${idx}`).value=Number(r.distance_km).toFixed(2);
+      if(r.pace&&parsePace(r.pace)) byId(`thresholdPaceInput${idx}`).value=r.pace;
+      if(Number.isFinite(Number(r.avg_hr))&&r.avg_hr>=80&&r.avg_hr<=230) byId(`thresholdHr${idx}`).value=String(Math.round(r.avg_hr));
+      if(Number.isFinite(Number(r.max_hr))&&r.max_hr>=80&&r.max_hr<=240) byId(`thresholdHrMax${idx}`).value=String(Math.round(r.max_hr));
+    });
+    updateLivePaces();
+  }
+
   async function recognizeThresholdPhoto(i,file){
     const status=byId(`thresholdPhotoStatus${i}`);
     const btn=document.querySelector(`[data-threshold-photo="${i}"]`);
@@ -7517,6 +7658,17 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
         return;
       }
       const data=parseThresholdOcrText(rawOcrText);
+      let graphIntervals=[];
+      // A single Garmin «Графики» screenshot can show several work intervals.
+      // Split them from the blue pace plateaus instead of treating 4:48/km as one interval.
+      if(!Array.isArray(data.interval_rows) || !data.interval_rows.length){
+        graphIntervals=await parseThresholdGraphIntervals(file,result);
+        if(graphIntervals.length>=2){
+          data.distance_km=graphIntervals[0].distance_km; data.pace=graphIntervals[0].pace;
+          data.avg_hr=graphIntervals[0].avg_hr; data.max_hr=graphIntervals[0].max_hr;
+          renderThresholdGraphIntervals(i,graphIntervals,rawOcrText);
+        }else{ renderThresholdGraphIntervals(i,[],rawOcrText); }
+      }
       const detectedRunIndices=Array.isArray(data.detected_run_indices)?data.detected_run_indices:[];
       const parsedRunIndices=Array.isArray(data.interval_rows)?data.interval_rows.map(r=>r.index):[];
       // If Garmin shows numbered work rows but the requested one is absent, never
@@ -7600,6 +7752,11 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       if(recognizedAvgHr){ recognizedAvgHr.textContent=Number.isFinite(avgOcr)&&avgOcr>0?`${Math.round(avgOcr)} уд/мин`:'—'; recognizedAvgHr.classList.toggle('invalid',Number.isFinite(avgOcr)&&avgOcr>0&&(avgOcr<80||avgOcr>230)); }
       if(recognizedMaxHr){ recognizedMaxHr.textContent=Number.isFinite(maxOcr)&&maxOcr>0?`${Math.round(maxOcr)} уд/мин`:'—'; recognizedMaxHr.classList.toggle('invalid',Number.isFinite(maxOcr)&&maxOcr>0&&(maxOcr<80||maxOcr>240||(Number.isFinite(avgOcr)&&avgOcr>0&&maxOcr<avgOcr))); }
       if(recognizedRaw) recognizedRaw.textContent=rawOcrText||'Текст не распознан.';
+      if(graphIntervals.length>=2 && status){
+        const summary=graphIntervals.map((r,n)=>{ const d=Number(r.distance_km); return `Интервал ${n+1}: ${Number.isFinite(d)&&d>0?d.toFixed(2)+' км · ':''}${r.pace||'—'}/км${Number.isFinite(Number(r.avg_hr))?' · пульс '+Math.round(r.avg_hr):''}`; }).join(' | ');
+        status.textContent=`По графику найдено ${graphIntervals.length} рабочих интервала: ${summary}. Значения по графику приблизительные.`;
+        status.className='threshold-photo-status ok';
+      }
       if(Array.isArray(data.interval_rows) && data.interval_rows.length && status){
         const summary=data.interval_rows.map(r=>`${r.index}: ${r.distance_km.toFixed(2)} км · ${r.pace}/км`).join(' | ');
         status.textContent=`Найдены рабочие интервалы: ${summary}`;

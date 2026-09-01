@@ -1,9 +1,9 @@
-const CACHE='trail-analyzer-web-v247-table-geometry-graph-split';
+const CACHE='trail-analyzer-web-v248-threshold-average-pace';
 const CORE=[
   './',
   './index.html',
-  './styles.css?v=265-interval-graph-ocr-picker',
-  './app.js?v=244-interval-graph-ocr-picker',
+  './styles.css?v=266-threshold-average-pace',
+  './app.js?v=245-threshold-average-pace',
   './manifest.webmanifest?v=075',
   './icon-192.png',
   './icon-512.png'

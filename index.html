@@ -1119,7 +1119,7 @@
             <div class="threshold-segment-title"><b>Отрезок 1 <em class="required-badge">ОБЯЗАТЕЛЬНО</em></b><span>12:00</span></div>
             <div class="threshold-photo-row">
               <button type="button" class="threshold-photo-btn" data-threshold-photo="1">📷 Распознать фото</button>
-              <span class="threshold-photo-source-hint">Garmin: Бег → Интервалы</span>
+              <span class="threshold-photo-source-hint">Garmin: Бег → Интервалы / Графики</span>
               <input id="thresholdPhotoInput1" type="file" accept="image/*" hidden>
               <span id="thresholdPhotoStatus1" class="threshold-photo-status">Фото Garmin/Strava</span>
             </div>
@@ -1134,10 +1134,11 @@
                   <div class="threshold-recognized-title">Что распознано</div>
                   <div class="threshold-recognized-grid">
                     <div><span>Дистанция</span><b id="thresholdRecognizedDistance1">—</b></div>
-                    <div><span>Темп</span><b id="thresholdRecognizedPace1">—</b></div>
+                    <div><span>Средний темп</span><b id="thresholdRecognizedPace1">—</b></div>
                     <div><span>Средний пульс</span><b id="thresholdRecognizedAvgHr1">—</b></div>
                     <div><span>Макс. пульс</span><b id="thresholdRecognizedMaxHr1">—</b></div>
                   </div>
+                  <div id="thresholdRecognizedIntervals1" class="threshold-recognized-intervals" hidden></div>
                   <details class="threshold-recognized-raw">
                     <summary>Текст, который увидел OCR</summary>
                     <pre id="thresholdRecognizedRaw1"></pre>
@@ -1157,7 +1158,7 @@
             <div class="threshold-segment-title"><b>Отрезок 2 <em class="required-badge">ОБЯЗАТЕЛЬНО</em></b><span>12:00</span></div>
             <div class="threshold-photo-row">
               <button type="button" class="threshold-photo-btn" data-threshold-photo="2">📷 Распознать фото</button>
-              <span class="threshold-photo-source-hint">Garmin: Бег → Интервалы</span>
+              <span class="threshold-photo-source-hint">Garmin: Бег → Интервалы / Графики</span>
               <input id="thresholdPhotoInput2" type="file" accept="image/*" hidden>
               <span id="thresholdPhotoStatus2" class="threshold-photo-status">Фото Garmin/Strava</span>
             </div>
@@ -1172,10 +1173,11 @@
                   <div class="threshold-recognized-title">Что распознано</div>
                   <div class="threshold-recognized-grid">
                     <div><span>Дистанция</span><b id="thresholdRecognizedDistance2">—</b></div>
-                    <div><span>Темп</span><b id="thresholdRecognizedPace2">—</b></div>
+                    <div><span>Средний темп</span><b id="thresholdRecognizedPace2">—</b></div>
                     <div><span>Средний пульс</span><b id="thresholdRecognizedAvgHr2">—</b></div>
                     <div><span>Макс. пульс</span><b id="thresholdRecognizedMaxHr2">—</b></div>
                   </div>
+                  <div id="thresholdRecognizedIntervals2" class="threshold-recognized-intervals" hidden></div>
                   <details class="threshold-recognized-raw">
                     <summary>Текст, который увидел OCR</summary>
                     <pre id="thresholdRecognizedRaw2"></pre>
@@ -1195,7 +1197,7 @@
             <div class="threshold-segment-title"><b>Отрезок 3 <em class="required-badge">ОБЯЗАТЕЛЬНО</em></b><span>12:00</span></div>
             <div class="threshold-photo-row">
               <button type="button" class="threshold-photo-btn" data-threshold-photo="3">📷 Распознать фото</button>
-              <span class="threshold-photo-source-hint">Garmin: Бег → Интервалы</span>
+              <span class="threshold-photo-source-hint">Garmin: Бег → Интервалы / Графики</span>
               <input id="thresholdPhotoInput3" type="file" accept="image/*" hidden>
               <span id="thresholdPhotoStatus3" class="threshold-photo-status">Фото Garmin/Strava</span>
             </div>
@@ -1210,10 +1212,11 @@
                   <div class="threshold-recognized-title">Что распознано</div>
                   <div class="threshold-recognized-grid">
                     <div><span>Дистанция</span><b id="thresholdRecognizedDistance3">—</b></div>
-                    <div><span>Темп</span><b id="thresholdRecognizedPace3">—</b></div>
+                    <div><span>Средний темп</span><b id="thresholdRecognizedPace3">—</b></div>
                     <div><span>Средний пульс</span><b id="thresholdRecognizedAvgHr3">—</b></div>
                     <div><span>Макс. пульс</span><b id="thresholdRecognizedMaxHr3">—</b></div>
                   </div>
+                  <div id="thresholdRecognizedIntervals3" class="threshold-recognized-intervals" hidden></div>
                   <details class="threshold-recognized-raw">
                     <summary>Текст, который увидел OCR</summary>
                     <pre id="thresholdRecognizedRaw3"></pre>
@@ -1502,8 +1505,8 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="app.js?v=246-garmin-table-unicode-fix"></script>
-  <script src="interval-ocr.js?v=247-table-geometry-graph-split"></script>
+  <script src="app.js?v=249-threshold-multi-graph-intervals"></script>
+  <script src="interval-ocr.js?v=248-threshold-multi-graph"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
@@ -1584,4 +1587,11 @@
 .threshold-physiology-good{color:#4ade80!important}
 
 .pacecalc-distance-wrap{display:grid;gap:6px}.pacecalc-distanceunit{display:flex;gap:6px;align-items:center}.pacecalc-distance-unit{border:1px solid #2b4569;background:#0a1730;color:#cbd5e1;border-radius:12px;padding:8px 14px;font-weight:800}.pacecalc-distance-unit.active{background:#38bdf8;color:#062033;border-color:#38bdf8}@media(max-width:700px){.pacecalc-distance-unit{padding:7px 12px;font-size:13px}}
+
+.threshold-recognized-intervals{display:grid;gap:9px;margin-top:12px}
+.threshold-recognized-interval{border:1px solid #315478;background:#09192a;border-radius:13px;padding:10px 12px}
+.threshold-recognized-interval-title{font-weight:900;color:#7dd3fc;margin-bottom:7px}
+.threshold-recognized-interval-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.threshold-recognized-interval-grid>div{background:#071421;border:1px solid #223d58;border-radius:10px;padding:8px 10px}
+.threshold-recognized-interval-grid span{display:block;color:#91a5bc;font-size:12px}.threshold-recognized-interval-grid b{display:block;color:#f8fafc;font-size:16px;margin-top:2px}
 </style>
