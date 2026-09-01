@@ -1,4 +1,4 @@
-const CACHE='trail-analyzer-web-v236-interval-ocr-native-picker';
+const CACHE='trail-analyzer-web-v247-table-geometry-graph-split';
 const CORE=[
   './',
   './index.html',

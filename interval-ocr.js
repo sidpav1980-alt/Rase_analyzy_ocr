@@ -68,6 +68,50 @@
     return out;
   }
 
+
+  function parseGarminTableGeometry(img,result){
+    const W=img.naturalWidth||img.width||1, H=img.naturalHeight||img.height||1;
+    const words=ocrWords(result).map(w=>{
+      const b=wordBox(w); const text=normalizeRunWord(String(w.text||'').trim());
+      return {text,x0:b.x0,x1:b.x1,y0:b.y0,y1:b.y1,cx:(b.x0+b.x1)/2,cy:(b.y0+b.y1)/2};
+    }).filter(w=>w.text);
+    if(words.length<4) return [];
+    words.sort((a,b)=>a.cy-b.cy||a.cx-b.cx);
+    const rows=[]; const tol=Math.max(10,H*0.012);
+    for(const w of words){
+      let row=rows.find(r=>Math.abs(r.cy-w.cy)<=tol);
+      if(!row){ row={cy:w.cy,ws:[]}; rows.push(row); }
+      row.ws.push(w); row.cy=(row.cy*(row.ws.length-1)+w.cy)/row.ws.length;
+    }
+    const out=[];
+    const numToken=t=>/^\d{1,2}$/.test(t);
+    const decToken=t=>/^\d{1,2}[,.]\d{1,3}$/.test(t);
+    const timeToken=t=>/^(?:\d{1,2}:)?\d{1,2}:\d{2}(?:[.,]\d)?$/.test(t);
+    const paceToken=t=>/^([2-9]|1[0-5]):[0-5]\d$/.test(t);
+    for(const r of rows){
+      const ws=r.ws.sort((a,b)=>a.cx-b.cx);
+      const idxW=ws.find(w=>w.cx<W*0.22 && numToken(w.text));
+      if(!idxW) continue;
+      const index=Number(idxW.text); if(index<1||index>99) continue;
+      const hasRun=ws.some(w=>/^(?:Бег|бег|Beg)$/i.test(normalizeRunWord(w.text)));
+      const timeW=ws.filter(w=>w.cx>W*0.32&&w.cx<W*0.68&&timeToken(w.text)).sort((a,b)=>Math.abs(a.cx-W*0.52)-Math.abs(b.cx-W*0.52))[0];
+      const distW=ws.filter(w=>w.cx>W*0.55&&w.cx<W*0.86&&decToken(w.text)).sort((a,b)=>Math.abs(a.cx-W*0.73)-Math.abs(b.cx-W*0.73))[0];
+      const paceW=ws.filter(w=>w.cx>W*0.72&&paceToken(w.text)).sort((a,b)=>b.cx-a.cx)[0];
+      // Geometry fallback deliberately accepts a row even when OCR missed the word "Бег".
+      // Requiring index + at least two numeric columns avoids turning headers/totals into intervals.
+      const fieldCount=[timeW,distW,paceW].filter(Boolean).length;
+      if(!hasRun && fieldCount<2) continue;
+      let distance=distW?Number(distW.text.replace(',','.')):null;
+      let time=timeW?timeW.text.replace(',','.') : '';
+      let pace=paceW?paceW.text:'';
+      if(distance!=null && (!Number.isFinite(distance)||distance<=0||distance>100)) distance=null;
+      if(!pace && distance!=null && time){ const sec=parseTimeToken(time); if(sec){ const ps=sec/distance; if(ps>=120&&ps<=900) pace=`${Math.floor(ps/60)}:${String(Math.round(ps%60)).padStart(2,'0')}`; } }
+      if(!time && distance!=null && pace) time=derivedTime(distance,pace);
+      if(distance!=null && pace) out.push({index,type:'Бег',distance,time,pace,raw:ws.map(w=>w.text).join(' '),geometry:true});
+    }
+    return out;
+  }
+
   function fmtHr(v){ return Number.isFinite(Number(v)) ? Math.round(Number(v))+' уд/мин' : '—'; }
   function fmtDuration(sec){
     sec=Math.max(0,Number(sec)||0);
@@ -123,9 +167,17 @@
     // Fallback for Garmin chart when labels OCR poorly: infer 50 sec/tick from visible graph height, anchored by header average pace only as sanity.
     if(!paceMap){ paceMap=y=>240 + (y-py0)/Math.max(1,py1-py0)*180; }
     const work=segments.map(([a,b])=>{ const vals=[]; for(let x=a;x<=b;x++) if(topBlue[x]!=null) vals.push(paceMap(topBlue[x])); const med=vals.sort((x,y)=>x-y)[Math.floor(vals.length/2)]||null; return {a,b,len:b-a+1,paceSec:med}; });
-    // Prefer long, faster plateaus; ignore warm-up/cool-down fragments.
-    const maxLen=Math.max(...work.map(x=>x.len)); let picks=work.filter(x=>x.len>=maxLen*0.55 && x.paceSec!=null);
-    if(picks.length<2) picks=[...work].sort((a,b)=>b.len-a.len).slice(0,2).sort((a,b)=>a.a-b.a); else picks=picks.sort((a,b)=>a.a-b.a);
+    // Garmin graphs can contain many repeated work plateaus. Keep every substantial fast block,
+    // not just the two longest ones. A robust threshold is based on the faster half of the visible blocks.
+    const valid=work.filter(x=>x.paceSec!=null&&x.len>=Math.max(8,cw*0.012));
+    let picks=[];
+    if(valid.length){
+      const paces=valid.map(x=>x.paceSec).sort((a,b)=>a-b);
+      const fastRef=paces[Math.min(paces.length-1,Math.floor((paces.length-1)*0.45))];
+      const maxLen=Math.max(...valid.map(x=>x.len));
+      picks=valid.filter(x=>x.len>=Math.max(10,maxLen*0.18) && x.paceSec<=fastRef+35).sort((a,b)=>a.a-b.a);
+      if(picks.length<2) picks=[...valid].sort((a,b)=>b.len-a.len).slice(0,Math.min(12,valid.length)).sort((a,b)=>a.a-b.a);
+    }
     const hrPts=[]; let hrMap=null, topRed=null;
     if(hrBand){ const [hy0,hy1]=hrBand; for(const w of words){ const t=String(w.text||'').trim(); if(!/^\d{2,3}$/.test(t))continue; const v=Number(t); if(v<70||v>230)continue; const b=wordBox(w); const cy=(b.y0+b.y1)/2*scale,cx=(b.x0+b.x1)/2*scale; if(cx<cw*0.24&&cy>hy0-60&&cy<hy1+60)hrPts.push([cy,v]); } hrMap=fitLinear(hrPts); topRed=new Array(cw).fill(null); for(let x=0;x<cw;x++){ for(let y=hy0;y<=hy1;y++){ const i=(y*cw+x)*4;if(isRed(d[i],d[i+1],d[i+2])){topRed[x]=y;break;} } } }
     const arr=[]; let idx=nextStartIndex;
@@ -167,11 +219,19 @@
       const result=await window.Tesseract.recognize(file,'rus+eng',{logger:m=>{if(m?.status==='recognizing text'&&Number.isFinite(m.progress)) st.textContent=`Распознаю… ${Math.round(m.progress*100)}%`;}});
       const text=String(result?.data?.text||'');
       const compact=text.replace(/\s+/g,' ').trim(); const lines=text.split(/\n+/).filter(x=>x.trim());
-      if(compact.length>2600||lines.length>70) throw new Error('Слишком много текста — загрузите скриншот Garmin «Бег → Интервалы»');
+      if(compact.length>7000||lines.length>180) throw new Error('Слишком много текста на изображении — обрежьте скриншот до таблицы «Интервалы» или экрана «Графики».');
       let parsed=parseRows(text);
       let graphMode=false;
+      const img=await loadImageForOcr(file);
+      // If line OCR skipped a row (common for Garmin dark tables), rebuild rows from word coordinates
+      // and merge them by interval number. This specifically recovers rows such as interval 4.
+      const geometric=parseGarminTableGeometry(img,result);
+      if(geometric.length){
+        const merged=new Map(parsed.map(r=>[r.index,r]));
+        for(const r of geometric){ if(!merged.has(r.index)) merged.set(r.index,r); }
+        parsed=[...merged.values()].sort((a,b)=>a.index-b.index);
+      }
       if(!parsed.length){
-        const img=await loadImageForOcr(file);
         const nextIndex=found.size?Math.max(...found.keys())+1:1;
         parsed=parseGraphScreenshot(img,result,nextIndex);
         graphMode=parsed.length>0;
