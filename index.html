@@ -1108,8 +1108,9 @@
           <div class="threshold-segment active" data-threshold-segment="1">
             <div class="threshold-segment-title"><b>Отрезок 1 <em class="required-badge">ОБЯЗАТЕЛЬНО</em></b><span>12:00</span></div>
             <div class="threshold-photo-row">
-              <button type="button" class="threshold-photo-btn" data-threshold-photo="1">📷 Распознать фото</button>
-              <input id="thresholdPhotoInput1" type="file" accept="image/*" hidden>
+              <label class="threshold-photo-btn threshold-photo-native" data-threshold-photo-label="1">📷 Распознать фото
+                <input id="thresholdPhotoInput1" type="file" accept="image/*">
+              </label>
               <span id="thresholdPhotoStatus1" class="threshold-photo-status">Фото Garmin/Strava</span>
             </div>
             <div class="threshold-input-grid">
@@ -1123,8 +1124,9 @@
           <div class="threshold-segment" data-threshold-segment="2" hidden>
             <div class="threshold-segment-title"><b>Отрезок 2 <em class="required-badge">ОБЯЗАТЕЛЬНО</em></b><span>12:00</span></div>
             <div class="threshold-photo-row">
-              <button type="button" class="threshold-photo-btn" data-threshold-photo="2">📷 Распознать фото</button>
-              <input id="thresholdPhotoInput2" type="file" accept="image/*" hidden>
+              <label class="threshold-photo-btn threshold-photo-native" data-threshold-photo-label="2">📷 Распознать фото
+                <input id="thresholdPhotoInput2" type="file" accept="image/*">
+              </label>
               <span id="thresholdPhotoStatus2" class="threshold-photo-status">Фото Garmin/Strava</span>
             </div>
             <div class="threshold-input-grid">
@@ -1138,8 +1140,9 @@
           <div class="threshold-segment" data-threshold-segment="3" hidden>
             <div class="threshold-segment-title"><b>Отрезок 3 <em class="required-badge">ОБЯЗАТЕЛЬНО</em></b><span>12:00</span></div>
             <div class="threshold-photo-row">
-              <button type="button" class="threshold-photo-btn" data-threshold-photo="3">📷 Распознать фото</button>
-              <input id="thresholdPhotoInput3" type="file" accept="image/*" hidden>
+              <label class="threshold-photo-btn threshold-photo-native" data-threshold-photo-label="3">📷 Распознать фото
+                <input id="thresholdPhotoInput3" type="file" accept="image/*">
+              </label>
               <span id="thresholdPhotoStatus3" class="threshold-photo-status">Фото Garmin/Strava</span>
             </div>
             <div class="threshold-input-grid">
@@ -1470,4 +1473,7 @@
 .threshold-physiology-good{color:#4ade80!important}
 
 .pacecalc-distance-wrap{display:grid;gap:6px}.pacecalc-distanceunit{display:flex;gap:6px;align-items:center}.pacecalc-distance-unit{border:1px solid #2b4569;background:#0a1730;color:#cbd5e1;border-radius:12px;padding:8px 14px;font-weight:800}.pacecalc-distance-unit.active{background:#38bdf8;color:#062033;border-color:#38bdf8}@media(max-width:700px){.pacecalc-distance-unit{padding:7px 12px;font-size:13px}}
+
+.threshold-photo-native{position:relative;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.threshold-photo-native input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:100px}
 </style>

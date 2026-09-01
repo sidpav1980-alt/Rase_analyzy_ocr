@@ -6652,6 +6652,22 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       if(live) live.textContent='Темп: —';
     }
   }
+  function validateThresholdPaceInput(i){
+    const paceEl=byId(`thresholdPaceInput${i}`);
+    const raw=String(paceEl?.value||'').trim();
+    if(!raw) return {ok:true,empty:true,pace:null};
+    const pace=parsePace(raw);
+    if(!pace){
+      paceEl?.classList.add('threshold-invalid');
+      return {ok:false,empty:false,pace:null};
+    }
+    paceEl?.classList.remove('threshold-invalid');
+    return {ok:true,empty:false,pace};
+  }
+  function thresholdPaceValidationMessage(raw){
+    return `⚠️ Неверный темп «${raw}». Введите темп в формате 4:10 или 410. Допустимый диапазон: 2:00–15:00/км.`;
+  }
+
   function readSegment(i){
     const d=Number(byId(`thresholdDistance${i}`)?.value||0);
     const paceEntered=parsePace(byId(`thresholdPaceInput${i}`)?.value);
@@ -6899,6 +6915,21 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     const n=Number(segmentCount.value||2);
     const segs=[];
     for(let i=1;i<=n;i++){
+      const paceEl=byId(`thresholdPaceInput${i}`);
+      const rawPace=String(paceEl?.value||'').trim();
+      const paceCheck=validateThresholdPaceInput(i);
+      if(!paceCheck.ok){
+        setActiveSegmentTab(i);
+        clearThresholdInvalid();
+        paceEl?.classList.add('threshold-invalid');
+        document.querySelector(`[data-threshold-tab="${i}"]`)?.classList.add('threshold-tab-invalid');
+        byId('thresholdStatus').textContent=thresholdPaceValidationMessage(rawPace);
+        byId('thresholdQuickResult').hidden=true;
+        byId('thresholdResult').hidden=true;
+        paceEl?.scrollIntoView({behavior:'smooth',block:'center'});
+        try{paceEl?.focus({preventScroll:true});}catch(e){}
+        return;
+      }
       const s=readSegment(i);
       if(!s || !Number.isFinite(s.hr)){
         byId('thresholdStatus').textContent=`Заполните отрезок ${i}: дистанцию или темп, и средний пульс.`;
@@ -7186,8 +7217,22 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
   segmentTabs.forEach(btn=>btn.addEventListener('click',()=>setActiveSegmentTab(Number(btn.dataset.thresholdTab||1))));
   for(let i=1;i<=3;i++){
     byId(`thresholdDistance${i}`)?.addEventListener('input',()=>{byId(`thresholdDistance${i}`)?.classList.remove('threshold-invalid');syncFromDistance(i);});
-    byId(`thresholdPaceInput${i}`)?.addEventListener('input',()=>{byId(`thresholdPaceInput${i}`)?.classList.remove('threshold-invalid');syncFromPace(i);});
-    byId(`thresholdPaceInput${i}`)?.addEventListener('blur',()=>{formatPaceInput(byId(`thresholdPaceInput${i}`));syncFromPace(i);});
+    byId(`thresholdPaceInput${i}`)?.addEventListener('input',()=>{
+      const el=byId(`thresholdPaceInput${i}`);
+      const raw=String(el?.value||'').trim();
+      if(!raw || parsePace(raw)) el?.classList.remove('threshold-invalid');
+      syncFromPace(i);
+    });
+    byId(`thresholdPaceInput${i}`)?.addEventListener('blur',()=>{
+      const el=byId(`thresholdPaceInput${i}`);
+      const raw=String(el?.value||'').trim();
+      if(raw && !parsePace(raw)){
+        el?.classList.add('threshold-invalid');
+        if(byId('thresholdStatus')) byId('thresholdStatus').textContent=thresholdPaceValidationMessage(raw);
+        return;
+      }
+      formatPaceInput(el);syncFromPace(i);
+    });
     const markThresholdDirty=()=>{
       byId(`thresholdHr${i}`)?.classList.remove('threshold-invalid');
       byId(`thresholdHrMax${i}`)?.classList.remove('threshold-invalid');
@@ -7256,10 +7301,10 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
 
   async function recognizeThresholdPhoto(i,file){
     const status=byId(`thresholdPhotoStatus${i}`);
-    const btn=document.querySelector(`[data-threshold-photo="${i}"]`);
+    const btn=document.querySelector(`[data-threshold-photo-label="${i}"]`);
     if(!file) return;
     if(status){ status.textContent='Распознаю фото на iPhone… 0%'; status.className='threshold-photo-status'; }
-    if(btn) btn.disabled=true;
+    if(btn){ btn.classList.add('is-loading'); btn.style.pointerEvents='none'; }
     try{
       if(!window.Tesseract?.recognize) throw new Error('Модуль распознавания не загрузился. Проверьте интернет и обновите страницу.');
       const result=await window.Tesseract.recognize(file,'rus+eng',{
@@ -7276,8 +7321,18 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
         filled.push(`дистанция ${Number(data.distance_km).toFixed(2)} км`);
       }
       if(data.pace){
-        byId(`thresholdPaceInput${i}`).value=String(data.pace);
-        filled.push(`темп ${data.pace}/км`);
+        const recognizedPace=String(data.pace).trim();
+        if(parsePace(recognizedPace)){
+          byId(`thresholdPaceInput${i}`).value=recognizedPace;
+          filled.push(`темп ${recognizedPace}/км`);
+        }else{
+          byId(`thresholdPaceInput${i}`).value=recognizedPace;
+          byId(`thresholdPaceInput${i}`).classList.add('threshold-invalid');
+          if(status){
+            status.textContent=`Темп распознан как «${recognizedPace}», но значение невалидно. Исправьте его вручную.`;
+            status.className='threshold-photo-status warn';
+          }
+        }
       }
       if(Number.isFinite(Number(data.avg_hr)) && Number(data.avg_hr)>=70){
         byId(`thresholdHr${i}`).value=String(Math.round(Number(data.avg_hr)));
@@ -7305,14 +7360,12 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
         status.className='threshold-photo-status err';
       }
     }finally{
-      if(btn) btn.disabled=false;
+      if(btn){ btn.classList.remove('is-loading'); btn.style.pointerEvents=''; }
       const input=byId(`thresholdPhotoInput${i}`); if(input) input.value='';
     }
   }
   for(let i=1;i<=3;i++){
-    const photoBtn=document.querySelector(`[data-threshold-photo="${i}"]`);
     const photoInput=byId(`thresholdPhotoInput${i}`);
-    photoBtn?.addEventListener('click',()=>photoInput?.click());
     photoInput?.addEventListener('change',()=>recognizeThresholdPhoto(i,photoInput.files?.[0]));
   }
 
