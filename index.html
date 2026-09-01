@@ -52,6 +52,9 @@
 
 .interval-ocr-upload{position:relative;overflow:hidden;cursor:pointer;}
 .interval-ocr-file-input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:100px;}
+
+.interval-ocr-native-pick{position:relative;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer}
+.interval-ocr-native-pick .interval-ocr-file-input{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;opacity:0!important;cursor:pointer!important;font-size:100px!important;display:block!important}
 </style>
 
 <style>
@@ -1325,8 +1328,9 @@
     <p class="muted interval-ocr-help"><b>Garmin: Бег → Интервалы или Графики.</b> Можно загрузить до 4 скриншотов одной тренировки. Таблица «Бег» распознаётся точно по номерам; на экране «Графики» рабочие отрезки, темп и пульс определяются приблизительно по графикам.</p>
 
     <div class="interval-ocr-actions">
-      <button type="button" class="threshold-photo-btn" id="intervalOcrPickBtn">📷 Распознать фото</button>
-      <input id="intervalOcrFiles" type="file" accept="image/*" multiple hidden>
+      <label class="threshold-photo-btn interval-ocr-native-pick" for="intervalOcrFiles">📷 Распознать фото
+        <input id="intervalOcrFiles" class="interval-ocr-file-input" type="file" accept="image/*" multiple>
+      </label>
       <button type="button" class="btn secondary" id="intervalOcrClear">Сбросить</button>
     </div>
     <div class="interval-ocr-note">До 4 фото. Для длинной серии можно загрузить продолжение: например, 1–8 на первом фото, 9–16 на втором.</div>
@@ -1498,7 +1502,8 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="app.js?v=244-interval-graph-ocr-picker"></script>
+  <script src="app.js?v=245-interval-picker-isolated"></script>
+  <script src="interval-ocr.js?v=245-interval-picker-isolated"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
