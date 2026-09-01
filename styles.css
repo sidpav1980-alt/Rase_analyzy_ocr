@@ -587,3 +587,21 @@ button.action-error:disabled {
 .threshold-input-grid .field>span small{font-size:10px;color:#7f93ad;font-weight:600}
 .threshold-status-hint{margin-top:10px;padding:10px 12px;border-radius:12px;background:rgba(255,190,59,.09);border:1px solid rgba(255,190,59,.28);color:#ffd27a;line-height:1.35}
 @media(max-width:600px){.threshold-required-title{font-size:17px}.threshold-required-step{font-size:14px}.required-badge{display:block;width:max-content;margin:5px 0 0}}
+
+/* v0.0262 — compact threshold interval cards on phones */
+@media(max-width:700px){
+  .threshold-segments{gap:8px!important;margin-top:8px!important}
+  .threshold-segment.active{padding:9px!important;border-radius:13px!important}
+  .threshold-segment-title{margin-bottom:6px!important;align-items:center!important}
+  .threshold-segment-title b{font-size:16px!important;display:flex!important;align-items:center!important;gap:6px!important;flex-wrap:wrap!important}
+  .threshold-segment-title span{font-size:11px!important}
+  .required-badge{font-size:9px!important;padding:2px 6px!important;margin:0!important}
+  .threshold-input-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important}
+  .threshold-input-grid .field{gap:3px!important;min-width:0!important}
+  .threshold-input-grid .field>span{font-size:11px!important;line-height:1.15!important;min-height:25px!important}
+  .threshold-input-grid .field>span small{font-size:8px!important;display:inline!important}
+  .threshold-input-grid input{min-height:42px!important;height:42px!important;padding:7px 10px!important;font-size:17px!important;border-radius:10px!important}
+  .threshold-live-pace{font-size:12px!important;margin-top:6px!important}
+  .threshold-segment-tabs{gap:6px!important;margin:9px 0 8px!important}
+  .threshold-segment-tab{padding:8px 11px!important;border-radius:11px!important;font-size:13px!important;flex:1 1 0!important;min-width:0!important}
+}

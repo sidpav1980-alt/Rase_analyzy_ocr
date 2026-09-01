@@ -6682,6 +6682,29 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       btn.classList.toggle('active',seg===tab && show);
     });
   }
+
+  function clearThresholdInvalid(){
+    for(let i=1;i<=3;i++){
+      byId(`thresholdDistance${i}`)?.classList.remove('threshold-invalid');
+      byId(`thresholdPaceInput${i}`)?.classList.remove('threshold-invalid');
+      byId(`thresholdHr${i}`)?.classList.remove('threshold-invalid');
+    }
+  }
+  function markThresholdMissing(i){
+    clearThresholdInvalid();
+    setActiveSegmentTab(i);
+    const distanceEl=byId(`thresholdDistance${i}`);
+    const paceEl=byId(`thresholdPaceInput${i}`);
+    const hrEl=byId(`thresholdHr${i}`);
+    const hasDistance=parseFloat(String(distanceEl?.value||'').replace(',','.'))>0;
+    const hasPace=!!parsePace(String(paceEl?.value||''));
+    if(!hasDistance && distanceEl) distanceEl.classList.add('threshold-invalid');
+    if(!hasPace && paceEl) paceEl.classList.add('threshold-invalid');
+    if(!(Number(hrEl?.value||0)>0) && hrEl) hrEl.classList.add('threshold-invalid');
+    const target = (!hasDistance && distanceEl) || (!hasPace && paceEl) || hrEl;
+    target?.scrollIntoView({behavior:'smooth',block:'center'});
+    try{ target?.focus({preventScroll:true}); }catch(e){}
+  }
   function weightedMean(values,weights){
     let n=0,d=0;
     values.forEach((v,i)=>{if(Number.isFinite(v)){n+=v*weights[i];d+=weights[i];}});
@@ -6699,7 +6722,8 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     for(let i=1;i<=n;i++){
       const s=readSegment(i);
       if(!s){
-        byId('thresholdStatus').textContent=`Введите дистанцию или темп для отрезка ${i}.`;
+        byId('thresholdStatus').textContent=`Заполните отрезок ${i}: дистанцию или темп, и средний пульс.`;
+        markThresholdMissing(i);
         return;
       }
       segs.push(s);
@@ -6761,6 +6785,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     try{
       localStorage.setItem('trailThresholdTest',JSON.stringify({n,recovery:byId('thresholdRecovery').value,segs:segs.map(s=>({d:s.d,pace:paceInputText(s.pace),hr:s.hr,hrMax:s.hrMax})),t5:byId('threshold5k').value,t10:byId('threshold10k').value,thresholdPaceSec:threshold,thresholdHr:Number.isFinite(thresholdHr)?thresholdHr:null}));
     }catch(e){}
+    clearThresholdInvalid();
     byId('thresholdQuickResult').scrollIntoView({behavior:'smooth',block:'center'});
   }
   function reset(){
@@ -6806,10 +6831,10 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
   segmentCount.addEventListener('change',syncSegments);
   segmentTabs.forEach(btn=>btn.addEventListener('click',()=>setActiveSegmentTab(Number(btn.dataset.thresholdTab||1))));
   for(let i=1;i<=3;i++){
-    byId(`thresholdDistance${i}`)?.addEventListener('input',()=>syncFromDistance(i));
-    byId(`thresholdPaceInput${i}`)?.addEventListener('input',()=>syncFromPace(i));
+    byId(`thresholdDistance${i}`)?.addEventListener('input',()=>{byId(`thresholdDistance${i}`)?.classList.remove('threshold-invalid');syncFromDistance(i);});
+    byId(`thresholdPaceInput${i}`)?.addEventListener('input',()=>{byId(`thresholdPaceInput${i}`)?.classList.remove('threshold-invalid');syncFromPace(i);});
     byId(`thresholdPaceInput${i}`)?.addEventListener('blur',()=>{formatPaceInput(byId(`thresholdPaceInput${i}`));syncFromPace(i);});
-    byId(`thresholdHr${i}`)?.addEventListener('input',updateLivePaces);
+    byId(`thresholdHr${i}`)?.addEventListener('input',()=>{byId(`thresholdHr${i}`)?.classList.remove('threshold-invalid');updateLivePaces();});
     byId(`thresholdHrMax${i}`)?.addEventListener('input',updateLivePaces);
   }
   byId('thresholdRecovery')?.addEventListener('blur',()=>formatRaceTimeInput(byId('thresholdRecovery')));

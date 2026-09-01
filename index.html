@@ -662,10 +662,10 @@
     <nav class="tabs">
       <button class="tab active" data-tab="route">1. Трек гонки</button>
       <button class="tab" data-tab="forecast">2. Прогноз гонки</button>
-      <button class="tab" data-tab="roster">3. Стартовый список и баллы ITRA</button>
-      <button class="tab" data-tab="result">4. Прогноз места в TOP-100</button>
-      <button class="tab" data-tab="threshold">5. Пороговый тест</button>
-      <button class="tab" data-tab="simulation">6. Симуляция гонки</button>
+      <button class="tab" data-tab="roster" hidden>3. Стартовый список и баллы ITRA</button>
+      <button class="tab" data-tab="result" hidden>4. Прогноз места в TOP-100</button>
+      <button class="tab" data-tab="threshold">3. Пороговый тест</button>
+      <button class="tab" data-tab="simulation">4. Симуляция гонки</button>
     </nav>
 
     <section id="route" class="tabpanel active">
@@ -1330,6 +1330,8 @@
 .threshold-segment-tab.active{background:#38bdf8;color:#062033;border-color:#38bdf8;box-shadow:0 0 0 1px rgba(56,189,248,.25) inset}
 .threshold-segment{display:none}
 .threshold-segment.active{display:block}
+
+.threshold-invalid{border-color:#ef4444!important;box-shadow:0 0 0 1px rgba(239,68,68,.45),0 0 16px rgba(239,68,68,.12)!important}
 </style>
 
 <div id="mishaFinishWelcome" class="misha-start-sendoff" aria-hidden="true">
