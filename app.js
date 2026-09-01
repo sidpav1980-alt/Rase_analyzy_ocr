@@ -6731,8 +6731,8 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     values.forEach((v,i)=>{if(Number.isFinite(v)){n+=v*weights[i];d+=weights[i];}});
     return d?n/d:null;
   }
-  function predictFromThreshold(thresholdPace, physiology){
-    // Baseline from the measured threshold pace.
+  function predictFromThreshold(thresholdPace, physiology, calibrationRace){
+    // Baseline from measured threshold pace.
     const tenPace=Math.max(150,thresholdPace-8);
     const baseTen=tenPace*10;
     const halfDist=21.0975;
@@ -6741,31 +6741,19 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     const baseHalf=baseTen*Math.pow(halfDist/10,1.06);
     const baseMarathon=baseTen*Math.pow(marathonDist/10,1.06);
 
-    // Physiological correction. VO2max raises/lowers the performance ceiling;
-    // HR reserve shows whether the 12-minute reps were truly near LT2.
     let vo2Factor=1, hrFactor=1;
     const vo2=Number(physiology?.vo2max);
-    if(Number.isFinite(vo2)){
-      // Around VO2max 55 is neutral. Each 5 points changes predicted time by ~2.5%,
-      // capped so VO2max never overwhelms actual running performance.
-      vo2Factor=Math.max(0.88,Math.min(1.12,1-(vo2-55)*0.005));
-    }
+    if(Number.isFinite(vo2)) vo2Factor=Math.max(0.88,Math.min(1.12,1-(vo2-55)*0.005));
     const hrmax=Number(physiology?.hrmax);
     const avgHr=Number(physiology?.avgHr);
     const peakHr=Number(physiology?.peakHr);
     if(Number.isFinite(hrmax) && Number.isFinite(avgHr) && hrmax>0){
       const f=avgHr/hrmax;
-      // Heart rate is highly individual. A low absolute HR must not by itself
-      // downgrade a fast runner. Use HR only as a modest reserve/cost signal.
       if(f<0.68) hrFactor=0.98;
       else if(f<0.78) hrFactor=0.985;
       else if(f<=0.94) hrFactor=1.00;
       else if(f<=0.97) hrFactor=1.01;
       else hrFactor=1.02;
-
-      // Peak HR from each 12-minute rep is also useful. At the same pace and
-      // average HR, a higher peak means the athlete was closer to the cardiac
-      // ceiling, so race predictions get a small conservative correction.
       if(Number.isFinite(peakHr) && peakHr>avgHr){
         const pf=peakHr/hrmax;
         if(pf>=0.98) hrFactor*=1.018;
@@ -6775,12 +6763,27 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       }
     }
     const physFactor=Math.max(0.86,Math.min(1.14,vo2Factor*hrFactor));
+    let fiveTime=baseFive*(1+0.65*(physFactor-1));
+    let tenTime=baseTen*(1+0.55*(physFactor-1));
+    let halfTime=baseHalf*(1+0.40*(physFactor-1));
+    let marathonTime=baseMarathon*(1+0.25*(physFactor-1));
 
-    // Use physiology as a moderate correction, stronger for short races and softer for marathon.
-    const fiveTime=baseFive*(1+0.65*(physFactor-1));
-    const tenTime=baseTen*(1+0.55*(physFactor-1));
-    const halfTime=baseHalf*(1+0.40*(physFactor-1));
-    const marathonTime=baseMarathon*(1+0.25*(physFactor-1));
+    // A fresh real race result is the strongest individual performance anchor.
+    // It must visibly change every forecast instead of being washed out by VO2/HR caps.
+    if(calibrationRace && Number.isFinite(calibrationRace.time) && calibrationRace.time>0){
+      const d0=calibrationRace.distance;
+      const t0=calibrationRace.time;
+      const riegel=(d)=>t0*Math.pow(d/d0,1.06);
+      const race5=riegel(5), race10=riegel(10), raceHalf=riegel(halfDist), raceMar=riegel(marathonDist);
+      const w=0.72; // 72% real race, 28% interval/physiology model
+      fiveTime=fiveTime*(1-w)+race5*w;
+      tenTime=tenTime*(1-w)+race10*w;
+      halfTime=halfTime*(1-w)+raceHalf*w;
+      marathonTime=marathonTime*(1-w)+raceMar*w;
+      // On the exact calibration distance, show the entered real result exactly.
+      if(Math.abs(d0-5)<0.01) fiveTime=t0;
+      if(Math.abs(d0-10)<0.01) tenTime=t0;
+    }
     return {
       tenPace:tenTime/10,tenTime,
       fiveTime,fivePace:fiveTime/5,
@@ -6828,7 +6831,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       const cost=oxygenCostAtPace(rawThreshold);
       const fraction=cost/vo2max;
       let sustainableFraction=0.90;
-      if(calibration) sustainableFraction=0.92; // race performance gives an individual economy anchor
+      if(calibration) sustainableFraction=0.96; // a real race result is a strong individual economy anchor
       const capCost=vo2max*sustainableFraction;
       const capPace=paceFromOxygenCost(capCost);
       if(fraction>0.98){
@@ -6921,10 +6924,17 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
 
     const t10=parseTime(byId('threshold10k').value);
     const t5=parseTime(byId('threshold5k').value);
-    let calibration=null,calLabel='';
-    if(t10 && t10>1200 && t10<7200){ calibration=t10/10+7; calLabel='10 км'; }
-    else if(t5 && t5>600 && t5<3600){ calibration=t5/5+18; calLabel='5 км'; }
-    if(calibration) threshold=threshold*0.60+calibration*0.40;
+    let calibration=null,calLabel='',calibrationRace=null;
+    if(t10 && t10>1200 && t10<7200){
+      calibration=t10/10+7; calLabel='10 км'; calibrationRace={distance:10,time:t10};
+    }else if(t5 && t5>600 && t5<3600){
+      // A real 5 km race is a strong anchor. Threshold is normally slower than 5 km pace.
+      calibration=t5/5+16; calLabel='5 км'; calibrationRace={distance:5,time:t5};
+    }
+    if(calibration){
+      // Real race performance gets majority weight; intervals still keep the result individual.
+      threshold=threshold*0.35+calibration*0.65;
+    }
 
     const hrVals=segs.map(s=>s.hr);
     const physiology=applyPhysiologyModel(threshold,segs,calibration);
@@ -6937,7 +6947,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     if(byId('lthr') && Number.isFinite(thresholdHr)) byId('lthr').value=String(thresholdHr);
 
     const rangeLo=Math.max(1,threshold-4), rangeHi=threshold+3;
-    const pred=predictFromThreshold(threshold,physiology);
+    const pred=predictFromThreshold(threshold,physiology,calibrationRace);
     let quality='Хорошее';
     if(n===3 && Math.abs(driftPct)<=5 && hrVals.every(Boolean)) quality='Высокое';
     if(Math.abs(driftPct)>7) quality='Среднее';
@@ -6989,7 +6999,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     }
 
     const segText=segs.map(s=>`${s.i}: ${paceText(s.pace)} (${s.d.toFixed(2)} км)`).join(' · ');
-    const calText=calibration?` Добавлена калибровка по свежему результату ${calLabel}.`:'';
+    const calText=calibration?` Свежий результат ${calLabel} используется как сильный якорь: он напрямую корректирует пороговый темп и все прогнозы.`:'';
     const physText=` VO₂max ${physiology.vo2max.toFixed(1)} учитывается как аэробный потолок${Number.isFinite(physiology.hrmax)?`; HRmax ${Math.round(physiology.hrmax)} — для проверки относительной интенсивности пульса`:''}.`;
     byId('thresholdExplanation').innerHTML=`<b>Отрезки:</b> ${segText}<br><b>Как рассчитано:</b> поздние отрезки имеют больший вес; учитывается изменение темпа, VO₂max, пульс${Number.isFinite(physiology.hrmax)?'/HRmax':''} и контрольный результат 5/10 км.${calText}${physText}`;
     byId('thresholdStatus').textContent='✓ Порог рассчитан.';
