@@ -7244,6 +7244,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     return `${m}:${String(s).padStart(2,'0')}/км`;
   }
   function addStop(data={}){
+    if(paceDistanceUnit==='m') return;
     if(stopCount>=7) return;
     stopCount++;
     const row=document.createElement('div');
@@ -7317,7 +7318,21 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     $('paceCalcResult').scrollIntoView({behavior:'smooth',block:'center'});
   }
   function reset(){
-    $('paceCalcDistance').value='';$('paceCalcTotalTime').value='';stopsEl.innerHTML='';stopCount=0;$('paceCalcResult').hidden=true;$('paceCalcStatus').textContent='Введите дистанцию и общее время.';$('paceCalcAddStop').disabled=false;
+    $('paceCalcDistance').value='';
+    $('paceCalcTotalTime').value='';
+    stopsEl.innerHTML='';
+    stopCount=0;
+    $('paceCalcResult').hidden=true;
+    document.querySelectorAll('.pacecalc-invalid').forEach(e=>e.classList.remove('pacecalc-invalid'));
+    $('paceCalcStatus').classList.remove('pacecalc-unrealistic');
+    // Полный сброс всегда возвращает базовый режим: километры + минуты.
+    setDistanceUnit('km');
+    $('paceCalcDistance').value='';
+    $('paceCalcTotalTime').value='';
+    stopsEl.innerHTML='';
+    stopCount=0;
+    $('paceCalcAddStop').disabled=false;
+    $('paceCalcStatus').textContent='Введите дистанцию и общее время.';
   }
   function setTimeUnit(unit){
     paceTimeUnit=unit==='sec'?'sec':(unit==='hour'?'hour':'min');
@@ -7350,13 +7365,22 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     if(paceDistanceUnit==='m'){
       if(label) label.textContent='Дистанция, м';
       if(input){ input.min='10'; input.max='999'; input.step='1'; input.placeholder='400'; }
+      // На коротких дистанциях остановки не применяются.
+      stopsEl.innerHTML='';
+      stopCount=0;
+      $('paceCalcAddStop').disabled=true;
+      $('paceCalcAddStop').title='Для режима «Метры» остановки отключены';
     }else{
       if(label) label.textContent='Дистанция, км';
       if(input){ input.min='0.1'; input.max='340'; input.step='0.1'; input.placeholder='100'; }
+      $('paceCalcAddStop').disabled=false;
+      $('paceCalcAddStop').title='';
     }
     configureTimeButtonsForDistance();
     $('paceCalcResult').hidden=true;
-    $('paceCalcStatus').textContent=`Режим дистанции: ${paceDistanceUnit==='m'?'метры':'километры'}. Нажмите «Рассчитать темп».`;
+    $('paceCalcStatus').textContent=paceDistanceUnit==='m'
+      ? 'Режим дистанции: метры. Остановки отключены. Введите дистанцию и время.'
+      : 'Режим дистанции: километры. Нажмите «Рассчитать темп».';
   }
   document.addEventListener('click',e=>{
     const db=e.target.closest?.('[data-distance-unit]');
