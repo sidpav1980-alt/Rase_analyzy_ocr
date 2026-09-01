@@ -7177,14 +7177,27 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     const speedKmh=3600/movingPace;
     // Distance-aware sanity check. Sprint-like speeds can be valid on 100–400 m,
     // but for 1 km+ values faster than elite world-class pace are treated as input errors.
-    let unrealistic=false;
-    if(dist>=1 && movingPace<130) unrealistic=true;       // < 2:10/km for 1 km or longer
-    else if(dist>=0.4 && movingPace<95) unrealistic=true; // < 1:35/km for 400–999 m
-    else if(dist<0.4 && speedKmh>45) unrealistic=true;    // extreme sprint input
-    if(unrealistic){
+    let tooFast=false;
+    if(dist>=1 && movingPace<130) tooFast=true;       // < 2:10/km for 1 km or longer
+    else if(dist>=0.4 && movingPace<95) tooFast=true; // < 1:35/km for 400–999 m
+    else if(dist<0.4 && speedKmh>45) tooFast=true;    // extreme sprint input
+
+    // Reverse realism check: reject extremely slow values that are usually a
+    // mistaken Minutes/Hours selection. Limits get progressively looser for ultras.
+    let maxPaceSec=10800; // 180:00/km for 200–340 km
+    if(dist<=5) maxPaceSec=1800;        // 30:00/km
+    else if(dist<=20) maxPaceSec=2400;  // 40:00/km
+    else if(dist<=50) maxPaceSec=3600;  // 60:00/km
+    else if(dist<=100) maxPaceSec=5400; // 90:00/km
+    else if(dist<=200) maxPaceSec=7200; // 120:00/km
+    const tooSlow=movingPace>maxPaceSec;
+
+    if(tooFast || tooSlow){
       $('paceCalcDistance').classList.add('pacecalc-invalid');
       $('paceCalcTotalTime').classList.add('pacecalc-invalid');
-      $('paceCalcStatus').textContent='😄 Ты Усэйн Болт, что ли? Такой результат выглядит нереалистично. Проверь дистанцию, время и переключатель «Минуты/Часы».';
+      $('paceCalcStatus').textContent=tooFast
+        ? '😄 Ты Усэйн Болт, что ли? Такой результат выглядит нереалистично. Проверь дистанцию, время и переключатель «Минуты/Часы».'
+        : '😴 Ты там ночевать собрался? Такое время для этой дистанции выглядит нереалистично. Проверь дистанцию, время, остановки и переключатель «Минуты/Часы».';
       $('paceCalcStatus').classList.add('pacecalc-unrealistic');
       $('paceCalcResult').hidden=true;
       $('paceCalcStatus').scrollIntoView({behavior:'smooth',block:'center'});
