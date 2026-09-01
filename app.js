@@ -7334,15 +7334,37 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     // 1  Бег  12:01.2  2,88  4:10
     // 2  Бег  12:01.7  2,78  4:20
     // These are the actual work intervals. Prefer them over warm-up/recovery rows.
-    const intervalRowRe=/(?:^|\n)\s*([1-3])\s+(?:бег|run|ber|6er|бeг)[^\n]{0,70}?(\d{1,2}[:.]\d{2}(?:[.]\d)?)\s+([0-9]{1,2}[.]\d{1,3})\s+([2-9][:.][0-5]\d)(?=\s|$)/gim;
+    // Parse each visible Garmin work row independently. This is intentionally
+    // row-number aware: when the user opens "Отрезок 2", values must come
+    // from the row "2 Бег", never from "1 Бег" or the warm-up row.
     let rm;
-    while((rm=intervalRowRe.exec(text))){
-      const idx=Number(rm[1]);
-      const duration=rm[2].replace('.',':');
-      const distance=Number(rm[3]);
-      const pace=`${Number(rm[4].split(/[:.]/)[0])}:${rm[4].split(/[:.]/)[1]}`;
-      if(idx>=1&&idx<=3&&distance>=1&&distance<=5&&parsePace(pace)){
-        out.interval_rows.push({index:idx,duration,distance_km:distance,pace});
+    for(const line0 of lines){
+      const line=line0.replace(/,/g,'.').replace(/\s+/g,' ').trim();
+      const head=line.match(/^\s*([1-3])(?:\s|[.)-])+(.+)$/i);
+      if(!head) continue;
+      const idx=Number(head[1]);
+      const rest=head[2];
+      if(!/(?:^|\s)(?:бег|run|ber|6er|бeг)(?:\s|$)/i.test(rest)) continue;
+      const durationM=rest.match(/\b(\d{1,2}[:.]\d{2}(?:[.]\d)?)\b/);
+      const paceMatches=[...rest.matchAll(/\b([2-9])[:.]([0-5]\d)\b/g)];
+      const paceM=paceMatches.length?paceMatches[paceMatches.length-1]:null;
+      const decimalMatches=[...rest.matchAll(/\b(\d{1,2}[.]\d{2,3})\b/g)]
+        .map(m=>Number(m[1])).filter(v=>v>=1&&v<=5);
+      const distance=decimalMatches.length?decimalMatches[decimalMatches.length-1]:NaN;
+      if(durationM && paceM && Number.isFinite(distance)){
+        const pace=`${Number(paceM[1])}:${paceM[2]}`;
+        if(parsePace(pace)) out.interval_rows.push({index:idx,duration:durationM[1],distance_km:distance,pace});
+      }
+    }
+    // Fallback for OCR that collapsed several table rows into one text line.
+    if(!out.interval_rows.length){
+      const intervalRowRe=/(?:^|\n|\s)([1-3])\s+(?:бег|run|ber|6er|бeг)[^\n]{0,70}?(\d{1,2}[:.]\d{2}(?:[.]\d)?)\s+([0-9]{1,2}[.]\d{1,3})\s+([2-9][:.][0-5]\d)(?=\s|$)/gim;
+      while((rm=intervalRowRe.exec(text))){
+        const idx=Number(rm[1]);
+        const duration=rm[2];
+        const distance=Number(rm[3]);
+        const pp=rm[4].split(/[:.]/); const pace=`${Number(pp[0])}:${pp[1]}`;
+        if(idx>=1&&idx<=3&&distance>=1&&distance<=5&&parsePace(pace)) out.interval_rows.push({index:idx,duration,distance_km:distance,pace});
       }
     }
     // OCR sometimes loses the word "Бег" but keeps the numbered row and 12-minute duration.
@@ -7488,9 +7510,16 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
           if(pEl) pEl.value=row.pace;
           updateThresholdLivePace?.(row.index);
         }
-        const own=data.interval_rows.find(r=>r.index===i) || data.interval_rows[0];
-        data.distance_km=own.distance_km;
-        data.pace=own.pace;
+        const own=data.interval_rows.find(r=>r.index===i);
+        if(own){
+          data.distance_km=own.distance_km;
+          data.pace=own.pace;
+        }else{
+          // Critical: never copy row 1 into segment 2/3 when OCR failed to
+          // recognize that specific numbered row. Leave it for manual entry.
+          data.distance_km=null;
+          data.pace=null;
+        }
       }
       const recognizedBox=byId(`thresholdRecognizedPreview${i}`);
       const recognizedDistance=byId(`thresholdRecognizedDistance${i}`);
