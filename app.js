@@ -7933,3 +7933,135 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
   stopsEl?.addEventListener('input',invalidatePaceResult);
   $('paceCalcReset').addEventListener('click',reset);
 })();
+
+// v0.0262: standalone Garmin interval OCR (up to 4 screenshots).
+(function initIntervalOcrBlock(){
+  const filesInput=document.getElementById('intervalOcrFiles');
+  const photoList=document.getElementById('intervalOcrPhotoList');
+  const status=document.getElementById('intervalOcrStatus');
+  const results=document.getElementById('intervalOcrResults');
+  const rowsEl=document.getElementById('intervalOcrRows');
+  const copyBtn=document.getElementById('intervalOcrCopyAll');
+  const copyStatus=document.getElementById('intervalOcrCopyStatus');
+  const clearBtn=document.getElementById('intervalOcrClear');
+  if(!filesInput||!photoList||!rowsEl) return;
+
+  const found=new Map();
+  let objectUrls=[];
+
+  function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+  function fmtDist(v){return Number(v).toFixed(2).replace('.',',')+' км';}
+  function paceSecs(p){const m=String(p||'').match(/^(\d{1,2}):([0-5]\d)$/);return m?Number(m[1])*60+Number(m[2]):null;}
+  function derivedTime(dist,pace){
+    const ps=paceSecs(pace); if(!Number.isFinite(dist)||!ps) return '';
+    const sec=dist*ps; const min=Math.floor(sec/60); const s=sec-min*60;
+    return `${min}:${s.toFixed(1).padStart(4,'0')}`;
+  }
+  function normalizeRunWord(line){
+    return line.replace(/\b(?:ber|6er|6ег|бeг|бег|beg)\b/ig,'Бег');
+  }
+  function parseRows(text){
+    const out=[];
+    const lines=String(text||'').split(/\n+/).map(x=>normalizeRunWord(x.trim())).filter(Boolean);
+    for(const raw of lines){
+      // Strictly require a numbered work row: "N Бег ...". Never infer an interval from "Всего".
+      const head=raw.match(/^\s*(\d{1,2})\s+Бег\b\s*(.*)$/i);
+      if(!head) continue;
+      const index=Number(head[1]); if(index<1||index>99) continue;
+      const tail=head[2].replace(/,/g,'.').replace(/[|]/g,' ');
+
+      // Pace is normally the last m:ss token in a Garmin interval row.
+      const paces=[...tail.matchAll(/\b([2-9]|1[0-5])[:.]([0-5]\d)\b/g)];
+      let pace='';
+      if(paces.length){ const p=paces[paces.length-1]; pace=`${Number(p[1])}:${p[2]}`; }
+
+      // Distance is a decimal km value, normally immediately before pace.
+      const distMatches=[...tail.matchAll(/\b(\d{1,2}\.\d{1,3})\b/g)]
+        .map(m=>({v:Number(m[1]),i:m.index})).filter(x=>x.v>=0.01&&x.v<=100);
+      let distance=null;
+      if(distMatches.length){
+        // Prefer the last plausible decimal before the pace token.
+        const pacePos=paces.length?paces[paces.length-1].index:Infinity;
+        const before=distMatches.filter(x=>x.i<pacePos);
+        const pick=(before.length?before:distMatches).slice(-1)[0];
+        if(pick) distance=pick.v;
+      }
+
+      // Time: accept h:mm:ss(.d), m:ss(.d), or Garmin OCR variants with separators.
+      let time='';
+      const timeMatches=[...tail.matchAll(/\b(?:\d{1,2}:)?\d{1,2}[:.]\d{2}(?:[.,]\d)?\b/g)].map(m=>({t:m[0].replace(',', '.'),i:m.index}));
+      if(timeMatches.length){
+        const pacePos=paces.length?paces[paces.length-1].index:Infinity;
+        const distPos=distMatches.length?distMatches[distMatches.length-1].i:Infinity;
+        const candidates=timeMatches.filter(x=>x.i<Math.min(distPos,pacePos));
+        if(candidates.length) time=candidates[0].t;
+      }
+      if(!time && distance!=null && pace) time=derivedTime(distance,pace);
+
+      if(distance!=null && pace){ out.push({index,type:'Бег',distance,time,pace,raw}); }
+    }
+    return out;
+  }
+
+  function render(){
+    const arr=[...found.values()].sort((a,b)=>a.index-b.index);
+    rowsEl.innerHTML=arr.map(r=>`<tr><td>${r.index}</td><td>Бег</td><td>${fmtDist(r.distance)}</td><td>${esc(r.time||'—')}</td><td>${esc(r.pace)}/км</td></tr>`).join('');
+    results.hidden=!arr.length;
+    if(arr.length){
+      const nums=arr.map(r=>r.index);
+      const gaps=[];
+      for(let n=Math.min(...nums);n<=Math.max(...nums);n++) if(!found.has(n)) gaps.push(n);
+      status.textContent=gaps.length?`Найдено ${arr.length} интервалов. Не найдены номера: ${gaps.join(', ')}.`:`Найдено ${arr.length} интервалов: ${Math.min(...nums)}–${Math.max(...nums)}.`;
+      status.className='interval-ocr-status '+(gaps.length?'warn':'ok');
+    }
+  }
+
+  function clearAll(){
+    found.clear(); rowsEl.innerHTML=''; results.hidden=true; photoList.innerHTML=''; photoList.hidden=true;
+    objectUrls.forEach(u=>{try{URL.revokeObjectURL(u)}catch{}}); objectUrls=[];
+    filesInput.value=''; status.textContent=''; status.className='interval-ocr-status'; if(copyStatus) copyStatus.textContent='';
+  }
+
+  async function recognizeOne(file,slot){
+    const url=URL.createObjectURL(file); objectUrls.push(url);
+    const card=document.createElement('div'); card.className='interval-ocr-photo';
+    card.innerHTML=`<div class="interval-ocr-photo-top"><b>Фото ${slot}</b><button type="button" class="btn secondary interval-ocr-toggle">Свернуть</button></div><div class="interval-ocr-photo-body"><img src="${url}" alt="Фото ${slot}"><div class="interval-ocr-photo-status">Ожидает распознавания…</div></div>`;
+    photoList.appendChild(card);
+    const body=card.querySelector('.interval-ocr-photo-body'); const toggle=card.querySelector('.interval-ocr-toggle'); const st=card.querySelector('.interval-ocr-photo-status');
+    toggle.addEventListener('click',()=>{ const hidden=body.hidden=!body.hidden; toggle.textContent=hidden?'Развернуть':'Свернуть'; });
+    try{
+      if(!window.Tesseract?.recognize) throw new Error('Модуль OCR не загрузился');
+      const result=await window.Tesseract.recognize(file,'rus+eng',{logger:m=>{if(m?.status==='recognizing text'&&Number.isFinite(m.progress)) st.textContent=`Распознаю… ${Math.round(m.progress*100)}%`;}});
+      const text=String(result?.data?.text||'');
+      const compact=text.replace(/\s+/g,' ').trim(); const lines=text.split(/\n+/).filter(x=>x.trim());
+      if(compact.length>2600||lines.length>70) throw new Error('Слишком много текста — загрузите скриншот Garmin «Бег → Интервалы»');
+      const parsed=parseRows(text);
+      if(!parsed.length){ st.textContent='Строки «N Бег» не найдены.'; st.className='interval-ocr-photo-status warn'; return; }
+      for(const r of parsed){
+        const old=found.get(r.index);
+        // Prefer the more complete recognition when screenshots overlap.
+        if(!old || ((r.time?1:0)+(r.distance?1:0)+(r.pace?1:0) > (old.time?1:0)+(old.distance?1:0)+(old.pace?1:0))) found.set(r.index,r);
+      }
+      st.textContent=`Найдены: ${parsed.map(r=>r.index+' Бег').join(', ')}`; st.className='interval-ocr-photo-status ok'; render();
+    }catch(e){ st.textContent=`Ошибка: ${e.message||e}`; st.className='interval-ocr-photo-status err'; }
+  }
+
+  filesInput.addEventListener('change',async()=>{
+    const files=[...filesInput.files||[]];
+    if(!files.length) return;
+    if(files.length>4){ status.textContent='Можно загрузить максимум 4 фото за один раз.'; status.className='interval-ocr-status warn'; files.splice(4); }
+    clearAll(); photoList.hidden=false;
+    status.textContent=`Загружено ${files.length} фото. Распознаю интервалы…`; status.className='interval-ocr-status';
+    for(let i=0;i<files.length;i++) await recognizeOne(files[i],i+1);
+    render();
+  });
+
+  copyBtn?.addEventListener('click',async()=>{
+    const arr=[...found.values()].sort((a,b)=>a.index-b.index);
+    if(!arr.length) return;
+    const text=arr.map(r=>`${r.index} Бег — ${fmtDist(r.distance)} — ${r.time||'—'} — ${r.pace}/км`).join('\n');
+    try{ await navigator.clipboard.writeText(text); if(copyStatus) copyStatus.textContent=`Скопировано ${arr.length} интервалов.`; }
+    catch{ const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); if(copyStatus) copyStatus.textContent=`Скопировано ${arr.length} интервалов.`; }
+  });
+  clearBtn?.addEventListener('click',clearAll);
+})();

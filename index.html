@@ -10,7 +10,7 @@
   <title>Прогноз и анализ трейловых гонок</title>
   <link rel="manifest" href="manifest.webmanifest?v=075">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=262-ocr-garmin-row-map2">
+  <link rel="stylesheet" href="styles.css?v=241-ocr-garmin-row-map2">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynBv0TtP4JpC5dQF3Vqv2tLIbV0w=" crossorigin="">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
@@ -666,7 +666,8 @@
       <button class="tab" data-tab="result" hidden>4. Прогноз места в TOP-100</button>
       <button class="tab" data-tab="threshold">3. Пороговый тест</button>
       <button class="tab" data-tab="pacecalc">4. Расчёт темпа</button>
-      <button class="tab" data-tab="simulation">5. Симуляция гонки</button>
+      <button class="tab" data-tab="intervalocr">5. Распознавание интервалов</button>
+      <button class="tab" data-tab="simulation">6. Симуляция гонки</button>
     </nav>
 
     <section id="route" class="tabpanel active">
@@ -1311,6 +1312,40 @@
       </div>
     </section>
 
+
+<section id="intervalocr" class="tabpanel">
+  <div class="card interval-ocr-card">
+    <h2>Распознавание интервалов</h2>
+    <p class="muted interval-ocr-help">Garmin: <b>Бег → Интервалы</b>. Можно загрузить до 4 скриншотов одной тренировки. Строки «1 Бег», «2 Бег», «9 Бег» и т. д. объединяются по номеру.</p>
+
+    <div class="interval-ocr-actions">
+      <label class="btn interval-ocr-upload">
+        📷 Загрузить фото
+        <input id="intervalOcrFiles" type="file" accept="image/*" multiple hidden>
+      </label>
+      <button type="button" class="btn secondary" id="intervalOcrClear">Сбросить</button>
+    </div>
+    <div class="interval-ocr-note">До 4 фото. Для длинной серии можно загрузить продолжение: например, 1–8 на первом фото, 9–16 на втором.</div>
+
+    <div id="intervalOcrPhotoList" class="interval-ocr-photos" hidden></div>
+    <div id="intervalOcrStatus" class="interval-ocr-status"></div>
+
+    <div id="intervalOcrResults" class="interval-ocr-results" hidden>
+      <div class="interval-ocr-results-head">
+        <h3>Найденные интервалы</h3>
+        <button type="button" class="btn secondary" id="intervalOcrCopyAll">Скопировать всё</button>
+      </div>
+      <div class="interval-ocr-table-wrap">
+        <table class="interval-ocr-table">
+          <thead><tr><th>№</th><th>Тип</th><th>Дистанция</th><th>Время</th><th>Темп</th></tr></thead>
+          <tbody id="intervalOcrRows"></tbody>
+        </table>
+      </div>
+      <div id="intervalOcrCopyStatus" class="interval-ocr-copy-status"></div>
+    </div>
+  </div>
+</section>
+
 <section id="simulation" class="tabpanel">
   <div class="sim-reference-shell">
     <div class="virtual-track-box">
@@ -1459,7 +1494,7 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="app.js?v=262-ocr-garmin-row-map2"></script>
+  <script src="app.js?v=241-ocr-garmin-row-map2"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
