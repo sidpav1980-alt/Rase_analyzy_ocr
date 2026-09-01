@@ -3,7 +3,7 @@ const CORE=[
   './',
   './index.html',
   './styles.css?v=267-threshold-graph-authoritative-slot-fix',
-  './app.js?v=251-threshold-graph-authoritative-slot-fix',
+  './app.js?v=263-threshold-graph-slot2-hard-fix',
   './manifest.webmanifest?v=075',
   './icon-192.png',
   './icon-512.png'

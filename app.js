@@ -297,7 +297,7 @@ $('installBtn').addEventListener('click', async () => {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=233', {updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('./sw.js?v=263', {updateViaCache:'none'});
       await reg.update();
       let refreshing=false;
       navigator.serviceWorker.addEventListener('controllerchange',()=>{
@@ -7502,20 +7502,40 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
         return a;
       };
       const bands=(a,minCount,minH=8)=>{ const out=[]; let st=-1; for(let y=0;y<=a.length;y++){ const on=y<a.length&&a[y]>=minCount; if(on&&st<0)st=y; if(!on&&st>=0){ if(y-st>=minH)out.push([st,y-1]); st=-1; } } return out; };
-      const blueBands=bands(rowCount(isBlue),Math.max(8,Math.floor(w*0.035)),18).sort((a,b)=>(b[1]-b[0])-(a[1]-a[0]));
+      // Be deliberately permissive here: on iPhone screenshots Garmin's blue pace
+      // fill can be only a narrow part of the full image width. The old 3.5% row
+      // threshold sometimes missed the chart completely, so OCR summary values
+      // (for example 4:10 / 162 / 180) were copied into both test segments.
+      const blueRows=rowCount(isBlue);
+      const blueBands=bands(blueRows,Math.max(3,Math.floor(w*0.009)),8)
+        .map(([a,b])=>({a,b,score:blueRows.slice(a,b+1).reduce((u,v)=>u+v,0)}))
+        .filter(q=>q.score>Math.max(30,w*.2))
+        .sort((a,b)=>b.score-a.score);
       if(!blueBands.length) return [];
-      const [py0,py1]=blueBands[0];
+      const py0=blueBands[0].a, py1=blueBands[0].b;
       const colCount=new Array(w).fill(0), topBlue=new Array(w).fill(null);
       for(let x=0;x<w;x++){
         let n=0,top=null;
         for(let y=py0;y<=py1;y++){ const k=(y*w+x)*4; if(isBlue(data[k],data[k+1],data[k+2])){n++; if(top===null)top=y;} }
         colCount[x]=n; topBlue[x]=top;
       }
-      const segs=[]; let st=-1; const minCol=Math.max(3,Math.floor((py1-py0)*0.025));
+      // Build horizontal blue runs and tolerate tiny holes caused by grid lines,
+      // antialiasing and compression. Then merge only very short gaps; the large
+      // black recovery gaps between Garmin work intervals remain separate.
+      let segs=[]; let st=-1; const minCol=Math.max(2,Math.floor((py1-py0)*0.012));
       for(let x=0;x<=w;x++){
         const on=x<w&&colCount[x]>=minCol;
         if(on&&st<0)st=x;
-        if(!on&&st>=0){ if(x-st>=Math.max(10,w*0.018))segs.push([st,x-1]); st=-1; }
+        if(!on&&st>=0){ if(x-st>=Math.max(6,w*0.008))segs.push([st,x-1]); st=-1; }
+      }
+      if(segs.length){
+        const merged=[segs[0]];
+        const tinyGap=Math.max(3,Math.floor(w*.008));
+        for(const q of segs.slice(1)){
+          const prev=merged[merged.length-1];
+          if(q[0]-prev[1]-1<=tinyGap) prev[1]=q[1]; else merged.push(q);
+        }
+        segs=merged;
       }
       if(segs.length<2) return [];
 
@@ -7560,12 +7580,17 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
         return {a,b,len:b-a+1,paceSec:mean};
       }).filter(x=>Number.isFinite(x.paceSec));
       if(raw.length<2)return [];
-      // Work blocks are the faster plateaus. Keep substantial blocks within ~35 s/km of the fastest median.
-      const fastest=Math.min(...raw.map(x=>x.paceSec));
+      // For threshold screenshots the two long blue plateaus are the work blocks.
+      // Prefer duration/width first, pace second. This prevents a shorter fast warm-up
+      // spike from replacing the genuinely slower second 12-minute interval.
       const maxLen=Math.max(...raw.map(x=>x.len));
-      let work=raw.filter(x=>x.len>=Math.max(12,maxLen*.28) && x.paceSec<=fastest+35);
-      if(work.length<2) work=[...raw].sort((a,b)=>(a.paceSec-b.paceSec)|| (b.len-a.len)).slice(0,2);
-      work=work.sort((a,b)=>a.a-b.a).slice(0,3);
+      let substantial=raw.filter(x=>x.len>=Math.max(12,maxLen*.38));
+      let work=(substantial.length>=2?substantial:[...raw].sort((a,b)=>b.len-a.len).slice(0,Math.min(3,raw.length)))
+        .sort((a,b)=>a.a-b.a)
+        .slice(-3);
+      // If there are 3 substantial areas, the earliest one is normally warm-up;
+      // keep the two right-most long plateaus for a 2-segment threshold test.
+      if(work.length>2) work=work.slice(work.length-2);
 
       // HR chart: map visible 100/150/200 labels to red graph height and average each work interval.
       const redBands=bands(rowCount(isRed),Math.max(8,Math.floor(w*.028)),16).sort((a,b)=>(b[1]-b[0])-(a[1]-a[0]));
@@ -7678,6 +7703,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       // work blocks is now authoritative.
       graphIntervals=await parseThresholdGraphIntervals(file,result);
       const graphMode=graphIntervals.length>=2;
+      const looksLikeGraph=/(?:Графики|Graphs)/i.test(rawOcrText) && /(?:Среднее|Average|Лучшее|Best|Частота пульса|Heart Rate)/i.test(rawOcrText);
       if(graphMode){
         const ownGraph=graphIntervals[Math.max(0,Math.min(graphIntervals.length-1,i-1))];
         data.distance_km=ownGraph?.distance_km ?? null;
@@ -7690,6 +7716,18 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
         renderThresholdGraphIntervals(i,graphIntervals,rawOcrText);
       }else{
         renderThresholdGraphIntervals(i,[],rawOcrText);
+        // Never treat a y-axis tick (4:10, 5:00, …) or the workout-wide summary
+        // as the value of a specific threshold segment. If this is clearly Garmin
+        // «Графики» but pixel splitting failed, leave segment values empty and show
+        // a warning instead of silently duplicating segment 1 into segment 2.
+        if(looksLikeGraph){
+          data.distance_km=null; data.pace=null; data.avg_hr=null; data.max_hr=null;
+          data.interval_rows=[]; data.detected_run_indices=[];
+          if(status){
+            status.textContent='Экран «Графики» распознан, но рабочие синие блоки не удалось уверенно разделить. Общие 4:48/162/180 и подписи шкалы не подставлены в отрезок. Попробуйте исходный скрин без обрезки.';
+            status.className='threshold-photo-status warn';
+          }
+        }
       }
       const detectedRunIndices=Array.isArray(data.detected_run_indices)?data.detected_run_indices:[];
       const parsedRunIndices=Array.isArray(data.interval_rows)?data.interval_rows.map(r=>r.index):[];
