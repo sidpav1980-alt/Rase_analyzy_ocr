@@ -6731,19 +6731,50 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     values.forEach((v,i)=>{if(Number.isFinite(v)){n+=v*weights[i];d+=weights[i];}});
     return d?n/d:null;
   }
-  function predictFromThreshold(thresholdPace){
+  function predictFromThreshold(thresholdPace, physiology){
+    // Baseline from the measured threshold pace.
     const tenPace=Math.max(150,thresholdPace-8);
-    const tenTime=tenPace*10;
-    const fiveTime=tenTime*Math.pow(0.5,1.06);
+    const baseTen=tenPace*10;
     const halfDist=21.0975;
     const marathonDist=42.195;
-    const halfTime=tenTime*Math.pow(halfDist/10,1.06);
-    const marathonTime=tenTime*Math.pow(marathonDist/10,1.06);
+    const baseFive=baseTen*Math.pow(0.5,1.06);
+    const baseHalf=baseTen*Math.pow(halfDist/10,1.06);
+    const baseMarathon=baseTen*Math.pow(marathonDist/10,1.06);
+
+    // Physiological correction. VO2max raises/lowers the performance ceiling;
+    // HR reserve shows whether the 12-minute reps were truly near LT2.
+    let vo2Factor=1, hrFactor=1;
+    const vo2=Number(physiology?.vo2max);
+    if(Number.isFinite(vo2)){
+      // Around VO2max 55 is neutral. Each 5 points changes predicted time by ~2.5%,
+      // capped so VO2max never overwhelms actual running performance.
+      vo2Factor=Math.max(0.88,Math.min(1.12,1-(vo2-55)*0.005));
+    }
+    const hrmax=Number(physiology?.hrmax);
+    const avgHr=Number(physiology?.avgHr);
+    if(Number.isFinite(hrmax) && Number.isFinite(avgHr) && hrmax>0){
+      const f=avgHr/hrmax;
+      // Heart rate is highly individual. A low absolute HR must not by itself
+      // downgrade a fast runner. Use HR only as a modest reserve/cost signal.
+      if(f<0.68) hrFactor=0.98;
+      else if(f<0.78) hrFactor=0.985;
+      else if(f<=0.94) hrFactor=1.00;
+      else if(f<=0.97) hrFactor=1.01;
+      else hrFactor=1.02;
+    }
+    const physFactor=Math.max(0.86,Math.min(1.14,vo2Factor*hrFactor));
+
+    // Use physiology as a moderate correction, stronger for short races and softer for marathon.
+    const fiveTime=baseFive*(1+0.65*(physFactor-1));
+    const tenTime=baseTen*(1+0.55*(physFactor-1));
+    const halfTime=baseHalf*(1+0.40*(physFactor-1));
+    const marathonTime=baseMarathon*(1+0.25*(physFactor-1));
     return {
-      tenPace,tenTime,
+      tenPace:tenTime/10,tenTime,
       fiveTime,fivePace:fiveTime/5,
       halfTime,halfPace:halfTime/halfDist,
-      marathonTime,marathonPace:marathonTime/marathonDist
+      marathonTime,marathonPace:marathonTime/marathonDist,
+      vo2Factor,hrFactor,physFactor
     };
   }
   function oxygenCostAtPace(paceSec){
@@ -6808,31 +6839,30 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     let lthr=Number.isFinite(avgHr)?Math.round(avgHr):null;
     if(Number.isFinite(hrmax) && Number.isFinite(avgHr)){
       const hrFraction=avgHr/hrmax;
-      if(hrFraction<0.78){
-        score-=40;
-        status='Не подтверждено';
-        notes.push(`средний пульс ${Math.round(hrFraction*100)}% HRmax — слишком низкий для LT2; проверь датчик или интенсивность`);
-        // Don't accept an obviously sub-threshold HR as measured LTHR; report an estimated anchor.
-        lthr=Math.round(hrmax*0.88);
-      }else if(hrFraction<0.83){
+      // Do not use a universal HR percentage as a hard gate. Trained athletes can
+      // have unusually low exercise HR and high running economy. HR is therefore
+      // a confidence signal, while pace, VO2max and real race results remain primary.
+      if(hrFraction<0.60){
         score-=20;
         if(status==='Подтверждено') status='Сомнительно';
-        notes.push(`средний пульс ${Math.round(hrFraction*100)}% HRmax — ниже типичного порогового диапазона`);
-        lthr=Math.max(Math.round(avgHr),Math.round(hrmax*0.85));
-      }else if(hrFraction<=0.94){
-        notes.push(`пульс ${Math.round(hrFraction*100)}% HRmax согласуется с пороговой интенсивностью`);
+        notes.push(`средний пульс ${Math.round(hrFraction*100)}% HRmax необычно низкий; проверь датчик, но темп автоматически не занижается`);
+      }else if(hrFraction<0.75){
+        score-=5;
+        notes.push(`пульс ${Math.round(hrFraction*100)}% HRmax низкий, но допустим при высокой экономичности и индивидуально низком рабочем пульсе`);
+      }else if(hrFraction<=0.95){
+        notes.push(`пульс ${Math.round(hrFraction*100)}% HRmax физиологически правдоподобен для тяжёлой продолжительной работы`);
       }else{
-        score-=15;
+        score-=10;
         if(status==='Подтверждено') status='Сомнительно';
         notes.push(`пульс ${Math.round(hrFraction*100)}% HRmax очень высокий — возможно, работа была выше порога`);
       }
     }else if(!Number.isFinite(hrmax)){
-      notes.push('HRmax не указан: проверка пульса выполнена только по самим отрезкам');
+      notes.push('HRmax не указан: абсолютный пульс не используется как жёсткое ограничение');
     }
 
     if(score<55) status='Не подтверждено';
     else if(score<80 && status==='Подтверждено') status='Сомнительно';
-    return {threshold:adjusted,thresholdHr:lthr,vo2max,hrmax,score,status,notes};
+    return {threshold:adjusted,thresholdHr:lthr,vo2max,hrmax,avgHr,score,status,notes};
   }
 
   function calculate(){
@@ -6884,7 +6914,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     if(byId('lthr') && Number.isFinite(thresholdHr)) byId('lthr').value=String(thresholdHr);
 
     const rangeLo=Math.max(1,threshold-4), rangeHi=threshold+3;
-    const pred=predictFromThreshold(threshold);
+    const pred=predictFromThreshold(threshold,physiology);
     let quality='Хорошее';
     if(n===3 && Math.abs(driftPct)<=5 && hrVals.every(Boolean)) quality='Высокое';
     if(Math.abs(driftPct)>7) quality='Среднее';
@@ -6907,7 +6937,10 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       physStatus.classList.remove('threshold-physiology-good','threshold-physiology-warning','threshold-physiology-bad');
       physStatus.classList.add(physiology.status==='Подтверждено'?'threshold-physiology-good':physiology.status==='Сомнительно'?'threshold-physiology-warning':'threshold-physiology-bad');
     }
-    if(physDetail) physDetail.textContent=physiology.notes.join(' · ');
+    if(physDetail){
+      const extra=`Прогноз скорректирован по VO₂max и относительному пульсу: VO₂×${pred.vo2Factor.toFixed(3)}, HR×${pred.hrFactor.toFixed(3)}.`;
+      physDetail.textContent=physiology.notes.join(' · ')+' · '+extra;
+    }
     byId('threshold5kPrediction').textContent=timeText(pred.fiveTime);
     byId('threshold5kPace').textContent=paceText(pred.fivePace);
     byId('threshold10kPrediction').textContent=timeText(pred.tenTime);
@@ -7144,27 +7177,14 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     const speedKmh=3600/movingPace;
     // Distance-aware sanity check. Sprint-like speeds can be valid on 100–400 m,
     // but for 1 km+ values faster than elite world-class pace are treated as input errors.
-    let tooFast=false;
-    if(dist>=1 && movingPace<130) tooFast=true;       // < 2:10/km for 1 km or longer
-    else if(dist>=0.4 && movingPace<95) tooFast=true; // < 1:35/km for 400–999 m
-    else if(dist<0.4 && speedKmh>45) tooFast=true;    // extreme sprint input
-
-    // Implausibly slow inputs are also rejected. These limits are deliberately
-    // generous because technical trail and ultras can be very slow.
-    let maxPaceSec=10800; // 180:00/km for the longest ultras
-    if(dist<=5) maxPaceSec=1800;        // 30:00/km
-    else if(dist<=20) maxPaceSec=2400;  // 40:00/km
-    else if(dist<=50) maxPaceSec=3600;  // 60:00/km
-    else if(dist<=100) maxPaceSec=5400; // 90:00/km
-    else if(dist<=200) maxPaceSec=7200; // 120:00/km
-    const tooSlow=movingPace>maxPaceSec;
-
-    if(tooFast || tooSlow){
+    let unrealistic=false;
+    if(dist>=1 && movingPace<130) unrealistic=true;       // < 2:10/km for 1 km or longer
+    else if(dist>=0.4 && movingPace<95) unrealistic=true; // < 1:35/km for 400–999 m
+    else if(dist<0.4 && speedKmh>45) unrealistic=true;    // extreme sprint input
+    if(unrealistic){
       $('paceCalcDistance').classList.add('pacecalc-invalid');
       $('paceCalcTotalTime').classList.add('pacecalc-invalid');
-      $('paceCalcStatus').textContent=tooFast
-        ? '😄 Ты Усэйн Болт, что ли? Такой результат выглядит нереалистично. Проверь дистанцию, время и переключатель «Минуты/Часы».'
-        : '😴 Ты там ночевать собрался? Такое время для этой дистанции выглядит нереалистично. Проверь дистанцию, время, остановки и переключатель «Минуты/Часы».';
+      $('paceCalcStatus').textContent='😄 Ты Усэйн Болт, что ли? Такой результат выглядит нереалистично. Проверь дистанцию, время и переключатель «Минуты/Часы».';
       $('paceCalcStatus').classList.add('pacecalc-unrealistic');
       $('paceCalcResult').hidden=true;
       $('paceCalcStatus').scrollIntoView({behavior:'smooth',block:'center'});
