@@ -7447,6 +7447,35 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
         }
       });
       const rawOcrText=String(result?.data?.text||'').trim();
+      // Anti-book / large-text guard: this OCR is only for compact Garmin/Strava workout screenshots.
+      // Reject pages/documents with lots of prose so the feature cannot be used as a general book scanner.
+      const ocrLines=rawOcrText.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+      const compactText=rawOcrText.replace(/\s+/g,' ').trim();
+      const sportsHints=/(garmin|strava|\bбег\b|интервал|разминк|восстанов|темп|пульс|уд\/?м|км|pace|heart|lap|interval)/i.test(rawOcrText);
+      const tooMuchText = compactText.length>1400 || ocrLines.length>38;
+      if(tooMuchText && !sportsHints){
+        const recognizedBox=byId(`thresholdRecognizedPreview${i}`);
+        const recognizedRaw=byId(`thresholdRecognizedRaw${i}`);
+        if(recognizedBox) recognizedBox.hidden=false;
+        if(recognizedRaw) recognizedRaw.textContent='Распознавание остановлено: на изображении слишком много текста.';
+        if(status){
+          status.textContent='Слишком много текста. Эта функция предназначена только для скриншотов тренировок Garmin/Strava, а не для страниц книг или документов.';
+          status.className='threshold-photo-status warn';
+        }
+        return;
+      }
+      // Even with sport-related words, reject very large text pages.
+      if(compactText.length>2600 || ocrLines.length>70){
+        const recognizedBox=byId(`thresholdRecognizedPreview${i}`);
+        const recognizedRaw=byId(`thresholdRecognizedRaw${i}`);
+        if(recognizedBox) recognizedBox.hidden=false;
+        if(recognizedRaw) recognizedRaw.textContent='Распознавание остановлено: превышен лимит текста.';
+        if(status){
+          status.textContent='Превышен лимит текста. Загрузите компактный скриншот тренировки с интервалами.';
+          status.className='threshold-photo-status warn';
+        }
+        return;
+      }
       const data=parseThresholdOcrText(rawOcrText);
       // If the screenshot contains Garmin's numbered work rows (1 Бег, 2 Бег, ...),
       // fill those threshold segments directly. Do not mistake warm-up/recovery for the interval.
