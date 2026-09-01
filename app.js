@@ -6688,6 +6688,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       byId(`thresholdDistance${i}`)?.classList.remove('threshold-invalid');
       byId(`thresholdPaceInput${i}`)?.classList.remove('threshold-invalid');
       byId(`thresholdHr${i}`)?.classList.remove('threshold-invalid');
+      document.querySelector(`[data-threshold-tab=\"${i}\"]`)?.classList.remove('threshold-tab-invalid');
     }
   }
   function markThresholdMissing(i){
@@ -6696,12 +6697,22 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     const distanceEl=byId(`thresholdDistance${i}`);
     const paceEl=byId(`thresholdPaceInput${i}`);
     const hrEl=byId(`thresholdHr${i}`);
-    const hasDistance=parseFloat(String(distanceEl?.value||'').replace(',','.'))>0;
+    const distanceValue=parseFloat(String(distanceEl?.value||'').replace(',','.'));
+    const hasDistance=Number.isFinite(distanceValue) && distanceValue>0;
     const hasPace=!!parsePace(String(paceEl?.value||''));
-    if(!hasDistance && distanceEl) distanceEl.classList.add('threshold-invalid');
-    if(!hasPace && paceEl) paceEl.classList.add('threshold-invalid');
-    if(!(Number(hrEl?.value||0)>0) && hrEl) hrEl.classList.add('threshold-invalid');
-    const target = (!hasDistance && distanceEl) || (!hasPace && paceEl) || hrEl;
+    const hasHr=Number(hrEl?.value||0)>0;
+
+    // Distance OR pace is required. If neither is present, highlight BOTH fields
+    // so it is obvious that the athlete may fill either one.
+    if(!hasDistance && !hasPace){
+      distanceEl?.classList.add('threshold-invalid');
+      paceEl?.classList.add('threshold-invalid');
+    }
+    if(!hasHr) hrEl?.classList.add('threshold-invalid');
+
+    const tab=document.querySelector(`[data-threshold-tab="${i}"]`);
+    tab?.classList.add('threshold-tab-invalid');
+    const target = (!hasDistance && !hasPace ? paceEl : (!hasHr ? hrEl : paceEl));
     target?.scrollIntoView({behavior:'smooth',block:'center'});
     try{ target?.focus({preventScroll:true}); }catch(e){}
   }
