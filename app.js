@@ -7328,13 +7328,43 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
   function parseThresholdOcrText(raw){
     const text=String(raw||'').replace(/\u00a0/g,' ').replace(/,/g,'.');
     const lines=text.split(/\n+/).map(x=>x.trim()).filter(Boolean);
-    const out={distance_km:null,pace:null,avg_hr:null,max_hr:null};
+    const out={distance_km:null,pace:null,avg_hr:null,max_hr:null,interval_rows:[]};
+
+    // Garmin interval-table screenshots: rows like
+    // 1  Бег  12:01.2  2,88  4:10
+    // 2  Бег  12:01.7  2,78  4:20
+    // These are the actual work intervals. Prefer them over warm-up/recovery rows.
+    const intervalRowRe=/(?:^|\n)\s*([1-3])\s+(?:бег|run|ber|6er|бeг)[^\n]{0,70}?(\d{1,2}[:.]\d{2}(?:[.]\d)?)\s+([0-9]{1,2}[.]\d{1,3})\s+([2-9][:.][0-5]\d)(?=\s|$)/gim;
+    let rm;
+    while((rm=intervalRowRe.exec(text))){
+      const idx=Number(rm[1]);
+      const duration=rm[2].replace('.',':');
+      const distance=Number(rm[3]);
+      const pace=`${Number(rm[4].split(/[:.]/)[0])}:${rm[4].split(/[:.]/)[1]}`;
+      if(idx>=1&&idx<=3&&distance>=1&&distance<=5&&parsePace(pace)){
+        out.interval_rows.push({index:idx,duration,distance_km:distance,pace});
+      }
+    }
+    // OCR sometimes loses the word "Бег" but keeps the numbered row and 12-minute duration.
+    if(!out.interval_rows.length){
+      const fallbackRowRe=/(?:^|\n)\s*([1-3])\s+[^\n]{0,30}?(1[01-3][:.][0-5]\d(?:[.]\d)?)\s+([1-4][.]\d{2,3})\s+([2-9][:.][0-5]\d)(?=\s|$)/gim;
+      while((rm=fallbackRowRe.exec(text))){
+        const idx=Number(rm[1]), distance=Number(rm[3]);
+        const pp=rm[4].split(/[:.]/); const pace=`${Number(pp[0])}:${pp[1]}`;
+        if(distance>=1&&distance<=5&&parsePace(pace)) out.interval_rows.push({index:idx,duration:rm[2],distance_km:distance,pace});
+      }
+    }
+    if(out.interval_rows.length){
+      out.interval_rows.sort((a,b)=>a.index-b.index);
+      out.distance_km=out.interval_rows[0].distance_km;
+      out.pace=out.interval_rows[0].pace;
+    }
 
     // Distance: prefer values next to km/км, then plausible 12-minute segment distance.
     const distLabel=text.match(/(?:distance|dist\.?|дистанц(?:ия|ии)?|расст\.?)[^\d]{0,18}(\d{1,2}(?:[.]\d{1,3})?)/i)
       || text.match(/(\d{1,2}(?:[.]\d{1,3})?)\s*(?:km|км)\b/i);
-    if(distLabel){ const v=Number(distLabel[1]); if(v>=0.2&&v<=10) out.distance_km=v; }
-    if(out.distance_km==null){
+    if(out.interval_rows.length===0 && distLabel){ const v=Number(distLabel[1]); if(v>=0.2&&v<=10) out.distance_km=v; }
+    if(out.interval_rows.length===0 && out.distance_km==null){
       const nums=[...text.matchAll(/\b(\d[.]\d{2,3})\b/g)].map(m=>Number(m[1]));
       const cand=nums.find(v=>v>=1.5&&v<=4.5);
       if(cand) out.distance_km=cand;
@@ -7343,7 +7373,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     // Pace in m:ss/km. Avoid elapsed times >= 10 minutes.
     const paceLabel=text.match(/(?:pace|темп)[^\d]{0,18}(\d{1,2})[:.](\d{2})/i)
       || text.match(/\b([2-9])[:.]([0-5]\d)\s*(?:\/\s*(?:km|км)|(?:min\/km|мин\/км))?/i);
-    if(paceLabel){ out.pace=`${Number(paceLabel[1])}:${paceLabel[2]}`; }
+    if(out.interval_rows.length===0 && paceLabel){ out.pace=`${Number(paceLabel[1])}:${paceLabel[2]}`; }
 
     // HR values. Prefer explicit labels. Garmin/RU variants are covered.
     const avgHrMatch=text.match(/(?:average\s*(?:heart\s*rate|hr)|avg\.?\s*hr|средн(?:ий|яя)?\s*(?:пульс|чсс)|пульс\s*средн)[^\d]{0,18}(\d{2,4})/i);
@@ -7418,6 +7448,21 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       });
       const rawOcrText=String(result?.data?.text||'').trim();
       const data=parseThresholdOcrText(rawOcrText);
+      // If the screenshot contains Garmin's numbered work rows (1 Бег, 2 Бег, ...),
+      // fill those threshold segments directly. Do not mistake warm-up/recovery for the interval.
+      if(Array.isArray(data.interval_rows) && data.interval_rows.length){
+        for(const row of data.interval_rows){
+          if(row.index<1 || row.index>3) continue;
+          const dEl=byId(`thresholdDistance${row.index}`);
+          const pEl=byId(`thresholdPaceInput${row.index}`);
+          if(dEl) dEl.value=Number(row.distance_km).toFixed(2);
+          if(pEl) pEl.value=row.pace;
+          updateThresholdLivePace?.(row.index);
+        }
+        const own=data.interval_rows.find(r=>r.index===i) || data.interval_rows[0];
+        data.distance_km=own.distance_km;
+        data.pace=own.pace;
+      }
       const recognizedBox=byId(`thresholdRecognizedPreview${i}`);
       const recognizedDistance=byId(`thresholdRecognizedDistance${i}`);
       const recognizedPace=byId(`thresholdRecognizedPace${i}`);
@@ -7434,6 +7479,11 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       if(recognizedAvgHr){ recognizedAvgHr.textContent=Number.isFinite(avgOcr)&&avgOcr>0?`${Math.round(avgOcr)} уд/мин`:'—'; recognizedAvgHr.classList.toggle('invalid',Number.isFinite(avgOcr)&&avgOcr>0&&(avgOcr<80||avgOcr>230)); }
       if(recognizedMaxHr){ recognizedMaxHr.textContent=Number.isFinite(maxOcr)&&maxOcr>0?`${Math.round(maxOcr)} уд/мин`:'—'; recognizedMaxHr.classList.toggle('invalid',Number.isFinite(maxOcr)&&maxOcr>0&&(maxOcr<80||maxOcr>240||(Number.isFinite(avgOcr)&&avgOcr>0&&maxOcr<avgOcr))); }
       if(recognizedRaw) recognizedRaw.textContent=rawOcrText||'Текст не распознан.';
+      if(Array.isArray(data.interval_rows) && data.interval_rows.length && status){
+        const summary=data.interval_rows.map(r=>`${r.index}: ${r.distance_km.toFixed(2)} км · ${r.pace}/км`).join(' | ');
+        status.textContent=`Найдены рабочие интервалы: ${summary}`;
+        status.className='threshold-photo-status ok';
+      }
       let filled=[];
       if(Number.isFinite(Number(data.distance_km)) && Number(data.distance_km)>0){
         byId(`thresholdDistance${i}`).value=Number(data.distance_km).toFixed(2);

@@ -1,9 +1,9 @@
-const CACHE='trail-analyzer-web-v0262-ocr-recognized-preview1';
+const CACHE='trail-analyzer-web-v0262-ocr-garmin-interval-rows1';
 const CORE=[
   './',
   './index.html',
-  './styles.css?v=262-ocr-recognized-preview1',
-  './app.js?v=262-ocr-recognized-preview1',
+  './styles.css?v=262-ocr-garmin-interval-rows1',
+  './app.js?v=262-ocr-garmin-interval-rows1',
   './manifest.webmanifest?v=075',
   './icon-192.png',
   './icon-512.png'
