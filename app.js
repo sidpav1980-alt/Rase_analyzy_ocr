@@ -297,7 +297,7 @@ $('installBtn').addEventListener('click', async () => {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('./sw.js?v=230', {updateViaCache:'none'});
+      const reg=await navigator.serviceWorker.register('./sw.js?v=233', {updateViaCache:'none'});
       await reg.update();
       let refreshing=false;
       navigator.serviceWorker.addEventListener('controllerchange',()=>{
@@ -7328,7 +7328,18 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
   function parseThresholdOcrText(raw){
     const text=String(raw||'').replace(/\u00a0/g,' ').replace(/,/g,'.');
     const lines=text.split(/\n+/).map(x=>x.trim()).filter(Boolean);
-    const out={distance_km:null,pace:null,avg_hr:null,max_hr:null,interval_rows:[]};
+    const out={distance_km:null,pace:null,avg_hr:null,max_hr:null,interval_rows:[],detected_run_indices:[]};
+
+    // Detect numbered Garmin work rows even when OCR mangles the duration/distance.
+    // This prevents a visible row like "3 Бег" from being reused as "Отрезок 2".
+    for(const line0 of lines){
+      const m=line0.replace(/\s+/g,' ').trim().match(/^\s*(\d{1,2})(?:\s|[.)-])+(?:бег|run|ber|6er|бeг)(?:\s|$)/i);
+      if(m){
+        const n=Number(m[1]);
+        if(Number.isFinite(n) && n>=1 && n<=99 && !out.detected_run_indices.includes(n)) out.detected_run_indices.push(n);
+      }
+    }
+    out.detected_run_indices.sort((a,b)=>a-b);
 
     // Garmin interval-table screenshots: rows like
     // 1  Бег  12:01.2  2,88  4:10
@@ -7385,17 +7396,24 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     // Distance: prefer values next to km/км, then plausible 12-minute segment distance.
     const distLabel=text.match(/(?:distance|dist\.?|дистанц(?:ия|ии)?|расст\.?)[^\d]{0,18}(\d{1,2}(?:[.]\d{1,3})?)/i)
       || text.match(/(\d{1,2}(?:[.]\d{1,3})?)\s*(?:km|км)\b/i);
-    if(out.interval_rows.length===0 && distLabel){ const v=Number(distLabel[1]); if(v>=0.2&&v<=10) out.distance_km=v; }
-    if(out.interval_rows.length===0 && out.distance_km==null){
+    if(out.interval_rows.length===0 && out.detected_run_indices.length===0 && distLabel){ const v=Number(distLabel[1]); if(v>=0.2&&v<=10) out.distance_km=v; }
+    if(out.interval_rows.length===0 && out.detected_run_indices.length===0 && out.distance_km==null){
       const nums=[...text.matchAll(/\b(\d[.]\d{2,3})\b/g)].map(m=>Number(m[1]));
       const cand=nums.find(v=>v>=1.5&&v<=4.5);
       if(cand) out.distance_km=cand;
     }
 
-    // Pace in m:ss/km. Avoid elapsed times >= 10 minutes.
-    const paceLabel=text.match(/(?:pace|темп)[^\d]{0,18}(\d{1,2})[:.](\d{2})/i)
-      || text.match(/\b([2-9])[:.]([0-5]\d)\s*(?:\/\s*(?:km|км)|(?:min\/km|мин\/км))?/i);
-    if(out.interval_rows.length===0 && paceLabel){ out.pace=`${Number(paceLabel[1])}:${paceLabel[2]}`; }
+    // Pace in m:ss/km. Strongly prefer a value that is explicitly followed by /km or /км.
+    // This matters for Strava summary screenshots where OCR often linearizes the header as
+    // "Расстояние  Темп  Время  8.03 км  4:47 /км ...". Without the unit-first rule
+    // the distance 8.03 could be mistaken for a pace of 8:03/km.
+    const paceWithUnit=text.match(/\b([2-9])[:.]([0-5]\d)\s*(?:\/\s*(?:km|км)|(?:min\/km|мин\/км))\b/i);
+    const paceAfterLabel=text.match(/(?:pace|темп)[^\n\d]{0,12}([2-9])[:.]([0-5]\d)/i);
+    const paceLabel=paceWithUnit || paceAfterLabel;
+    if(out.interval_rows.length===0 && out.detected_run_indices.length===0 && paceLabel){
+      const candidate=`${Number(paceLabel[1])}:${paceLabel[2]}`;
+      if(parsePace(candidate)) out.pace=candidate;
+    }
 
     // HR values. Prefer explicit labels. Garmin/RU variants are covered.
     const avgHrMatch=text.match(/(?:average\s*(?:heart\s*rate|hr)|avg\.?\s*hr|средн(?:ий|яя)?\s*(?:пульс|чсс)|пульс\s*средн)[^\d]{0,18}(\d{2,4})/i);
@@ -7499,6 +7517,51 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
         return;
       }
       const data=parseThresholdOcrText(rawOcrText);
+      const detectedRunIndices=Array.isArray(data.detected_run_indices)?data.detected_run_indices:[];
+      const parsedRunIndices=Array.isArray(data.interval_rows)?data.interval_rows.map(r=>r.index):[];
+      // If Garmin shows numbered work rows but the requested one is absent, never
+      // substitute another row or the summary values. Tell the user exactly what was found.
+      if(detectedRunIndices.length && !detectedRunIndices.includes(i)){
+        data.distance_km=null;
+        data.pace=null;
+        data.avg_hr=null;
+        data.max_hr=null;
+        const foundText=detectedRunIndices.length===1
+          ? `${detectedRunIndices[0]} Бег`
+          : detectedRunIndices.map(n=>`${n} Бег`).join(', ');
+        const recognizedBox=byId(`thresholdRecognizedPreview${i}`);
+        const recognizedDistance=byId(`thresholdRecognizedDistance${i}`);
+        const recognizedPace=byId(`thresholdRecognizedPace${i}`);
+        const recognizedAvgHr=byId(`thresholdRecognizedAvgHr${i}`);
+        const recognizedMaxHr=byId(`thresholdRecognizedMaxHr${i}`);
+        const recognizedRaw=byId(`thresholdRecognizedRaw${i}`);
+        if(recognizedBox) recognizedBox.hidden=false;
+        if(recognizedDistance) recognizedDistance.textContent='—';
+        if(recognizedPace) recognizedPace.textContent='—';
+        if(recognizedAvgHr) recognizedAvgHr.textContent='—';
+        if(recognizedMaxHr) recognizedMaxHr.textContent='—';
+        if(recognizedRaw) recognizedRaw.textContent=rawOcrText||'Текст не распознан.';
+        if(status){
+          status.textContent=`Отрезок ${i} не найден на скриншоте. Найдено: ${foundText}.`;
+          status.className='threshold-photo-status warn';
+        }
+        return;
+      }
+      // If the requested numbered row exists but OCR could not parse its metrics, do not
+      // fall back to another row or to totals.
+      if(detectedRunIndices.includes(i) && !parsedRunIndices.includes(i)){
+        data.distance_km=null;
+        data.pace=null;
+        const recognizedBox=byId(`thresholdRecognizedPreview${i}`);
+        const recognizedRaw=byId(`thresholdRecognizedRaw${i}`);
+        if(recognizedBox) recognizedBox.hidden=false;
+        if(recognizedRaw) recognizedRaw.textContent=rawOcrText||'Текст не распознан.';
+        if(status){
+          status.textContent=`Строка «${i} Бег» найдена, но её дистанцию/темп не удалось уверенно распознать. Обрежьте фото вокруг строки или введите данные вручную.`;
+          status.className='threshold-photo-status warn';
+        }
+        return;
+      }
       // If the screenshot contains Garmin's numbered work rows (1 Бег, 2 Бег, ...),
       // fill those threshold segments directly. Do not mistake warm-up/recovery for the interval.
       if(Array.isArray(data.interval_rows) && data.interval_rows.length){

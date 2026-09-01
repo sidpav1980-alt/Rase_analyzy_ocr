@@ -1,4 +1,4 @@
-const CACHE='trail-analyzer-web-v0262-ocr-garmin-row-map2';
+const CACHE='trail-analyzer-web-v233-ocr-garmin-row-map2';
 const CORE=[
   './',
   './index.html',
