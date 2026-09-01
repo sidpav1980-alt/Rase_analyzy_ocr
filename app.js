@@ -6618,26 +6618,34 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     if(Number.isFinite(sec)) el.value=paceInputText(sec);
   }
   function syncFromDistance(i){
-    const d=Number(byId(`thresholdDistance${i}`)?.value||0);
+    const distanceEl=byId(`thresholdDistance${i}`);
+    const d=Number(distanceEl?.value||0);
     const paceEl=byId(`thresholdPaceInput${i}`);
     const live=byId(`thresholdPace${i}`);
     if(d>0){
       const pace=720/d;
       if(paceEl) paceEl.value=paceInputText(pace);
       if(live) live.textContent='Темп: '+paceText(pace);
+      // Distance OR pace satisfies the required speed input, so clear both errors.
+      distanceEl?.classList.remove('threshold-invalid');
+      paceEl?.classList.remove('threshold-invalid');
     }else{
       if(paceEl) paceEl.value='';
       if(live) live.textContent='Темп: —';
     }
   }
   function syncFromPace(i){
-    const pace=parsePace(byId(`thresholdPaceInput${i}`)?.value);
+    const paceEl=byId(`thresholdPaceInput${i}`);
+    const pace=parsePace(paceEl?.value);
     const distEl=byId(`thresholdDistance${i}`);
     const live=byId(`thresholdPace${i}`);
     if(pace){
       const d=720/pace;
       if(distEl) distEl.value=d.toFixed(2);
       if(live) live.textContent='Темп: '+paceText(pace);
+      // Pace is valid and auto-fills distance: neither field should remain red.
+      paceEl?.classList.remove('threshold-invalid');
+      distEl?.classList.remove('threshold-invalid');
     }else{
       if(live) live.textContent='Темп: —';
     }
