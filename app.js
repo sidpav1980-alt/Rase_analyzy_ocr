@@ -7664,8 +7664,12 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       if(!Array.isArray(data.interval_rows) || !data.interval_rows.length){
         graphIntervals=await parseThresholdGraphIntervals(file,result);
         if(graphIntervals.length>=2){
-          data.distance_km=graphIntervals[0].distance_km; data.pace=graphIntervals[0].pace;
-          data.avg_hr=graphIntervals[0].avg_hr; data.max_hr=graphIntervals[0].max_hr;
+          // The same Garmin graph can be uploaded into Отрезок 1/2/3.
+          // Use the matching work block for the currently selected segment,
+          // never interval #1 for every tab.
+          const ownGraph=graphIntervals[Math.max(0,Math.min(graphIntervals.length-1,i-1))];
+          data.distance_km=ownGraph?.distance_km ?? null; data.pace=ownGraph?.pace ?? null;
+          data.avg_hr=ownGraph?.avg_hr ?? null; data.max_hr=ownGraph?.max_hr ?? null;
           renderThresholdGraphIntervals(i,graphIntervals,rawOcrText);
         }else{ renderThresholdGraphIntervals(i,[],rawOcrText); }
       }
@@ -7754,7 +7758,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       if(recognizedRaw) recognizedRaw.textContent=rawOcrText||'Текст не распознан.';
       if(graphIntervals.length>=2 && status){
         const summary=graphIntervals.map((r,n)=>{ const d=Number(r.distance_km); return `Интервал ${n+1}: ${Number.isFinite(d)&&d>0?d.toFixed(2)+' км · ':''}${r.pace||'—'}/км${Number.isFinite(Number(r.avg_hr))?' · пульс '+Math.round(r.avg_hr):''}`; }).join(' | ');
-        status.textContent=`По графику найдено ${graphIntervals.length} рабочих интервала: ${summary}. Значения по графику приблизительные.`;
+        status.textContent=`По графику найдено ${graphIntervals.length} рабочих отрезка: ${summary}. Для «Отрезок ${i}» взят Интервал ${Math.min(i,graphIntervals.length)}. Значения по графику приблизительные.`;
         status.className='threshold-photo-status ok';
       }
       if(Array.isArray(data.interval_rows) && data.interval_rows.length && status){
