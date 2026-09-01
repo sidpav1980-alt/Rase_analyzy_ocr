@@ -7671,25 +7671,31 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       }
       const data=parseThresholdOcrText(rawOcrText);
       let graphIntervals=[];
-      // A single Garmin «Графики» screenshot can show several work intervals.
-      // Split them from the blue pace plateaus instead of treating 4:48/km as one interval.
-      if(!Array.isArray(data.interval_rows) || !data.interval_rows.length){
-        graphIntervals=await parseThresholdGraphIntervals(file,result);
-        if(graphIntervals.length>=2){
-          // The same Garmin graph can be uploaded into Отрезок 1/2/3.
-          // Use the matching work block for the currently selected segment,
-          // never interval #1 for every tab.
-          const ownGraph=graphIntervals[Math.max(0,Math.min(graphIntervals.length-1,i-1))];
-          data.distance_km=ownGraph?.distance_km ?? null; data.pace=ownGraph?.pace ?? null;
-          data.avg_hr=ownGraph?.avg_hr ?? null; data.max_hr=ownGraph?.max_hr ?? null;
-          renderThresholdGraphIntervals(i,graphIntervals,rawOcrText);
-        }else{ renderThresholdGraphIntervals(i,[],rawOcrText); }
+      // IMPORTANT: try pixel graph parsing FIRST, even if OCR happened to invent
+      // interval_rows from axis labels (4:10 / 5:00 / 5:50 etc.). On Garmin's
+      // «Графики» screen those false OCR rows previously won and both tabs got
+      // the same summary values 4:10 / 162 / 180. A real graph with 2+ blue
+      // work blocks is now authoritative.
+      graphIntervals=await parseThresholdGraphIntervals(file,result);
+      const graphMode=graphIntervals.length>=2;
+      if(graphMode){
+        const ownGraph=graphIntervals[Math.max(0,Math.min(graphIntervals.length-1,i-1))];
+        data.distance_km=ownGraph?.distance_km ?? null;
+        data.pace=ownGraph?.pace ?? null;
+        data.avg_hr=ownGraph?.avg_hr ?? null;
+        data.max_hr=ownGraph?.max_hr ?? null;
+        // Ignore OCR's pseudo interval rows on graph screenshots completely.
+        data.interval_rows=[];
+        data.detected_run_indices=[];
+        renderThresholdGraphIntervals(i,graphIntervals,rawOcrText);
+      }else{
+        renderThresholdGraphIntervals(i,[],rawOcrText);
       }
       const detectedRunIndices=Array.isArray(data.detected_run_indices)?data.detected_run_indices:[];
       const parsedRunIndices=Array.isArray(data.interval_rows)?data.interval_rows.map(r=>r.index):[];
       // If Garmin shows numbered work rows but the requested one is absent, never
       // substitute another row or the summary values. Tell the user exactly what was found.
-      if(detectedRunIndices.length && !detectedRunIndices.includes(i)){
+      if(!graphMode && detectedRunIndices.length && !detectedRunIndices.includes(i)){
         data.distance_km=null;
         data.pace=null;
         data.avg_hr=null;
@@ -7717,7 +7723,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       }
       // If the requested numbered row exists but OCR could not parse its metrics, do not
       // fall back to another row or to totals.
-      if(detectedRunIndices.includes(i) && !parsedRunIndices.includes(i)){
+      if(!graphMode && detectedRunIndices.includes(i) && !parsedRunIndices.includes(i)){
         data.distance_km=null;
         data.pace=null;
         const recognizedBox=byId(`thresholdRecognizedPreview${i}`);
@@ -7732,7 +7738,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       }
       // If the screenshot contains Garmin's numbered work rows (1 Бег, 2 Бег, ...),
       // fill those threshold segments directly. Do not mistake warm-up/recovery for the interval.
-      if(Array.isArray(data.interval_rows) && data.interval_rows.length){
+      if(!graphMode && Array.isArray(data.interval_rows) && data.interval_rows.length){
         for(const row of data.interval_rows){
           if(row.index<1 || row.index>3) continue;
           const dEl=byId(`thresholdDistance${row.index}`);
@@ -7773,7 +7779,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
         status.textContent=`По графику найдено ${graphIntervals.length} рабочих отрезка: ${summary}. Для «Отрезок ${i}» взят Интервал ${Math.min(i,graphIntervals.length)}. Значения по графику приблизительные.`;
         status.className='threshold-photo-status ok';
       }
-      if(Array.isArray(data.interval_rows) && data.interval_rows.length && status){
+      if(!graphMode && Array.isArray(data.interval_rows) && data.interval_rows.length && status){
         const summary=data.interval_rows.map(r=>`${r.index}: ${r.distance_km.toFixed(2)} км · ${r.pace}/км`).join(' | ');
         status.textContent=`Найдены рабочие интервалы: ${summary}`;
         status.className='threshold-photo-status ok';
