@@ -6571,16 +6571,45 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
   function parseTime(v){
     const raw=String(v||'').trim().replace(',', '.');
     if(!raw) return null;
-    const p=raw.split(':').map(Number);
-    if(!p.length||p.some(x=>!Number.isFinite(x)||x<0)) return null;
-    if(p.length===2 && p[1]<60) return p[0]*60+p[1];
-    if(p.length===3 && p[1]<60 && p[2]<60) return p[0]*3600+p[1]*60+p[2];
+    // iPhone numeric keyboard often has no colon. For race times allow:
+    // 42 -> 42:00, 4150 -> 41:50, while still accepting 41:50 / 1:23:45.
+    if(!raw.includes(':') && /^\d+$/.test(raw)){
+      const digits=raw.replace(/^0+(?=\d)/,'');
+      if(digits.length<=2) return Number(digits)*60;
+      const min=Number(digits.slice(0,-2));
+      const sec=Number(digits.slice(-2));
+      return sec<60 ? min*60+sec : null;
+    }
+    const parts=raw.split(':').map(Number);
+    if(!parts.length||parts.some(x=>!Number.isFinite(x)||x<0)) return null;
+    if(parts.length===2 && parts[1]<60) return parts[0]*60+parts[1];
+    if(parts.length===3 && parts[1]<60 && parts[2]<60) return parts[0]*3600+parts[1]*60+parts[2];
     return null;
   }
   function parsePace(v){
-    const sec=parseTime(v);
+    const raw=String(v||'').trim();
+    if(!raw) return null;
+    let sec=null;
+    // Pace shorthand: 410 -> 4:10, 425 -> 4:25. Colon remains supported.
+    if(!raw.includes(':') && /^\d{3,4}$/.test(raw)){
+      const min=Number(raw.slice(0,-2));
+      const seconds=Number(raw.slice(-2));
+      if(seconds<60) sec=min*60+seconds;
+    }else{
+      sec=parseTime(raw);
+    }
     if(!Number.isFinite(sec) || sec<120 || sec>900) return null;
     return sec;
+  }
+  function formatRaceTimeInput(el){
+    if(!el) return;
+    const sec=parseTime(el.value);
+    if(Number.isFinite(sec)) el.value=timeText(sec);
+  }
+  function formatPaceInput(el){
+    if(!el) return;
+    const sec=parsePace(el.value);
+    if(Number.isFinite(sec)) el.value=paceInputText(sec);
   }
   function syncFromDistance(i){
     const d=Number(byId(`thresholdDistance${i}`)?.value||0);
@@ -6733,9 +6762,13 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
   for(let i=1;i<=3;i++){
     byId(`thresholdDistance${i}`)?.addEventListener('input',()=>syncFromDistance(i));
     byId(`thresholdPaceInput${i}`)?.addEventListener('input',()=>syncFromPace(i));
+    byId(`thresholdPaceInput${i}`)?.addEventListener('blur',()=>{formatPaceInput(byId(`thresholdPaceInput${i}`));syncFromPace(i);});
     byId(`thresholdHr${i}`)?.addEventListener('input',updateLivePaces);
     byId(`thresholdHrMax${i}`)?.addEventListener('input',updateLivePaces);
   }
+  byId('thresholdRecovery')?.addEventListener('blur',()=>formatRaceTimeInput(byId('thresholdRecovery')));
+  byId('threshold5k')?.addEventListener('blur',()=>formatRaceTimeInput(byId('threshold5k')));
+  byId('threshold10k')?.addEventListener('blur',()=>formatRaceTimeInput(byId('threshold10k')));
   byId('thresholdCalcBtn').addEventListener('click',calculate);
   byId('thresholdResetBtn').addEventListener('click',reset);
   restore();
