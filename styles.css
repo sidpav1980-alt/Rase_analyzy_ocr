@@ -617,3 +617,12 @@ button.action-error:disabled {
 .threshold-plan-week b{display:block;color:#7dd3fc;margin-bottom:6px}
 .threshold-plan-week p{margin:4px 0;line-height:1.35}
 .threshold-plan-close{margin-top:12px;border:1px solid #365b86;background:#172642;color:#fff;border-radius:10px;padding:9px 12px;font-weight:800}
+
+/* Photo OCR for 12-minute threshold segments */
+.threshold-photo-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 12px}
+.threshold-photo-btn{min-height:42px;padding:8px 14px;border:1px solid #2f82b9;border-radius:12px;background:#10233a;color:#d9efff;font-weight:800;font-size:15px;cursor:pointer}
+.threshold-photo-btn:disabled{opacity:.55;cursor:wait}
+.threshold-photo-status{font-size:13px;color:#8fa5bd;min-width:0}
+.threshold-photo-status.ok{color:#69e39e}
+.threshold-photo-status.warn{color:#ffc66d}
+.threshold-photo-status.err{color:#ff7676}

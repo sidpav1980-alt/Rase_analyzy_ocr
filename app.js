@@ -7205,6 +7205,117 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
   byId('threshold10k')?.addEventListener('blur',()=>formatRaceTimeInput(byId('threshold10k')));
   byId('thresholdCalcBtn').addEventListener('click',calculate);
   byId('thresholdResetBtn').addEventListener('click',reset);
+
+  function parseThresholdOcrText(raw){
+    const text=String(raw||'').replace(/\u00a0/g,' ').replace(/,/g,'.');
+    const lines=text.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+    const out={distance_km:null,pace:null,avg_hr:null,max_hr:null};
+
+    // Distance: prefer values next to km/км, then plausible 12-minute segment distance.
+    const distLabel=text.match(/(?:distance|dist\.?|дистанц(?:ия|ии)?|расст\.?)[^\d]{0,18}(\d{1,2}(?:[.]\d{1,3})?)/i)
+      || text.match(/(\d{1,2}(?:[.]\d{1,3})?)\s*(?:km|км)\b/i);
+    if(distLabel){ const v=Number(distLabel[1]); if(v>=0.2&&v<=10) out.distance_km=v; }
+    if(out.distance_km==null){
+      const nums=[...text.matchAll(/\b(\d[.]\d{2,3})\b/g)].map(m=>Number(m[1]));
+      const cand=nums.find(v=>v>=1.5&&v<=4.5);
+      if(cand) out.distance_km=cand;
+    }
+
+    // Pace in m:ss/km. Avoid elapsed times >= 10 minutes.
+    const paceLabel=text.match(/(?:pace|темп)[^\d]{0,18}(\d{1,2})[:.](\d{2})/i)
+      || text.match(/\b([2-9])[:.]([0-5]\d)\s*(?:\/\s*(?:km|км)|(?:min\/km|мин\/км))?/i);
+    if(paceLabel){ out.pace=`${Number(paceLabel[1])}:${paceLabel[2]}`; }
+
+    // HR values. Prefer explicit labels. Garmin/RU variants are covered.
+    const avgHrMatch=text.match(/(?:average\s*(?:heart\s*rate|hr)|avg\.?\s*hr|средн(?:ий|яя)?\s*(?:пульс|чсс)|пульс\s*средн)[^\d]{0,18}(\d{2,3})/i);
+    const maxHrMatch=text.match(/(?:maximum\s*(?:heart\s*rate|hr)|max\.?\s*hr|макс(?:имальн(?:ый|ая))?\.?\s*(?:пульс|чсс)|пульс\s*макс)[^\d]{0,18}(\d{2,3})/i);
+    if(avgHrMatch){ const v=Number(avgHrMatch[1]); if(v>=70&&v<=230) out.avg_hr=v; }
+    if(maxHrMatch){ const v=Number(maxHrMatch[1]); if(v>=70&&v<=240) out.max_hr=v; }
+
+    // If explicit labels are absent, use plausible HR values on lines mentioning bpm/уд/м.
+    if(out.avg_hr==null || out.max_hr==null){
+      const hrVals=[];
+      for(const line of lines){
+        if(/(?:bpm|уд\/?м|уд\/мин|чсс|пульс)/i.test(line)){
+          for(const m of line.matchAll(/\b(\d{2,3})\b/g)){
+            const v=Number(m[1]); if(v>=70&&v<=240) hrVals.push(v);
+          }
+        }
+      }
+      const uniq=[...new Set(hrVals)];
+      if(out.avg_hr==null && uniq.length) out.avg_hr=uniq[0];
+      if(out.max_hr==null && uniq.length>1) out.max_hr=Math.max(...uniq);
+    }
+
+    // Ensure logical HR relation.
+    if(out.avg_hr!=null && out.max_hr!=null && out.max_hr<out.avg_hr){
+      const a=out.avg_hr; out.avg_hr=out.max_hr; out.max_hr=a;
+    }
+    return out;
+  }
+
+  async function recognizeThresholdPhoto(i,file){
+    const status=byId(`thresholdPhotoStatus${i}`);
+    const btn=document.querySelector(`[data-threshold-photo="${i}"]`);
+    if(!file) return;
+    if(status){ status.textContent='Распознаю фото на iPhone… 0%'; status.className='threshold-photo-status'; }
+    if(btn) btn.disabled=true;
+    try{
+      if(!window.Tesseract?.recognize) throw new Error('Модуль распознавания не загрузился. Проверьте интернет и обновите страницу.');
+      const result=await window.Tesseract.recognize(file,'rus+eng',{
+        logger:m=>{
+          if(status && m?.status==='recognizing text' && Number.isFinite(m.progress)){
+            status.textContent=`Распознаю фото… ${Math.round(m.progress*100)}%`;
+          }
+        }
+      });
+      const data=parseThresholdOcrText(result?.data?.text||'');
+      let filled=[];
+      if(Number.isFinite(Number(data.distance_km)) && Number(data.distance_km)>0){
+        byId(`thresholdDistance${i}`).value=Number(data.distance_km).toFixed(2);
+        filled.push(`дистанция ${Number(data.distance_km).toFixed(2)} км`);
+      }
+      if(data.pace){
+        byId(`thresholdPaceInput${i}`).value=String(data.pace);
+        filled.push(`темп ${data.pace}/км`);
+      }
+      if(Number.isFinite(Number(data.avg_hr)) && Number(data.avg_hr)>=70){
+        byId(`thresholdHr${i}`).value=String(Math.round(Number(data.avg_hr)));
+        filled.push(`ср. пульс ${Math.round(Number(data.avg_hr))}`);
+      }
+      if(Number.isFinite(Number(data.max_hr)) && Number(data.max_hr)>=70){
+        byId(`thresholdHrMax${i}`).value=String(Math.round(Number(data.max_hr)));
+        filled.push(`макс. пульс ${Math.round(Number(data.max_hr))}`);
+      }
+      if(data.pace) syncFromPace(i); else if(Number(data.distance_km)>0) syncFromDistance(i);
+      byId(`thresholdDistance${i}`)?.classList.remove('threshold-invalid');
+      byId(`thresholdPaceInput${i}`)?.classList.remove('threshold-invalid');
+      byId(`thresholdHr${i}`)?.classList.remove('threshold-invalid');
+      byId(`thresholdHrMax${i}`)?.classList.remove('threshold-invalid');
+      if(byId('thresholdQuickResult')) byId('thresholdQuickResult').hidden=true;
+      if(byId('thresholdResult')) byId('thresholdResult').hidden=true;
+      if(status){
+        status.textContent=filled.length?`Найдено: ${filled.join(' · ')}`:'Фото прочитано, но значения не найдены. Попробуйте обрезать скриншот вокруг данных.';
+        status.className='threshold-photo-status '+(filled.length?'ok':'warn');
+      }
+      if(byId('thresholdStatus')) byId('thresholdStatus').textContent=filled.length?'Данные с фото подставлены. Проверьте их и нажмите «Рассчитать порог».':'Не удалось уверенно распознать данные. Введите их вручную.';
+    }catch(err){
+      if(status){
+        status.textContent=`Ошибка распознавания: ${err.message||err}`;
+        status.className='threshold-photo-status err';
+      }
+    }finally{
+      if(btn) btn.disabled=false;
+      const input=byId(`thresholdPhotoInput${i}`); if(input) input.value='';
+    }
+  }
+  for(let i=1;i<=3;i++){
+    const photoBtn=document.querySelector(`[data-threshold-photo="${i}"]`);
+    const photoInput=byId(`thresholdPhotoInput${i}`);
+    photoBtn?.addEventListener('click',()=>photoInput?.click());
+    photoInput?.addEventListener('change',()=>recognizeThresholdPhoto(i,photoInput.files?.[0]));
+  }
+
   restore();
   if(byId('thresholdVo2max') && !byId('thresholdVo2max').value && Number(byId('vo2max')?.value||0)>=20) byId('thresholdVo2max').value=byId('vo2max').value;
   if(byId('thresholdAthleteHrMax') && !byId('thresholdAthleteHrMax').value && Number(byId('refMaxHr')?.value||0)>=120) byId('thresholdAthleteHrMax').value=byId('refMaxHr').value;
