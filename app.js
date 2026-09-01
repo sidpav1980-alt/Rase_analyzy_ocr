@@ -6938,6 +6938,45 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       }
       segs.push(s);
     }
+    // Validate heart-rate values before using them in the threshold model.
+    // These are 12-minute threshold intervals, so obviously broken OCR/input values
+    // such as 17 bpm must never be accepted.
+    const athleteHrMax=Number(byId('thresholdAthleteHrMax')?.value||0);
+    for(let i=0;i<segs.length;i++){
+      const s=segs[i];
+      const segNo=i+1;
+      const avgEl=byId(`thresholdHr${segNo}`);
+      const maxEl=byId(`thresholdHrMax${segNo}`);
+      const tab=document.querySelector(`[data-threshold-tab="${segNo}"]`);
+      let msg='';
+      let badEl=null;
+      if(!Number.isFinite(s.hr) || s.hr<80 || s.hr>230){
+        msg=`⚠️ Средний пульс отрезка ${segNo} (${Number.isFinite(s.hr)?Math.round(s.hr):'—'}) невалиден. Для порогового 12-минутного отрезка укажите 80–230 уд/мин.`;
+        badEl=avgEl;
+      }else if(Number.isFinite(s.hrMax) && (s.hrMax<80 || s.hrMax>240)){
+        msg=`⚠️ Максимальный пульс отрезка ${segNo} (${Math.round(s.hrMax)}) невалиден. Допустимый диапазон 80–240 уд/мин.`;
+        badEl=maxEl;
+      }else if(Number.isFinite(athleteHrMax) && athleteHrMax>=120 && athleteHrMax<=230 && s.hr>athleteHrMax){
+        msg=`⚠️ Средний пульс отрезка ${segNo} (${Math.round(s.hr)}) не может быть выше указанного HRmax (${Math.round(athleteHrMax)}).`;
+        badEl=avgEl;
+      }else if(Number.isFinite(s.hrMax) && Number.isFinite(athleteHrMax) && athleteHrMax>=120 && athleteHrMax<=230 && s.hrMax>athleteHrMax){
+        msg=`⚠️ Максимальный пульс отрезка ${segNo} (${Math.round(s.hrMax)}) выше указанного HRmax (${Math.round(athleteHrMax)}). Проверьте данные.`;
+        badEl=maxEl;
+      }
+      if(msg){
+        setActiveSegmentTab(segNo);
+        clearThresholdInvalid();
+        badEl?.classList.add('threshold-invalid');
+        tab?.classList.add('threshold-invalid');
+        byId('thresholdStatus').textContent=msg;
+        byId('thresholdQuickResult').hidden=true;
+        byId('thresholdResult').hidden=true;
+        badEl?.scrollIntoView({behavior:'smooth',block:'center'});
+        try{badEl?.focus({preventScroll:true});}catch(e){}
+        return;
+      }
+    }
+
     // A segment maximum HR cannot be lower than its average HR.
     for(let i=0;i<segs.length;i++){
       const s=segs[i];
@@ -7234,16 +7273,28 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       formatPaceInput(el);syncFromPace(i);
     });
     const markThresholdDirty=()=>{
-      byId(`thresholdHr${i}`)?.classList.remove('threshold-invalid');
-      byId(`thresholdHrMax${i}`)?.classList.remove('threshold-invalid');
+      const ocrAvg=Number(data.avg_hr), ocrMax=Number(data.max_hr);
+      if(!Number.isFinite(ocrAvg) || (ocrAvg>=80 && ocrAvg<=230)) byId(`thresholdHr${i}`)?.classList.remove('threshold-invalid');
+      if(!Number.isFinite(ocrMax) || (ocrMax>=80 && ocrMax<=240)) byId(`thresholdHrMax${i}`)?.classList.remove('threshold-invalid');
       document.querySelector(`[data-threshold-tab="${i}"]`)?.classList.remove('threshold-invalid');
       updateLivePaces();
       if(byId('thresholdQuickResult')) byId('thresholdQuickResult').hidden=true;
       if(byId('thresholdResult')) byId('thresholdResult').hidden=true;
       if(byId('thresholdStatus')) byId('thresholdStatus').textContent='Данные изменены — нажмите «Рассчитать порог».';
     };
-    byId(`thresholdHr${i}`)?.addEventListener('input',markThresholdDirty);
-    byId(`thresholdHrMax${i}`)?.addEventListener('input',markThresholdDirty);
+    byId(`thresholdHr${i}`)?.addEventListener('input',()=>{
+      const el=byId(`thresholdHr${i}`), v=Number(el?.value||0);
+      if(el?.value && (v<80 || v>230)) el.classList.add('threshold-invalid'); else el?.classList.remove('threshold-invalid');
+      markThresholdDirty();
+      if(el?.value && (v<80 || v>230)){el.classList.add('threshold-invalid'); if(byId('thresholdStatus')) byId('thresholdStatus').textContent='Средний пульс должен быть от 80 до 230 уд/мин.';}
+    });
+    byId(`thresholdHrMax${i}`)?.addEventListener('input',()=>{
+      const el=byId(`thresholdHrMax${i}`), v=Number(el?.value||0), avg=Number(byId(`thresholdHr${i}`)?.value||0);
+      if(el?.value && (v<80 || v>240 || (avg>0 && v<avg))) el.classList.add('threshold-invalid'); else el?.classList.remove('threshold-invalid');
+      markThresholdDirty();
+      if(el?.value && (v<80 || v>240)){el.classList.add('threshold-invalid'); if(byId('thresholdStatus')) byId('thresholdStatus').textContent='Максимальный пульс должен быть от 80 до 240 уд/мин.';}
+      else if(el?.value && avg>0 && v<avg){el.classList.add('threshold-invalid'); if(byId('thresholdStatus')) byId('thresholdStatus').textContent='Максимальный пульс не может быть ниже среднего.';}
+    });
   }
   byId('thresholdRecovery')?.addEventListener('blur',()=>formatRaceTimeInput(byId('thresholdRecovery')));
   byId('threshold5k')?.addEventListener('blur',()=>formatRaceTimeInput(byId('threshold5k')));
@@ -7301,10 +7352,10 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
 
   async function recognizeThresholdPhoto(i,file){
     const status=byId(`thresholdPhotoStatus${i}`);
-    const btn=document.querySelector(`[data-threshold-photo-label="${i}"]`);
+    const btn=document.querySelector(`[data-threshold-photo="${i}"]`);
     if(!file) return;
     if(status){ status.textContent='Распознаю фото на iPhone… 0%'; status.className='threshold-photo-status'; }
-    if(btn){ btn.classList.add('is-loading'); btn.style.pointerEvents='none'; }
+    if(btn) btn.disabled=true;
     try{
       if(!window.Tesseract?.recognize) throw new Error('Модуль распознавания не загрузился. Проверьте интернет и обновите страницу.');
       const result=await window.Tesseract.recognize(file,'rus+eng',{
@@ -7334,13 +7385,23 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
           }
         }
       }
-      if(Number.isFinite(Number(data.avg_hr)) && Number(data.avg_hr)>=70){
+      if(Number.isFinite(Number(data.avg_hr)) && Number(data.avg_hr)>=80 && Number(data.avg_hr)<=230){
         byId(`thresholdHr${i}`).value=String(Math.round(Number(data.avg_hr)));
         filled.push(`ср. пульс ${Math.round(Number(data.avg_hr))}`);
       }
-      if(Number.isFinite(Number(data.max_hr)) && Number(data.max_hr)>=70){
+      else if(Number.isFinite(Number(data.avg_hr)) && Number(data.avg_hr)>0){
+        byId(`thresholdHr${i}`).value=String(Math.round(Number(data.avg_hr)));
+        byId(`thresholdHr${i}`).classList.add('threshold-invalid');
+        if(status){status.textContent=`Средний пульс распознан как ${Math.round(Number(data.avg_hr))}, но значение невалидно. Укажите 80–230 уд/мин.`;status.className='threshold-photo-status warn';}
+      }
+      if(Number.isFinite(Number(data.max_hr)) && Number(data.max_hr)>=80 && Number(data.max_hr)<=240){
         byId(`thresholdHrMax${i}`).value=String(Math.round(Number(data.max_hr)));
         filled.push(`макс. пульс ${Math.round(Number(data.max_hr))}`);
+      }
+      else if(Number.isFinite(Number(data.max_hr)) && Number(data.max_hr)>0){
+        byId(`thresholdHrMax${i}`).value=String(Math.round(Number(data.max_hr)));
+        byId(`thresholdHrMax${i}`).classList.add('threshold-invalid');
+        if(status){status.textContent=`Максимальный пульс распознан как ${Math.round(Number(data.max_hr))}, но значение невалидно. Укажите 80–240 уд/мин.`;status.className='threshold-photo-status warn';}
       }
       if(data.pace) syncFromPace(i); else if(Number(data.distance_km)>0) syncFromDistance(i);
       byId(`thresholdDistance${i}`)?.classList.remove('threshold-invalid');
@@ -7360,12 +7421,14 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
         status.className='threshold-photo-status err';
       }
     }finally{
-      if(btn){ btn.classList.remove('is-loading'); btn.style.pointerEvents=''; }
+      if(btn) btn.disabled=false;
       const input=byId(`thresholdPhotoInput${i}`); if(input) input.value='';
     }
   }
   for(let i=1;i<=3;i++){
+    const photoBtn=document.querySelector(`[data-threshold-photo="${i}"]`);
     const photoInput=byId(`thresholdPhotoInput${i}`);
+    photoBtn?.addEventListener('click',()=>photoInput?.click());
     photoInput?.addEventListener('change',()=>recognizeThresholdPhoto(i,photoInput.files?.[0]));
   }
 
