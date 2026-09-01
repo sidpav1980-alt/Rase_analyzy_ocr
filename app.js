@@ -6837,6 +6837,12 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     clearThresholdInvalid();
     byId('thresholdQuickResult').scrollIntoView({behavior:'smooth',block:'center'});
   }
+  function invalidatePaceResult(){
+    $('paceCalcResult').hidden=true;
+    $('paceCalcStatus').classList.remove('pacecalc-unrealistic');
+    $('paceCalcStatus').textContent='Данные изменены — нажмите «Рассчитать темп».';
+    document.querySelectorAll('.pacecalc-invalid').forEach(e=>e.classList.remove('pacecalc-invalid'));
+  }
   function reset(){
     for(let i=1;i<=3;i++){
       ['Distance','PaceInput','Hr','HrMax'].forEach(k=>{const el=byId(`threshold${k}${i}`);if(el)el.value='';});
@@ -7024,11 +7030,19 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     if(moving<=0){$('paceCalcStatus').textContent='Сумма остановок не может быть больше общего времени.';return;}
     const movingPace=moving/dist, elapsedPace=total/dist;
     const speedKmh=3600/movingPace;
-    // Sanity check: reject obviously impossible running inputs instead of displaying absurd pace.
-    if(movingPace < 120 || speedKmh > 30){
-      $('paceCalcStatus').textContent='😄 Ты Усэйн Болт, что ли? Такой темп нереалистичен — проверь дистанцию, время и выбранные «Минуты/Часы».';
+    // Distance-aware sanity check. Sprint-like speeds can be valid on 100–400 m,
+    // but for 1 km+ values faster than elite world-class pace are treated as input errors.
+    let unrealistic=false;
+    if(dist>=1 && movingPace<130) unrealistic=true;       // < 2:10/km for 1 km or longer
+    else if(dist>=0.4 && movingPace<95) unrealistic=true; // < 1:35/km for 400–999 m
+    else if(dist<0.4 && speedKmh>45) unrealistic=true;    // extreme sprint input
+    if(unrealistic){
+      $('paceCalcDistance').classList.add('pacecalc-invalid');
+      $('paceCalcTotalTime').classList.add('pacecalc-invalid');
+      $('paceCalcStatus').textContent='😄 Ты Усэйн Болт, что ли? Такой результат выглядит нереалистично. Проверь дистанцию, время и переключатель «Минуты/Часы».';
       $('paceCalcStatus').classList.add('pacecalc-unrealistic');
       $('paceCalcResult').hidden=true;
+      $('paceCalcStatus').scrollIntoView({behavior:'smooth',block:'center'});
       return;
     }
     $('paceCalcStatus').classList.remove('pacecalc-unrealistic');
@@ -7054,5 +7068,8 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
   }));
   $('paceCalcAddStop').addEventListener('click',()=>addStop());
   $('paceCalcBtn').addEventListener('click',calculate);
+  $('paceCalcDistance')?.addEventListener('input',invalidatePaceResult);
+  $('paceCalcTotalTime')?.addEventListener('input',invalidatePaceResult);
+  stopsEl?.addEventListener('input',invalidatePaceResult);
   $('paceCalcReset').addEventListener('click',reset);
 })();
