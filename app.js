@@ -7416,7 +7416,24 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
           }
         }
       });
-      const data=parseThresholdOcrText(result?.data?.text||'');
+      const rawOcrText=String(result?.data?.text||'').trim();
+      const data=parseThresholdOcrText(rawOcrText);
+      const recognizedBox=byId(`thresholdRecognizedPreview${i}`);
+      const recognizedDistance=byId(`thresholdRecognizedDistance${i}`);
+      const recognizedPace=byId(`thresholdRecognizedPace${i}`);
+      const recognizedAvgHr=byId(`thresholdRecognizedAvgHr${i}`);
+      const recognizedMaxHr=byId(`thresholdRecognizedMaxHr${i}`);
+      const recognizedRaw=byId(`thresholdRecognizedRaw${i}`);
+      const distanceNum=Number(data.distance_km);
+      const avgOcr=Number(data.avg_hr);
+      const maxOcr=Number(data.max_hr);
+      const paceOcr=String(data.pace||'').trim();
+      if(recognizedBox) recognizedBox.hidden=false;
+      if(recognizedDistance) recognizedDistance.textContent=Number.isFinite(distanceNum)&&distanceNum>0?`${distanceNum.toFixed(2)} км`:'—';
+      if(recognizedPace){ recognizedPace.textContent=paceOcr?`${paceOcr}/км`:'—'; recognizedPace.classList.toggle('invalid',!!paceOcr&&!parsePace(paceOcr)); }
+      if(recognizedAvgHr){ recognizedAvgHr.textContent=Number.isFinite(avgOcr)&&avgOcr>0?`${Math.round(avgOcr)} уд/мин`:'—'; recognizedAvgHr.classList.toggle('invalid',Number.isFinite(avgOcr)&&avgOcr>0&&(avgOcr<80||avgOcr>230)); }
+      if(recognizedMaxHr){ recognizedMaxHr.textContent=Number.isFinite(maxOcr)&&maxOcr>0?`${Math.round(maxOcr)} уд/мин`:'—'; recognizedMaxHr.classList.toggle('invalid',Number.isFinite(maxOcr)&&maxOcr>0&&(maxOcr<80||maxOcr>240||(Number.isFinite(avgOcr)&&avgOcr>0&&maxOcr<avgOcr))); }
+      if(recognizedRaw) recognizedRaw.textContent=rawOcrText||'Текст не распознан.';
       let filled=[];
       if(Number.isFinite(Number(data.distance_km)) && Number(data.distance_km)>0){
         byId(`thresholdDistance${i}`).value=Number(data.distance_km).toFixed(2);

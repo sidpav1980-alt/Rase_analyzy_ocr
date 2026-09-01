@@ -10,7 +10,7 @@
   <title>Прогноз и анализ трейловых гонок</title>
   <link rel="manifest" href="manifest.webmanifest?v=075">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=262-threshold-required-inputs">
+  <link rel="stylesheet" href="styles.css?v=262-ocr-recognized-preview1">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynBv0TtP4JpC5dQF3Vqv2tLIbV0w=" crossorigin="">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
@@ -1119,6 +1119,19 @@
               </div>
               <div id="thresholdPhotoPreviewBody1" class="threshold-photo-preview-body">
                 <img id="thresholdPhotoPreview1" class="threshold-photo-preview" alt="Превью загруженного изображения для отрезка 1">
+                <div id="thresholdRecognizedPreview1" class="threshold-recognized-preview" hidden>
+                  <div class="threshold-recognized-title">Что распознано</div>
+                  <div class="threshold-recognized-grid">
+                    <div><span>Дистанция</span><b id="thresholdRecognizedDistance1">—</b></div>
+                    <div><span>Темп</span><b id="thresholdRecognizedPace1">—</b></div>
+                    <div><span>Средний пульс</span><b id="thresholdRecognizedAvgHr1">—</b></div>
+                    <div><span>Макс. пульс</span><b id="thresholdRecognizedMaxHr1">—</b></div>
+                  </div>
+                  <details class="threshold-recognized-raw">
+                    <summary>Текст, который увидел OCR</summary>
+                    <pre id="thresholdRecognizedRaw1"></pre>
+                  </details>
+                </div>
               </div>
             </div>
             <div class="threshold-input-grid">
@@ -1143,6 +1156,19 @@
               </div>
               <div id="thresholdPhotoPreviewBody2" class="threshold-photo-preview-body">
                 <img id="thresholdPhotoPreview2" class="threshold-photo-preview" alt="Превью загруженного изображения для отрезка 2">
+                <div id="thresholdRecognizedPreview2" class="threshold-recognized-preview" hidden>
+                  <div class="threshold-recognized-title">Что распознано</div>
+                  <div class="threshold-recognized-grid">
+                    <div><span>Дистанция</span><b id="thresholdRecognizedDistance2">—</b></div>
+                    <div><span>Темп</span><b id="thresholdRecognizedPace2">—</b></div>
+                    <div><span>Средний пульс</span><b id="thresholdRecognizedAvgHr2">—</b></div>
+                    <div><span>Макс. пульс</span><b id="thresholdRecognizedMaxHr2">—</b></div>
+                  </div>
+                  <details class="threshold-recognized-raw">
+                    <summary>Текст, который увидел OCR</summary>
+                    <pre id="thresholdRecognizedRaw2"></pre>
+                  </details>
+                </div>
               </div>
             </div>
             <div class="threshold-input-grid">
@@ -1167,6 +1193,19 @@
               </div>
               <div id="thresholdPhotoPreviewBody3" class="threshold-photo-preview-body">
                 <img id="thresholdPhotoPreview3" class="threshold-photo-preview" alt="Превью загруженного изображения для отрезка 3">
+                <div id="thresholdRecognizedPreview3" class="threshold-recognized-preview" hidden>
+                  <div class="threshold-recognized-title">Что распознано</div>
+                  <div class="threshold-recognized-grid">
+                    <div><span>Дистанция</span><b id="thresholdRecognizedDistance3">—</b></div>
+                    <div><span>Темп</span><b id="thresholdRecognizedPace3">—</b></div>
+                    <div><span>Средний пульс</span><b id="thresholdRecognizedAvgHr3">—</b></div>
+                    <div><span>Макс. пульс</span><b id="thresholdRecognizedMaxHr3">—</b></div>
+                  </div>
+                  <details class="threshold-recognized-raw">
+                    <summary>Текст, который увидел OCR</summary>
+                    <pre id="thresholdRecognizedRaw3"></pre>
+                  </details>
+                </div>
               </div>
             </div>
             <div class="threshold-input-grid">
@@ -1417,7 +1456,7 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="app.js?v=262-ocr-preview-toggle1"></script>
+  <script src="app.js?v=262-ocr-recognized-preview1"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 

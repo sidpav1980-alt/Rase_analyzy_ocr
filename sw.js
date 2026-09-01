@@ -1,9 +1,9 @@
-const CACHE='trail-analyzer-web-v0262-ocr-hr-module-fix2';
+const CACHE='trail-analyzer-web-v0262-ocr-recognized-preview1';
 const CORE=[
   './',
   './index.html',
-  './styles.css?v=262-threshold-test',
-  './app.js?v=262-ocr-hr-module-fix2',
+  './styles.css?v=262-ocr-recognized-preview1',
+  './app.js?v=262-ocr-recognized-preview1',
   './manifest.webmanifest?v=075',
   './icon-192.png',
   './icon-512.png'
