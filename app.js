@@ -6800,6 +6800,21 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     byId('thresholdMarathonPrediction').textContent=timeText(pred.marathonTime);
     byId('thresholdMarathonPace').textContent=paceText(pred.marathonPace);
 
+    // Estimated sustainable average HR for each predicted road race, anchored to calculated LTHR.
+    // 5 km can sit slightly above LTHR; longer distances must be progressively below it.
+    if(Number.isFinite(thresholdHr)){
+      const avgHr5=Math.round(thresholdHr*1.025);
+      const avgHr10=Math.round(thresholdHr*1.005);
+      const avgHrHalf=Math.round(thresholdHr*0.965);
+      const avgHrMarathon=Math.round(thresholdHr*0.92);
+      byId('threshold5kHr').textContent=`Средний пульс: ~${avgHr5} уд/мин`;
+      byId('threshold10kHr').textContent=`Средний пульс: ~${avgHr10} уд/мин`;
+      byId('thresholdHalfHr').textContent=`Средний пульс: ~${avgHrHalf} уд/мин`;
+      byId('thresholdMarathonHr').textContent=`Средний пульс: ~${avgHrMarathon} уд/мин`;
+    }else{
+      ['threshold5kHr','threshold10kHr','thresholdHalfHr','thresholdMarathonHr'].forEach(id=>{if(byId(id))byId(id).textContent='Средний пульс: —';});
+    }
+
     const segText=segs.map(s=>`${s.i}: ${paceText(s.pace)} (${s.d.toFixed(2)} км)`).join(' · ');
     const calText=calibration?` Добавлена калибровка по свежему результату ${calLabel}.`:'';
     byId('thresholdExplanation').innerHTML=`<b>Отрезки:</b> ${segText}<br><b>Как рассчитано:</b> поздние отрезки имеют больший вес; отдельно учитывается изменение темпа от первого к последнему.${calText}`;
@@ -6807,7 +6822,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     byId('thresholdResult').hidden=false;
 
     try{
-      localStorage.setItem('trailThresholdTest',JSON.stringify({n,recovery:byId('thresholdRecovery').value,segs:segs.map(s=>({d:s.d,pace:paceInputText(s.pace),hr:s.hr,hrMax:s.hrMax})),t5:byId('threshold5k').value,t10:byId('threshold10k').value,thresholdPaceSec:threshold,thresholdHr:Number.isFinite(thresholdHr)?thresholdHr:null}));
+      localStorage.setItem('trailThresholdTest',JSON.stringify({n,recovery:byId('thresholdRecovery').value,segs:segs.map(s=>({d:Number(s.d.toFixed(2)),pace:paceInputText(s.pace),hr:s.hr,hrMax:s.hrMax})),t5:byId('threshold5k').value,t10:byId('threshold10k').value,thresholdPaceSec:threshold,thresholdHr:Number.isFinite(thresholdHr)?thresholdHr:null}));
     }catch(e){}
     clearThresholdInvalid();
     byId('thresholdQuickResult').scrollIntoView({behavior:'smooth',block:'center'});
@@ -6832,7 +6847,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       byId('thresholdRecovery').value=x.recovery||'2:00';
       (x.segs||[]).forEach((s,j)=>{
         const i=j+1;
-        if(byId(`thresholdDistance${i}`)) byId(`thresholdDistance${i}`).value=s.d||'';
+        if(byId(`thresholdDistance${i}`)) byId(`thresholdDistance${i}`).value=(Number(s.d)>0?Number(s.d).toFixed(2):'');
         if(byId(`thresholdPaceInput${i}`)) byId(`thresholdPaceInput${i}`).value=s.pace||((s.d>0)?paceInputText(720/s.d):'');
         if(byId(`thresholdHr${i}`)) byId(`thresholdHr${i}`).value=s.hr||'';
         if(byId(`thresholdHrMax${i}`)) byId(`thresholdHrMax${i}`).value=s.hrMax||'';

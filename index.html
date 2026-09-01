@@ -1124,7 +1124,7 @@
           <label class="field"><span>5 км · время</span><input id="threshold5k" inputmode="numeric" placeholder="1959 = 19:59"></label>
           <label class="field"><span>10 км · время</span><input id="threshold10k" inputmode="numeric" placeholder="4150 = 41:50"></label>
         </div>
-        <p class="muted"><b>На iPhone двоеточие вводить не нужно:</b> темп 4:10 можно набрать как <b>410</b>, 19:59 как <b>1959</b>, 41:50 как <b>4150</b>, а 42:00 — просто <b>42</b>. После выхода из поля формат подставится автоматически.<br>Если есть свежий результат 10 км, он имеет приоритет для калибровки. Это помогает не занижать порог из-за усталости на поздних отрезках.</p>
+        <p class="muted">Если есть свежий результат 10 км, он имеет приоритет для калибровки. Это помогает не занижать порог из-за усталости на поздних отрезках.</p>
 
         <div class="threshold-actions">
           <button id="thresholdCalcBtn" type="button" class="primary">Рассчитать порог</button>
@@ -1146,14 +1146,14 @@
         </div>
         <div class="metrics threshold-metrics">
           <div><span>Пороговый пульс</span><b id="thresholdHrResult">—</b></div>
-          <div><span>Просадка темпа</span><b id="thresholdDrift">—</b></div>
+          <div><span>Изменение темпа от 1-го к последнему отрезку</span><b id="thresholdDrift">—</b><small class="threshold-drift-help">+4% = последний отрезок был примерно на 4% медленнее первого</small></div>
           <div><span>Качество теста</span><b id="thresholdQuality">—</b></div>
         </div>
         <div class="metrics threshold-predictions">
-          <div><span>Прогноз 5 км</span><b id="threshold5kPrediction">—</b><small id="threshold5kPace">—</small></div>
-          <div><span>Прогноз 10 км</span><b id="threshold10kPrediction">—</b><small id="threshold10kPace">—</small></div>
-          <div><span>Прогноз полумарафон</span><b id="thresholdHalfPrediction">—</b><small id="thresholdHalfPace">—</small></div>
-          <div><span>Прогноз марафон</span><b id="thresholdMarathonPrediction">—</b><small id="thresholdMarathonPace">—</small></div>
+          <div><span>Прогноз 5 км</span><b id="threshold5kPrediction">—</b><small id="threshold5kPace">—</small><small id="threshold5kHr">Средний пульс: —</small></div>
+          <div><span>Прогноз 10 км</span><b id="threshold10kPrediction">—</b><small id="threshold10kPace">—</small><small id="threshold10kHr">Средний пульс: —</small></div>
+          <div><span>Прогноз полумарафон</span><b id="thresholdHalfPrediction">—</b><small id="thresholdHalfPace">—</small><small id="thresholdHalfHr">Средний пульс: —</small></div>
+          <div><span>Прогноз марафон</span><b id="thresholdMarathonPrediction">—</b><small id="thresholdMarathonPace">—</small><small id="thresholdMarathonHr">Средний пульс: —</small></div>
         </div>
         <div id="thresholdExplanation" class="threshold-explanation"></div>
         <p class="muted"><b>Использование:</b> рассчитанный пороговый пульс автоматически используется как LTHR в других расчётах Race Analyzer. Пороговый темп сохраняется как текущий расчётный порог и восстанавливается после перезапуска.</p>
@@ -1337,6 +1337,8 @@
 
 .threshold-invalid{border:2px solid #ef4444!important;background:rgba(239,68,68,.08)!important;box-shadow:0 0 0 2px rgba(239,68,68,.18)!important}
 .threshold-tab-invalid{border-color:#ef4444!important;box-shadow:0 0 0 2px rgba(239,68,68,.22)!important}
+
+.threshold-drift-help{display:block;margin-top:5px;color:#94a3b8;font-size:12px;line-height:1.25;font-weight:500}
 </style>
 
 <div id="mishaFinishWelcome" class="misha-start-sendoff" aria-hidden="true">
