@@ -10,7 +10,7 @@
   <title>Прогноз и анализ трейловых гонок</title>
   <link rel="manifest" href="manifest.webmanifest?v=075">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=262-threshold-shared-values">
+  <link rel="stylesheet" href="styles.css?v=262-threshold-required-inputs">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynBv0TtP4JpC5dQF3Vqv2tLIbV0w=" crossorigin="">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
@@ -1057,7 +1057,14 @@
     <section id="threshold" class="tabpanel">
       <div class="card threshold-card">
         <h2>Пороговый тест · 2–3 × 12 минут</h2>
-        <p class="muted threshold-intro">Введите дистанцию или темп каждого 12-минутного рабочего отрезка и пульс. Достаточно заполнить одно из двух полей — второе рассчитается автоматически. Восстановление между отрезками — по умолчанию 2 минуты. Алгоритм учитывает не только средний темп, но и просадку скорости к последнему отрезку. Контрольный результат на 5/10 км можно добавить для калибровки.</p>
+        <div class="threshold-required-box">
+          <div class="threshold-required-title">Что нужно ввести для расчёта</div>
+          <div class="threshold-required-step"><b>1.</b><span>Выберите <b>2 или 3 отрезка по 12 минут</b>.</span></div>
+          <div class="threshold-required-step"><b>2.</b><span>Для <b>каждого отрезка</b> обязательно укажите <b>темп ИЛИ дистанцию</b> + <b>средний пульс</b>.</span></div>
+          <div class="threshold-required-step"><b>3.</b><span><b>Максимальный пульс</b> и результат на <b>5/10 км</b> — необязательны, они только уточняют расчёт.</span></div>
+          <div class="threshold-required-example">Пример: отрезок 1 → <b>4:10/км</b> + <b>172 уд/мин</b>; отрезок 2 → <b>4:20/км</b> + <b>174 уд/мин</b>.</div>
+        </div>
+        <p class="muted threshold-intro">Если вводите темп, дистанцию можно не заполнять — она рассчитается автоматически. Если вводите дистанцию, темп рассчитается сам. Отдых между отрезками по умолчанию 2 минуты.</p>
 
         <div class="threshold-settings">
           <label class="field">
@@ -1075,38 +1082,38 @@
 
         <div id="thresholdSegments" class="threshold-segments">
           <div class="threshold-segment" data-threshold-segment="1">
-            <div class="threshold-segment-title"><b>Отрезок 1</b><span>12:00</span></div>
+            <div class="threshold-segment-title"><b>Отрезок 1 <em class="required-badge">ОБЯЗАТЕЛЬНО</em></b><span>12:00</span></div>
             <div class="threshold-input-grid">
-              <label class="field"><span>Дистанция, км</span><input id="thresholdDistance1" type="number" inputmode="decimal" min="1.5" max="4" step="0.01" placeholder="2.88"></label>
-              <label class="field"><span>Темп, мин/км</span><input id="thresholdPaceInput1" inputmode="numeric" placeholder="410 = 4:10"></label>
-              <label class="field"><span>Средний пульс</span><input id="thresholdHr1" type="number" inputmode="numeric" min="80" max="230" step="1" placeholder="172"></label>
+              <label class="field"><span>Дистанция, км <small>или темп ↓</small></span><input id="thresholdDistance1" type="number" inputmode="decimal" min="1.5" max="4" step="0.01" placeholder="2.88"></label>
+              <label class="field"><span>Темп, мин/км <small>или дистанция ↑</small></span><input id="thresholdPaceInput1" inputmode="numeric" placeholder="410 = 4:10"></label>
+              <label class="field"><span>Средний пульс <b class="req-star">*</b></span><input id="thresholdHr1" type="number" inputmode="numeric" min="80" max="230" step="1" placeholder="172"></label>
               <label class="field"><span>Макс. пульс (необяз.)</span><input id="thresholdHrMax1" type="number" inputmode="numeric" min="80" max="240" step="1" placeholder="178"></label>
             </div>
             <div id="thresholdPace1" class="threshold-live-pace">Темп: —</div>
           </div>
           <div class="threshold-segment" data-threshold-segment="2">
-            <div class="threshold-segment-title"><b>Отрезок 2</b><span>12:00</span></div>
+            <div class="threshold-segment-title"><b>Отрезок 2 <em class="required-badge">ОБЯЗАТЕЛЬНО</em></b><span>12:00</span></div>
             <div class="threshold-input-grid">
-              <label class="field"><span>Дистанция, км</span><input id="thresholdDistance2" type="number" inputmode="decimal" min="1.5" max="4" step="0.01" placeholder="2.78"></label>
-              <label class="field"><span>Темп, мин/км</span><input id="thresholdPaceInput2" inputmode="numeric" placeholder="420 = 4:20"></label>
-              <label class="field"><span>Средний пульс</span><input id="thresholdHr2" type="number" inputmode="numeric" min="80" max="230" step="1" placeholder="174"></label>
+              <label class="field"><span>Дистанция, км <small>или темп ↓</small></span><input id="thresholdDistance2" type="number" inputmode="decimal" min="1.5" max="4" step="0.01" placeholder="2.78"></label>
+              <label class="field"><span>Темп, мин/км <small>или дистанция ↑</small></span><input id="thresholdPaceInput2" inputmode="numeric" placeholder="420 = 4:20"></label>
+              <label class="field"><span>Средний пульс <b class="req-star">*</b></span><input id="thresholdHr2" type="number" inputmode="numeric" min="80" max="230" step="1" placeholder="174"></label>
               <label class="field"><span>Макс. пульс (необяз.)</span><input id="thresholdHrMax2" type="number" inputmode="numeric" min="80" max="240" step="1" placeholder="180"></label>
             </div>
             <div id="thresholdPace2" class="threshold-live-pace">Темп: —</div>
           </div>
           <div class="threshold-segment" data-threshold-segment="3" hidden>
-            <div class="threshold-segment-title"><b>Отрезок 3</b><span>12:00</span></div>
+            <div class="threshold-segment-title"><b>Отрезок 3 <em class="required-badge">ОБЯЗАТЕЛЬНО</em></b><span>12:00</span></div>
             <div class="threshold-input-grid">
-              <label class="field"><span>Дистанция, км</span><input id="thresholdDistance3" type="number" inputmode="decimal" min="1.5" max="4" step="0.01" placeholder="2.72"></label>
-              <label class="field"><span>Темп, мин/км</span><input id="thresholdPaceInput3" inputmode="numeric" placeholder="425 = 4:25"></label>
-              <label class="field"><span>Средний пульс</span><input id="thresholdHr3" type="number" inputmode="numeric" min="80" max="230" step="1" placeholder="175"></label>
+              <label class="field"><span>Дистанция, км <small>или темп ↓</small></span><input id="thresholdDistance3" type="number" inputmode="decimal" min="1.5" max="4" step="0.01" placeholder="2.72"></label>
+              <label class="field"><span>Темп, мин/км <small>или дистанция ↑</small></span><input id="thresholdPaceInput3" inputmode="numeric" placeholder="425 = 4:25"></label>
+              <label class="field"><span>Средний пульс <b class="req-star">*</b></span><input id="thresholdHr3" type="number" inputmode="numeric" min="80" max="230" step="1" placeholder="175"></label>
               <label class="field"><span>Макс. пульс (необяз.)</span><input id="thresholdHrMax3" type="number" inputmode="numeric" min="80" max="240" step="1" placeholder="181"></label>
             </div>
             <div id="thresholdPace3" class="threshold-live-pace">Темп: —</div>
           </div>
         </div>
 
-        <h3>Контрольный результат (необязательно)</h3>
+        <h3>Дополнительная калибровка <span class="optional-tag">НЕОБЯЗАТЕЛЬНО</span></h3>
         <div class="threshold-control-grid">
           <label class="field"><span>5 км · время</span><input id="threshold5k" inputmode="numeric" placeholder="1959 = 19:59"></label>
           <label class="field"><span>10 км · время</span><input id="threshold10k" inputmode="numeric" placeholder="4150 = 41:50"></label>
@@ -1117,7 +1124,11 @@
           <button id="thresholdCalcBtn" type="button" class="primary">Рассчитать порог</button>
           <button id="thresholdResetBtn" type="button" class="secondary">Сбросить</button>
         </div>
-        <div id="thresholdStatus" class="muted threshold-status">Введите минимум два 12-минутных отрезка.</div>
+        <div id="thresholdQuickResult" class="threshold-quick-result" hidden>
+          <div><span>Пороговый темп</span><b id="thresholdQuickPace">—</b></div>
+          <div><span>Пороговый пульс</span><b id="thresholdQuickHr">—</b></div>
+        </div>
+        <div id="thresholdStatus" class="threshold-status threshold-status-hint">Для расчёта заполните минимум 2 отрезка: темп или дистанция + средний пульс.</div>
       </div>
 
       <div id="thresholdResult" class="card threshold-result" hidden>
@@ -1289,7 +1300,7 @@
     Модель является оценочной. Броды, погода, питание, состояние покрытия, самочувствие и другие факторы могут существенно повлиять на фактический результат. Расчёты носят исключительно информационно-ознакомительный характер, не являются гарантией результата или рекомендацией к действию. Автор не несёт ответственности за решения, принятые на основании расчётов приложения.
   </footer>
 
-  <script src="app.js?v=262-threshold-shared-values"></script>
+  <script src="app.js?v=262-threshold-required-inputs"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 

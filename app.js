@@ -6723,6 +6723,9 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     byId('thresholdMainPace').textContent=paceText(threshold);
     byId('thresholdPaceRange').textContent=`Рабочий диапазон: ${paceText(rangeLo)} – ${paceText(rangeHi)}`;
     byId('thresholdHrResult').textContent=Number.isFinite(thresholdHr)?`${thresholdHr} уд/мин`:'—';
+    byId('thresholdQuickPace').textContent=paceText(threshold);
+    byId('thresholdQuickHr').textContent=Number.isFinite(thresholdHr)?`${thresholdHr} уд/мин`:'—';
+    byId('thresholdQuickResult').hidden=false;
     byId('thresholdDrift').textContent=`${driftPct>=0?'+':''}${driftPct.toFixed(1)}%`;
     byId('thresholdQuality').textContent=quality;
     byId('threshold5kPrediction').textContent=timeText(pred.fiveTime);
@@ -6739,14 +6742,15 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     try{
       localStorage.setItem('trailThresholdTest',JSON.stringify({n,recovery:byId('thresholdRecovery').value,segs:segs.map(s=>({d:s.d,pace:paceInputText(s.pace),hr:s.hr,hrMax:s.hrMax})),t5:byId('threshold5k').value,t10:byId('threshold10k').value,thresholdPaceSec:threshold,thresholdHr:Number.isFinite(thresholdHr)?thresholdHr:null}));
     }catch(e){}
-    byId('thresholdResult').scrollIntoView({behavior:'smooth',block:'start'});
+    byId('thresholdQuickResult').scrollIntoView({behavior:'smooth',block:'center'});
   }
   function reset(){
     for(let i=1;i<=3;i++){
       ['Distance','PaceInput','Hr','HrMax'].forEach(k=>{const el=byId(`threshold${k}${i}`);if(el)el.value='';});
     }
     byId('threshold5k').value='';byId('threshold10k').value='';byId('thresholdRecovery').value='2:00';
-    segmentCount.value='2';syncSegments();byId('thresholdResult').hidden=true;
+    segmentCount.value='2';syncSegments();byId('thresholdResult').hidden=true;byId('thresholdQuickResult').hidden=true;
+    byId('thresholdQuickPace').textContent='—';byId('thresholdQuickHr').textContent='—';
     byId('thresholdStatus').textContent='Введите минимум два 12-минутных отрезка.';
     state.thresholdPaceSec=null; state.thresholdHr=null;
     if(byId('lthr')) byId('lthr').value='0';
@@ -6766,9 +6770,15 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
         if(byId(`thresholdHrMax${i}`)) byId(`thresholdHrMax${i}`).value=s.hrMax||'';
       });
       byId('threshold5k').value=x.t5||'';byId('threshold10k').value=x.t10||'';
-      if(Number.isFinite(Number(x.thresholdPaceSec)) && Number(x.thresholdPaceSec)>0) state.thresholdPaceSec=Number(x.thresholdPaceSec);
+      if(Number.isFinite(Number(x.thresholdPaceSec)) && Number(x.thresholdPaceSec)>0){
+        state.thresholdPaceSec=Number(x.thresholdPaceSec);
+        byId('thresholdQuickPace').textContent=paceText(Number(x.thresholdPaceSec));
+        byId('thresholdQuickResult').hidden=false;
+      }
       if(Number.isFinite(Number(x.thresholdHr)) && Number(x.thresholdHr)>0){
         state.thresholdHr=Number(x.thresholdHr);
+        byId('thresholdQuickHr').textContent=`${Math.round(Number(x.thresholdHr))} уд/мин`;
+        byId('thresholdQuickResult').hidden=false;
         if(byId('lthr')) byId('lthr').value=String(Math.round(Number(x.thresholdHr)));
       }
     }catch(e){}

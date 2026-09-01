@@ -543,6 +543,12 @@ button.action-error:disabled {
 .threshold-actions{display:flex;gap:10px;align-items:center;margin-top:14px}
 .threshold-actions .secondary{margin-top:0}
 .threshold-status{margin-top:10px;min-height:18px}
+
+.threshold-quick-result{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.threshold-quick-result[hidden]{display:none}
+.threshold-quick-result>div{background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.55);border-radius:14px;padding:12px;text-align:center}
+.threshold-quick-result span{display:block;color:var(--muted);font-size:13px;margin-bottom:5px}
+.threshold-quick-result b{display:block;font-size:24px;color:#86efac}
 .threshold-main-result{padding:18px;border:1px solid #38bdf8;border-radius:16px;background:rgba(56,189,248,.08);text-align:center}
 .threshold-main-result span,.threshold-main-result small{display:block;color:var(--muted)}
 .threshold-main-result b{display:block;font-size:38px;line-height:1.05;margin:7px 0;color:#e0f2fe}
@@ -567,3 +573,17 @@ button.action-error:disabled {
   .threshold-actions button{width:100%}
   .threshold-predictions{grid-template-columns:1fr}
 }
+
+/* Threshold test: make required inputs unmistakable on mobile */
+.threshold-required-box{margin:10px 0 14px;padding:14px;border:2px solid #2db9ff;border-radius:16px;background:rgba(45,185,255,.08)}
+.threshold-required-title{font-size:18px;font-weight:900;color:#fff;margin-bottom:10px}
+.threshold-required-step{display:flex;gap:9px;align-items:flex-start;margin:8px 0;line-height:1.35;color:#dce8f7}
+.threshold-required-step>b{flex:0 0 24px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:#2db9ff;color:#06101d;font-size:13px}
+.threshold-required-example{margin-top:11px;padding:10px 11px;border-radius:12px;background:#08111f;color:#9edfff;line-height:1.4}
+.required-badge,.optional-tag{display:inline-block;margin-left:7px;padding:3px 7px;border-radius:999px;font-style:normal;font-size:10px;line-height:1;font-weight:900;vertical-align:middle}
+.required-badge{background:#2db9ff;color:#06101d}
+.optional-tag{background:#253450;color:#aebbd0}
+.req-star{color:#ff6b6b;font-size:16px}
+.threshold-input-grid .field>span small{font-size:10px;color:#7f93ad;font-weight:600}
+.threshold-status-hint{margin-top:10px;padding:10px 12px;border-radius:12px;background:rgba(255,190,59,.09);border:1px solid rgba(255,190,59,.28);color:#ffd27a;line-height:1.35}
+@media(max-width:600px){.threshold-required-title{font-size:17px}.threshold-required-step{font-size:14px}.required-badge{display:block;width:max-content;margin:5px 0 0}}
