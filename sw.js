@@ -1,9 +1,9 @@
-const CACHE='trail-analyzer-web-v281-copy-status-under-button';
+const CACHE='trail-analyzer-web-v283-footer-links';
 const CORE=[
   './',
   './index.html',
-  './styles.css?v=281-copy-status-under-button',
-  './app.js?v=281-copy-status-under-button',
+  './styles.css?v=283-footer-links',
+  './app.js?v=283-footer-links',
   './manifest.webmanifest?v=075',
   './icon-192.png',
   './icon-512.png'
