@@ -8197,21 +8197,51 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
 })();
 
 
-// v0.0268: separate forecast calibration GPX uploads into compact tabs.
+// v0.0269: robust iPhone switching between forecast reference GPX tabs.
 (function initForecastTrainingTabs(){
-  const tabs=[...document.querySelectorAll('[data-forecast-training-tab]')];
-  const panels=[...document.querySelectorAll('[data-forecast-training-panel]')];
-  if(!tabs.length||!panels.length) return;
+  const selector='[data-forecast-training-tab]';
+  const panelSelector='[data-forecast-training-panel]';
+  function allTabs(){ return [...document.querySelectorAll(selector)]; }
+  function allPanels(){ return [...document.querySelectorAll(panelSelector)]; }
   function activate(role){
+    const tabs=allTabs(), panels=allPanels();
+    if(!tabs.some(b=>b.dataset.forecastTrainingTab===role)) return;
     tabs.forEach(btn=>{
       const on=btn.dataset.forecastTrainingTab===role;
       btn.classList.toggle('active',on);
       btn.setAttribute('aria-selected',on?'true':'false');
+      btn.tabIndex=on?0:-1;
     });
-    panels.forEach(panel=>panel.classList.toggle('active',panel.dataset.forecastTrainingPanel===role));
+    panels.forEach(panel=>{
+      const on=panel.dataset.forecastTrainingPanel===role;
+      panel.classList.toggle('active',on);
+      panel.hidden=!on;
+      panel.setAttribute('aria-hidden',on?'false':'true');
+    });
     try{sessionStorage.setItem('forecastTrainingActiveTab',role);}catch{}
   }
-  tabs.forEach(btn=>btn.addEventListener('click',()=>activate(btn.dataset.forecastTrainingTab)));
+  const tabs=allTabs(), panels=allPanels();
+  if(!tabs.length||!panels.length) return;
+
+  // Capture phase is intentional: on iOS the native file input can retain the
+  // interaction layer after a GPX is selected. Handle the tab before any upload
+  // element or generic click handler can consume it.
+  document.addEventListener('click',e=>{
+    const btn=e.target?.closest?.(selector);
+    if(!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    activate(btn.dataset.forecastTrainingTab);
+  },true);
+
+  // Keyboard/accessibility fallback.
+  document.addEventListener('keydown',e=>{
+    const btn=e.target?.closest?.(selector);
+    if(!btn || (e.key!=='Enter' && e.key!==' ')) return;
+    e.preventDefault();
+    activate(btn.dataset.forecastTrainingTab);
+  },true);
+
   let saved=''; try{saved=sessionStorage.getItem('forecastTrainingActiveTab')||'';}catch{}
   if(!tabs.some(b=>b.dataset.forecastTrainingTab===saved)) saved='strength';
   activate(saved);

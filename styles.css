@@ -705,3 +705,11 @@ button.action-error:disabled {
   .forecast-training-tab{font-size:13px;padding:10px 6px;min-height:44px}
   .forecast-training-panel{padding:14px!important}
 }
+
+
+/* v0.0269 — forecast GPX tabs must stay tappable above iOS native file inputs */
+.forecast-training-tabs{position:relative;z-index:30;isolation:isolate}
+.forecast-training-tab{position:relative;z-index:31;pointer-events:auto;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.forecast-training-panels{position:relative;z-index:1}
+.forecast-training-panel[hidden]{display:none!important}
+.forecast-training-panel.active{display:flex!important}

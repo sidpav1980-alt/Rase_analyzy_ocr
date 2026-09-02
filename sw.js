@@ -1,9 +1,9 @@
-const CACHE='trail-analyzer-web-v256-forecast-training-tabs';
+const CACHE='trail-analyzer-web-v256-forecast-tabs-ios-switch-fix';
 const CORE=[
   './',
   './index.html',
-  './styles.css?v=271-forecast-training-tabs',
-  './app.js?v=268-forecast-training-tabs',
+  './styles.css?v=272-forecast-tabs-ios-switch-fix',
+  './app.js?v=269-forecast-tabs-ios-switch-fix',
   './manifest.webmanifest?v=075',
   './icon-192.png',
   './icon-512.png'
