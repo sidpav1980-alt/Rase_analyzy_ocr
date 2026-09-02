@@ -10,7 +10,7 @@
   <title>Прогноз и анализ трейловых гонок</title>
   <link rel="manifest" href="manifest.webmanifest?v=075">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=276-css-head-fix">
+  <link rel="stylesheet" href="styles.css?v=277-forecast-warning-block">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynBv0TtP4JpC5dQF3Vqv2tLIbV0w=" crossorigin="">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
@@ -650,13 +650,17 @@
 .support-project-btn{display:inline-flex;align-items:center;justify-content:center;padding:5px 10px;border-radius:999px;border:1px solid #2563eb;background:#0f172a;color:#7dd3fc;text-decoration:none;font-size:12px;font-weight:800;white-space:nowrap}
 .support-project-btn:active{transform:scale(.98)}
 @media(max-width:430px){.support-project-btn{font-size:11px;padding:5px 8px}.top-actions{gap:6px}}
-.calc-availability-link .forecast-jump-link{color:#38bdf8;font-weight:800;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
-.calc-availability-link .forecast-jump-link:active{opacity:.75}
+.calc-availability-link{margin:14px 0 18px;padding:16px 18px;border:2px solid rgba(56,189,248,.45);border-radius:16px;background:linear-gradient(180deg,rgba(8,32,68,.92),rgba(7,24,48,.94));box-shadow:0 0 0 1px rgba(255,196,0,.08) inset}
+.calc-availability-link strong{display:block;font-size:18px;line-height:1.3;font-weight:900;color:#f8fafc;margin-bottom:8px}
+.calc-availability-link .calc-availability-note{display:block;font-size:15px;line-height:1.45;color:#cfe7ff;margin-bottom:12px}
+.calc-availability-link .forecast-jump-link{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:12px;background:#38bdf8;color:#041426 !important;font-weight:900;text-decoration:none;box-shadow:0 8px 24px rgba(56,189,248,.22);cursor:pointer}
+.calc-availability-link .forecast-jump-link:before{content:'→';font-weight:900}
+.calc-availability-link .forecast-jump-link:active{opacity:.8;transform:translateY(1px)}
 </style>
 
 </head>
 <body>
-<div class="top-actions"><div class="app-version">v0.0276</div><a class="support-project-btn" href="https://www.tbank.ru/cf/49SEnJlLa0Y" target="_blank" rel="noopener noreferrer">❤️ Поддержать проект</a></div>
+<div class="top-actions"><div class="app-version">v0.0277</div><a class="support-project-btn" href="https://www.tbank.ru/cf/49SEnJlLa0Y" target="_blank" rel="noopener noreferrer">❤️ Поддержать проект</a></div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Прогноз и анализ трейловых гонок</div>
@@ -891,7 +895,7 @@
           </div>
         </div>
 
-        <div id="calcAvailabilityStatus" class="muted calc-availability-link">Для расчёта прогноза загрузите трек гонки в разделе «Трек гонки». <a href="#route" class="forecast-jump-link">Перейти в «1. Трек гонки»</a>.</div>
+        <div id="calcAvailabilityStatus" class="muted calc-availability-link"><strong>Сначала загрузите трек гонки — это обязательный шаг.</strong><span class="calc-availability-note">Без этого нельзя рассчитать прогноз и перейти к следующим действиям. Загрузите трек в разделе «Трек гонки».</span><a href="#route" class="forecast-jump-link">Перейти в «1. Трек гонки»</a></div>
         <div class="metrics big">
           <div><span>Эталонов загружено</span><b id="referenceCount">0 / 3</b></div>
           <div><span>Общая модель</span><b id="combinedModelState">ожидает 3 GPX</b></div>
@@ -1516,8 +1520,8 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="app.js?v=276-css-head-fix"></script>
-  <script src="interval-ocr.js?v=276-css-head-fix"></script>
+  <script src="app.js?v=277-forecast-warning-block"></script>
+  <script src="interval-ocr.js?v=277-forecast-warning-block"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 

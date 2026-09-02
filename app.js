@@ -4083,7 +4083,7 @@ function updateFinalCalcAvailability(){
 
   if(!ready){
     setActionState('calcBtn','idle');
-    if(status) status.innerHTML='Для расчёта прогноза загрузите трек гонки в разделе «Трек гонки». <a href="#route" class="forecast-jump-link">Перейти в «1. Трек гонки»</a>.';
+    if(status) status.innerHTML='<strong>Сначала загрузите трек гонки — это обязательный шаг.</strong><span class="calc-availability-note">Без этого нельзя рассчитать прогноз и перейти к следующим действиям. Загрузите трек в разделе «Трек гонки».</span><a href="#route" class="forecast-jump-link">Перейти в «1. Трек гонки»</a>';
   }else{
     setActionState('calcBtn','ready');
     if(status){
