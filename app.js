@@ -8195,3 +8195,24 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
   stopsEl?.addEventListener('input',invalidatePaceResult);
   $('paceCalcReset').addEventListener('click',reset);
 })();
+
+
+// v0.0268: separate forecast calibration GPX uploads into compact tabs.
+(function initForecastTrainingTabs(){
+  const tabs=[...document.querySelectorAll('[data-forecast-training-tab]')];
+  const panels=[...document.querySelectorAll('[data-forecast-training-panel]')];
+  if(!tabs.length||!panels.length) return;
+  function activate(role){
+    tabs.forEach(btn=>{
+      const on=btn.dataset.forecastTrainingTab===role;
+      btn.classList.toggle('active',on);
+      btn.setAttribute('aria-selected',on?'true':'false');
+    });
+    panels.forEach(panel=>panel.classList.toggle('active',panel.dataset.forecastTrainingPanel===role));
+    try{sessionStorage.setItem('forecastTrainingActiveTab',role);}catch{}
+  }
+  tabs.forEach(btn=>btn.addEventListener('click',()=>activate(btn.dataset.forecastTrainingTab)));
+  let saved=''; try{saved=sessionStorage.getItem('forecastTrainingActiveTab')||'';}catch{}
+  if(!tabs.some(b=>b.dataset.forecastTrainingTab===saved)) saved='strength';
+  activate(saved);
+})();

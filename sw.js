@@ -1,9 +1,9 @@
-const CACHE='trail-analyzer-web-v255-pacecalc-min-per-km';
+const CACHE='trail-analyzer-web-v256-forecast-training-tabs';
 const CORE=[
   './',
   './index.html',
-  './styles.css?v=270-pacecalc-min-per-km',
-  './app.js?v=267-pacecalc-min-per-km',
+  './styles.css?v=271-forecast-training-tabs',
+  './app.js?v=268-forecast-training-tabs',
   './manifest.webmanifest?v=075',
   './icon-192.png',
   './icon-512.png'

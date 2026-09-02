@@ -692,3 +692,16 @@ button.action-error:disabled {
   .interval-ocr-table th:nth-child(3),.interval-ocr-table td:nth-child(3){width:34%}
   .interval-ocr-table th:nth-child(4),.interval-ocr-table td:nth-child(4){width:28%}
 }
+
+
+/* v0.0268 — compact separate GPX training tabs */
+.forecast-training-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0 12px}
+.forecast-training-tab{appearance:none;border:1px solid #28517b;background:#0a1730;color:#cfe7ff;border-radius:14px;padding:12px 10px;font-weight:800;cursor:pointer;min-height:48px}
+.forecast-training-tab.active{background:#38bdf8;color:#062033;border-color:#38bdf8;box-shadow:0 0 0 1px rgba(56,189,248,.25) inset}
+.forecast-training-panel{display:none!important}
+.forecast-training-panel.active{display:flex!important}
+@media(max-width:620px){
+  .forecast-training-tabs{gap:7px}
+  .forecast-training-tab{font-size:13px;padding:10px 6px;min-height:44px}
+  .forecast-training-panel{padding:14px!important}
+}

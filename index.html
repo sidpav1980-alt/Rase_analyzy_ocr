@@ -10,7 +10,7 @@
   <title>Прогноз и анализ трейловых гонок</title>
   <link rel="manifest" href="manifest.webmanifest?v=075">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=270-pacecalc-min-per-km">
+  <link rel="stylesheet" href="styles.css?v=271-forecast-training-tabs">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynBv0TtP4JpC5dQF3Vqv2tLIbV0w=" crossorigin="">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
@@ -653,7 +653,7 @@
 </style>
 </head>
 <body>
-<div class="top-actions"><div class="app-version">v0.0267</div><a class="support-project-btn" href="https://www.tbank.ru/cf/49SEnJlLa0Y" target="_blank" rel="noopener noreferrer">❤️ Поддержать проект</a></div>
+<div class="top-actions"><div class="app-version">v0.0268</div><a class="support-project-btn" href="https://www.tbank.ru/cf/49SEnJlLa0Y" target="_blank" rel="noopener noreferrer">❤️ Поддержать проект</a></div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Прогноз и анализ трейловых гонок</div>
@@ -850,8 +850,13 @@
         </p>
 
         
-        <div class="forecast-ref-grid">
-          <div class="upload">
+        <div class="forecast-training-tabs" role="tablist" aria-label="Тренировки для прогноза">
+          <button type="button" class="forecast-training-tab active" data-forecast-training-tab="strength" role="tab" aria-selected="true">1. Силовая</button>
+          <button type="button" class="forecast-training-tab" data-forecast-training-tab="fastTrail" role="tab" aria-selected="false">2. Быстрая</button>
+          <button type="button" class="forecast-training-tab" data-forecast-training-tab="flatRace" role="tab" aria-selected="false">3. Плоская</button>
+        </div>
+        <div class="forecast-ref-grid forecast-training-panels">
+          <div class="upload forecast-training-panel active" data-forecast-training-panel="strength">
             <strong>1. Силовая трейловая GPX</strong>
             <div class="muted">Большой набор и крутые подъёмы. Из неё модель учит, как уклон меняет скорость, и оценивает запас выносливости по длительности и набору.</div>
             <input id="strengthActivityFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml,*/*">
@@ -860,7 +865,7 @@
             <span id="strengthActivityStatus">Не загружена.</span>
           </div>
 
-          <div class="upload">
+          <div class="upload forecast-training-panel" data-forecast-training-panel="fastTrail">
             <strong>2. Быстрая трейловая GPX</strong>
             <div class="muted">Быстрый трейл с высоким устойчивым усилием. Даёт рабочую скорость, реакцию на умеренный рельеф и дополнительную оценку выносливости.</div>
             <input id="fastTrailActivityFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml,*/*">
@@ -869,7 +874,7 @@
             <span id="fastTrailActivityStatus">Не загружена.</span>
           </div>
 
-          <div class="upload">
+          <div class="upload forecast-training-panel" data-forecast-training-panel="flatRace">
             <strong>3. Скоростная плоская GPX — минимум 5 км</strong>
             <div class="muted">Минимальная длина файла — 5 км. Например, быстрая плоская десятка. Даёт базовый темп и скорость без большого влияния рельефа. Если файл заметно медленнее консервативной оценки по VO₂max, скоростной якорь автоматически частично корректируется по VO₂max. Плоская гоночная GPX становится главным скоростным эталоном: её реальное время масштабируется на дистанцию гонки, а затем применяются рельеф, покрытие, броды и физиологические ограничения. Для короткой гонки, близкой по длине к скоростному GPX, используется фактически показанный темп этого файла без искусственного ускорения по быстрым отрезкам или VO₂max.</div>
             <input id="flatRaceActivityFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml,*/*">
@@ -1505,8 +1510,8 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="app.js?v=267-pacecalc-min-per-km"></script>
-  <script src="interval-ocr.js?v=252-pacecalc-min-per-km"></script>
+  <script src="app.js?v=268-forecast-training-tabs"></script>
+  <script src="interval-ocr.js?v=253-forecast-training-tabs"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
