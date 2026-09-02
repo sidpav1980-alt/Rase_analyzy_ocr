@@ -1,9 +1,9 @@
-const CACHE='trail-analyzer-web-v256-forecast-route-jump';
+const CACHE='trail-analyzer-web-v275-forecast-track-upload-hint';
 const CORE=[
   './',
   './index.html',
-  './styles.css?v=276-forecast-route-jump',
-  './app.js?v=273-forecast-route-jump',
+  './styles.css?v=275-forecast-track-upload-hint',
+  './app.js?v=275-forecast-track-upload-hint',
   './manifest.webmanifest?v=075',
   './icon-192.png',
   './icon-512.png'

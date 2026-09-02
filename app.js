@@ -2674,7 +2674,7 @@ function fmtPaceSecPerKm(sec){
   if(!Number.isFinite(sec) || sec<=0) return '—';
   let m=Math.floor(sec/60), s=Math.round(sec%60);
   if(s===60){m++;s=0;}
-  return `${m}:${String(s).padStart(2,'0')} /км`;
+  return `${m}:${String(s).padStart(2,'0')} мин/км`;
 }
 
 function solveLinearSystem(A,b){
@@ -4083,7 +4083,7 @@ function updateFinalCalcAvailability(){
 
   if(!ready){
     setActionState('calcBtn','idle');
-    if(status) status.innerHTML='Прогноз находится в разделе «Трек гонки». <a href="#route" class="forecast-jump-link">Перейти в «1. Трек гонки»</a>.';
+    if(status) status.innerHTML='Для расчёта прогноза загрузите трек гонки в разделе «Трек гонки». <a href="#route" class="forecast-jump-link">Перейти в «1. Трек гонки»</a>.';
   }else{
     setActionState('calcBtn','ready');
     if(status){
@@ -6122,7 +6122,7 @@ function updateResults(){
   const pace=dist()>0&&b>0?b/dist():0;
   const pm=Math.floor(pace/60),ps=Math.round(pace%60);
   const av=E('simAvgPace');
-  if(av) av.textContent=pace?`${pm}:${String(ps).padStart(2,'0')} /км`:'—';
+  if(av) av.textContent=pace?`${pm}:${String(ps).padStart(2,'0')} мин/км`:'—';
 }
 
 function maybePauseForFord(km){
