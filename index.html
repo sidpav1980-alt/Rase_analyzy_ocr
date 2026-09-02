@@ -10,7 +10,7 @@
   <title>Прогноз и анализ трейловых гонок</title>
   <link rel="manifest" href="manifest.webmanifest?v=075">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=280-track-jump-higher">
+  <link rel="stylesheet" href="styles.css?v=281-copy-status-under-button">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynBv0TtP4JpC5dQF3Vqv2tLIbV0w=" crossorigin="">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
@@ -372,7 +372,7 @@
 }
 </style>
 <style>
-/* v0.0280 — event notifications lower over the course canvas */
+/* v0.0282 — event notifications lower over the course canvas */
 .sim-pause-badge{top:70px!important;right:auto!important;left:50%!important;transform:translateX(-50%)!important;white-space:nowrap}
 .sim-event-chip{top:108px!important}
 @media(max-width:700px){
@@ -670,7 +670,7 @@
 
 </head>
 <body>
-<div class="top-actions"><div class="app-version">v0.0280</div><a class="support-project-btn" href="https://www.tbank.ru/cf/49SEnJlLa0Y" target="_blank" rel="noopener noreferrer">❤️ Поддержать проект</a></div>
+<div class="top-actions"><div class="app-version">v0.0282</div><a class="support-project-btn" href="https://www.tbank.ru/cf/49SEnJlLa0Y" target="_blank" rel="noopener noreferrer">❤️ Поддержать проект</a></div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Прогноз и анализ трейловых гонок</div>
@@ -1369,15 +1369,17 @@
     <div id="intervalOcrResults" class="interval-ocr-results" hidden>
       <div class="interval-ocr-results-head">
         <h3>Найденные интервалы</h3>
-        <button type="button" class="btn secondary" id="intervalOcrCopyAll">Скопировать всё</button>
+        <div class="interval-ocr-copy-wrap">
+          <button type="button" class="btn secondary" id="intervalOcrCopyAll">Скопировать всё</button>
+          <div id="intervalOcrCopyStatus" class="interval-ocr-copy-status"></div>
+        </div>
       </div>
       <div class="interval-ocr-table-wrap">
         <table class="interval-ocr-table">
-          <thead><tr><th>№</th><th>Дистанция</th><th>Средний темп</th><th>Время</th><th>Тип</th><th>Ср. пульс</th><th>Макс.</th></tr></thead>
+          <thead><tr><th>№</th><th>Дистанция</th><th>Средний темп, мин/км</th><th>Время</th><th>Тип</th><th>Ср. пульс</th><th>Макс.</th></tr></thead>
           <tbody id="intervalOcrRows"></tbody>
         </table>
       </div>
-      <div id="intervalOcrCopyStatus" class="interval-ocr-copy-status"></div>
     </div>
   </div>
 </section>
@@ -1530,8 +1532,8 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="app.js?v=280-track-jump-higher"></script>
-  <script src="interval-ocr.js?v=280-track-jump-higher"></script>
+  <script src="app.js?v=281-copy-status-under-button"></script>
+  <script src="interval-ocr.js?v=281-copy-status-under-button"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 

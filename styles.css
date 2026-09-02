@@ -666,12 +666,13 @@ button.action-error:disabled {
 .interval-ocr-results{margin-top:18px}
 .interval-ocr-results-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .interval-ocr-results-head h3{margin:0}
+.interval-ocr-copy-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:5px}
 .interval-ocr-table-wrap{overflow-x:auto;margin-top:10px;border:1px solid #29415f;border-radius:14px}
 .interval-ocr-table{width:100%;border-collapse:collapse;min-width:570px}
 .interval-ocr-table th,.interval-ocr-table td{padding:11px 10px;text-align:left;border-bottom:1px solid #1e3048;white-space:nowrap}
 .interval-ocr-table th{color:#aebbd0;font-size:.88rem;background:#101c30}
 .interval-ocr-table tr:last-child td{border-bottom:0}
-.interval-ocr-copy-status{margin-top:8px;color:#65e6a7;min-height:1.2em}
+.interval-ocr-copy-status{margin-top:0;color:#65e6a7;min-height:1.2em;font-size:.9rem;text-align:right}
 @media(max-width:640px){.interval-ocr-photos{grid-template-columns:1fr}.interval-ocr-actions .btn,.interval-ocr-upload{font-size:.95rem}}
 
 /* v0.0262 interval OCR graph mode */
@@ -749,3 +750,5 @@ button.action-error:disabled {
 #forecastTrainingFlat:checked ~ .forecast-training-panels [data-forecast-training-panel="flatRace"]{
   display:flex!important;
 }
+
+@media(max-width:640px){.interval-ocr-copy-wrap{align-items:stretch}.interval-ocr-copy-status{text-align:center;font-size:.88rem}}

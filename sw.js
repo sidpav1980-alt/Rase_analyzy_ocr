@@ -1,9 +1,9 @@
-const CACHE='trail-analyzer-web-v280-track-jump-higher';
+const CACHE='trail-analyzer-web-v281-copy-status-under-button';
 const CORE=[
   './',
   './index.html',
-  './styles.css?v=280-track-jump-higher',
-  './app.js?v=280-track-jump-higher',
+  './styles.css?v=281-copy-status-under-button',
+  './app.js?v=281-copy-status-under-button',
   './manifest.webmanifest?v=075',
   './icon-192.png',
   './icon-512.png'
