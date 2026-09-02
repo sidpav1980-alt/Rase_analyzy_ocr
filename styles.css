@@ -713,3 +713,29 @@ button.action-error:disabled {
 .forecast-training-panels{position:relative;z-index:1}
 .forecast-training-panel[hidden]{display:none!important}
 .forecast-training-panel.active{display:flex!important}
+
+
+/* v0.0270 — forecast training tabs are pure CSS radio tabs for iOS reliability */
+.forecast-training-radio{
+  position:absolute!important;
+  width:1px!important;height:1px!important;
+  opacity:0!important;pointer-events:none!important;
+}
+.forecast-training-tabs{position:relative;z-index:40!important}
+.forecast-training-tab{
+  display:flex;align-items:center;justify-content:center;
+  position:relative;z-index:41!important;pointer-events:auto!important;
+  user-select:none;-webkit-user-select:none;touch-action:manipulation;
+}
+.forecast-training-panel{display:none!important}
+#forecastTrainingStrength:checked ~ .forecast-training-tabs label[for="forecastTrainingStrength"],
+#forecastTrainingFast:checked ~ .forecast-training-tabs label[for="forecastTrainingFast"],
+#forecastTrainingFlat:checked ~ .forecast-training-tabs label[for="forecastTrainingFlat"]{
+  background:#38bdf8!important;color:#062033!important;border-color:#38bdf8!important;
+  box-shadow:0 0 0 1px rgba(56,189,248,.25) inset!important;
+}
+#forecastTrainingStrength:checked ~ .forecast-training-panels [data-forecast-training-panel="strength"],
+#forecastTrainingFast:checked ~ .forecast-training-panels [data-forecast-training-panel="fastTrail"],
+#forecastTrainingFlat:checked ~ .forecast-training-panels [data-forecast-training-panel="flatRace"]{
+  display:flex!important;
+}
