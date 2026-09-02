@@ -1,9 +1,9 @@
-const CACHE='trail-analyzer-web-v252-threshold-graph-gridline-split-fix';
+const CACHE='trail-analyzer-web-v253-new-photo-reset-fix';
 const CORE=[
   './',
   './index.html',
-  './styles.css?v=267-threshold-graph-authoritative-slot-fix',
-  './app.js?v=264-threshold-graph-gridline-split-fix',
+  './styles.css?v=268-new-photo-reset-fix',
+  './app.js?v=265-new-photo-reset-fix',
   './manifest.webmanifest?v=075',
   './icon-192.png',
   './icon-512.png'

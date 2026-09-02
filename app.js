@@ -7652,10 +7652,48 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     updateLivePaces();
   }
 
+  function clearThresholdPhotoState(i, clearFields=true){
+    const status=byId(`thresholdPhotoStatus${i}`);
+    const recognizedBox=byId(`thresholdRecognizedPreview${i}`);
+    const recognizedDistance=byId(`thresholdRecognizedDistance${i}`);
+    const recognizedPace=byId(`thresholdRecognizedPace${i}`);
+    const recognizedAvgHr=byId(`thresholdRecognizedAvgHr${i}`);
+    const recognizedMaxHr=byId(`thresholdRecognizedMaxHr${i}`);
+    const recognizedRaw=byId(`thresholdRecognizedRaw${i}`);
+    const intervalsHost=byId(`thresholdRecognizedIntervals${i}`);
+    if(status){
+      status.textContent='Фото Garmin/Strava';
+      status.className='threshold-photo-status';
+    }
+    if(recognizedBox) recognizedBox.hidden=true;
+    if(recognizedDistance){ recognizedDistance.textContent='—'; recognizedDistance.classList.remove('invalid'); }
+    if(recognizedPace){ recognizedPace.textContent='—'; recognizedPace.classList.remove('invalid'); }
+    if(recognizedAvgHr){ recognizedAvgHr.textContent='—'; recognizedAvgHr.classList.remove('invalid'); }
+    if(recognizedMaxHr){ recognizedMaxHr.textContent='—'; recognizedMaxHr.classList.remove('invalid'); }
+    if(recognizedRaw) recognizedRaw.textContent='';
+    if(intervalsHost){ intervalsHost.hidden=true; intervalsHost.innerHTML=''; }
+    if(clearFields){
+      const d=byId(`thresholdDistance${i}`);
+      const p=byId(`thresholdPaceInput${i}`);
+      const h=byId(`thresholdHr${i}`);
+      const hm=byId(`thresholdHrMax${i}`);
+      if(d){ d.value=''; d.classList.remove('threshold-invalid'); }
+      if(p){ p.value=''; p.classList.remove('threshold-invalid'); }
+      if(h){ h.value=''; h.classList.remove('threshold-invalid'); }
+      if(hm){ hm.value=''; hm.classList.remove('threshold-invalid'); }
+      const live=byId(`thresholdPace${i}`);
+      if(live) live.textContent='—';
+      document.querySelector(`[data-threshold-tab="${i}"]`)?.classList.remove('threshold-invalid','threshold-tab-invalid');
+      if(byId('thresholdQuickResult')) byId('thresholdQuickResult').hidden=true;
+      if(byId('thresholdResult')) byId('thresholdResult').hidden=true;
+    }
+  }
+
   async function recognizeThresholdPhoto(i,file){
     const status=byId(`thresholdPhotoStatus${i}`);
     const btn=document.querySelector(`[data-threshold-photo="${i}"]`);
     if(!file) return;
+    clearThresholdPhotoState(i,true);
     showThresholdPhotoPreview(i,file);
     if(status){ status.textContent='Распознаю фото на iPhone… 0%'; status.className='threshold-photo-status'; }
     if(btn) btn.disabled=true;
@@ -7899,7 +7937,10 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     const photoInput=byId(`thresholdPhotoInput${i}`);
     const previewToggle=document.querySelector(`[data-threshold-preview-toggle="${i}"]`);
     photoBtn?.addEventListener('click',()=>photoInput?.click());
-    photoInput?.addEventListener('change',()=>recognizeThresholdPhoto(i,photoInput.files?.[0]));
+    photoInput?.addEventListener('change',()=>{
+      if(photoInput?.files?.[0]) clearThresholdPhotoState(i,true);
+      recognizeThresholdPhoto(i,photoInput.files?.[0]);
+    });
     previewToggle?.addEventListener('click',()=>toggleThresholdPhotoPreview(i));
   }
 

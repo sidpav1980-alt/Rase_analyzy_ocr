@@ -229,6 +229,18 @@
     filesInput.value=''; status.textContent=''; status.className='interval-ocr-status'; if(copyStatus) copyStatus.textContent='';
   }
 
+  function clearUiForNewBatch(){
+    found.clear();
+    rowsEl.innerHTML='';
+    results.hidden=true;
+    photoList.innerHTML='';
+    photoList.hidden=true;
+    objectUrls.forEach(u=>{try{URL.revokeObjectURL(u)}catch{}}); objectUrls=[];
+    if(copyStatus) copyStatus.textContent='';
+    status.textContent='';
+    status.className='interval-ocr-status';
+  }
+
   async function recognizeOne(file,slot){
     const url=URL.createObjectURL(file); objectUrls.push(url);
     const card=document.createElement('div'); card.className='interval-ocr-photo';
@@ -290,9 +302,8 @@
     intervalOcrBusy=true;
     // Не вызываем clearAll(): на iPhone сброс value у file-input в момент change может
     // обнулить выбор до того, как Safari закончит передавать файлы. Очищаем UI отдельно.
-    found.clear(); rowsEl.innerHTML=''; results.hidden=true; photoList.innerHTML=''; photoList.hidden=false;
-    objectUrls.forEach(u=>{try{URL.revokeObjectURL(u)}catch{}}); objectUrls=[];
-    if(copyStatus) copyStatus.textContent='';
+    clearUiForNewBatch();
+    photoList.hidden=false;
     status.textContent=`Выбрано ${files.length} фото. Начинаю распознавание…`;
     status.className='interval-ocr-status';
     try{
