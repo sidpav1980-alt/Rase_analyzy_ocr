@@ -1,9 +1,9 @@
-const CACHE='trail-analyzer-web-v254-interval-pace-visible-mobile';
+const CACHE='trail-analyzer-web-v255-pacecalc-min-per-km';
 const CORE=[
   './',
   './index.html',
-  './styles.css?v=269-interval-pace-visible-mobile',
-  './app.js?v=266-interval-pace-visible-mobile',
+  './styles.css?v=270-pacecalc-min-per-km',
+  './app.js?v=267-pacecalc-min-per-km',
   './manifest.webmanifest?v=075',
   './icon-192.png',
   './icon-512.png'

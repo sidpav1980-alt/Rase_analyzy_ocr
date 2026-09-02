@@ -6561,7 +6561,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
     if(!Number.isFinite(sec)||sec<=0) return '—';
     let m=Math.floor(sec/60), s=Math.round(sec-m*60);
     if(s===60){m+=1;s=0;}
-    return `${m}:${String(s).padStart(2,'0')}/км`;
+    return `${m}:${String(s).padStart(2,'0')} мин/км`;
   }
   function paceInputText(sec){
     if(!Number.isFinite(sec)||sec<=0) return '';
@@ -8037,7 +8037,7 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
   function paceText(secPerKm){
     if(!Number.isFinite(secPerKm)||secPerKm<=0)return '—';
     let m=Math.floor(secPerKm/60),s=Math.round(secPerKm%60);if(s===60){m++;s=0;}
-    return `${m}:${String(s).padStart(2,'0')}/км`;
+    return `${m}:${String(s).padStart(2,'0')} мин/км`;
   }
   function addStop(data={}){
     if(paceDistanceUnit==='m') return;
