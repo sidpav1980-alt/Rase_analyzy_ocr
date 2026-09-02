@@ -1,9 +1,9 @@
-const CACHE='trail-analyzer-web-v275-forecast-track-upload-hint';
+const CACHE='trail-analyzer-web-v276-css-head-fix';
 const CORE=[
   './',
   './index.html',
-  './styles.css?v=275-forecast-track-upload-hint',
-  './app.js?v=275-forecast-track-upload-hint',
+  './styles.css?v=276-css-head-fix',
+  './app.js?v=276-css-head-fix',
   './manifest.webmanifest?v=075',
   './icon-192.png',
   './icon-512.png'
