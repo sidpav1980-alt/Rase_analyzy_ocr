@@ -1,9 +1,9 @@
-const CACHE='trail-analyzer-web-v277-forecast-warning-block';
+const CACHE='trail-analyzer-web-v278-forecast-jump-to-gpx-upload';
 const CORE=[
   './',
   './index.html',
-  './styles.css?v=277-forecast-warning-block',
-  './app.js?v=277-forecast-warning-block',
+  './styles.css?v=278-forecast-jump-to-gpx-upload',
+  './app.js?v=278-forecast-jump-to-gpx-upload',
   './manifest.webmanifest?v=075',
   './icon-192.png',
   './icon-512.png'

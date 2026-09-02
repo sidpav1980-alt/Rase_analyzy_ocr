@@ -288,7 +288,11 @@ document.addEventListener('click',e=>{
   const tab=document.querySelector('[data-tab="route"]');
   if(tab){
     tab.click();
-    setTimeout(()=>document.getElementById('route')?.scrollIntoView({behavior:'smooth',block:'start'}),0);
+    setTimeout(()=>{
+      const target=document.querySelector('#route .gpx-upload-column') || document.getElementById('gpxFile') || document.getElementById('route');
+      target?.scrollIntoView({behavior:'smooth',block:'start'});
+      setTimeout(()=>window.scrollBy({top:-120,left:0,behavior:'smooth'}),180);
+    },0);
   }
 });
 
