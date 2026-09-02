@@ -7522,7 +7522,11 @@ $('saveItraRosterBtn')?.addEventListener('click',(ev)=>{
       // Build horizontal blue runs and tolerate tiny holes caused by grid lines,
       // antialiasing and compression. Then merge only very short gaps; the large
       // black recovery gaps between Garmin work intervals remain separate.
-      let segs=[]; let st=-1; const minCol=Math.max(2,Math.floor((py1-py0)*0.012));
+      let segs=[]; let st=-1;
+      // Ignore thin horizontal Garmin grid lines: they can cross the black recovery
+      // gaps and falsely glue all blue work blocks into one continuous segment.
+      // A real filled pace block occupies a meaningful vertical part of the chart.
+      const minCol=Math.max(6,Math.floor((py1-py0+1)*0.06));
       for(let x=0;x<=w;x++){
         const on=x<w&&colCount[x]>=minCol;
         if(on&&st<0)st=x;

@@ -1,9 +1,9 @@
-const CACHE='trail-analyzer-web-v251-threshold-graph-authoritative-slot-fix';
+const CACHE='trail-analyzer-web-v252-threshold-graph-gridline-split-fix';
 const CORE=[
   './',
   './index.html',
   './styles.css?v=267-threshold-graph-authoritative-slot-fix',
-  './app.js?v=263-threshold-graph-slot2-hard-fix',
+  './app.js?v=264-threshold-graph-gridline-split-fix',
   './manifest.webmanifest?v=075',
   './icon-192.png',
   './icon-512.png'
