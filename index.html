@@ -10,7 +10,7 @@
   <title>Прогноз и анализ трейловых гонок</title>
   <link rel="manifest" href="manifest.webmanifest?v=075">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=273-forecast-tabs-css-radio-fix">
+  <link rel="stylesheet" href="styles.css?v=276-forecast-route-jump">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynBv0TtP4JpC5dQF3Vqv2tLIbV0w=" crossorigin="">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 
@@ -651,9 +651,12 @@
 .support-project-btn:active{transform:scale(.98)}
 @media(max-width:430px){.support-project-btn{font-size:11px;padding:5px 8px}.top-actions{gap:6px}}
 </style>
+
+.calc-availability-link .forecast-jump-link{color:#38bdf8;font-weight:800;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.calc-availability-link .forecast-jump-link:active{opacity:.75}
 </head>
 <body>
-<div class="top-actions"><div class="app-version">v0.0270</div><a class="support-project-btn" href="https://www.tbank.ru/cf/49SEnJlLa0Y" target="_blank" rel="noopener noreferrer">❤️ Поддержать проект</a></div>
+<div class="top-actions"><div class="app-version">v0.0273</div><a class="support-project-btn" href="https://www.tbank.ru/cf/49SEnJlLa0Y" target="_blank" rel="noopener noreferrer">❤️ Поддержать проект</a></div>
   <header class="app-header">
     <div>
       <div class="eyebrow">Прогноз и анализ трейловых гонок</div>
@@ -859,7 +862,7 @@
           <label class="forecast-training-tab" for="forecastTrainingFlat" data-radio-training-tab="flatRace">3. Плоская</label>
         </div>
         <div class="forecast-ref-grid forecast-training-panels">
-          <div class="upload forecast-training-panel active" data-forecast-training-panel="strength">
+          <div class="upload forecast-training-panel" data-forecast-training-panel="strength">
             <strong>1. Силовая трейловая GPX</strong>
             <div class="muted">Большой набор и крутые подъёмы. Из неё модель учит, как уклон меняет скорость, и оценивает запас выносливости по длительности и набору.</div>
             <input id="strengthActivityFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml,*/*">
@@ -888,7 +891,7 @@
           </div>
         </div>
 
-        <div id="calcAvailabilityStatus" class="muted">Сначала рассчитайте прогноз во вкладке «Прогноз».</div>
+        <div id="calcAvailabilityStatus" class="muted calc-availability-link">Прогноз находится в разделе «Трек гонки». <a href="#route" class="forecast-jump-link">Перейти в «1. Трек гонки»</a>.</div>
         <div class="metrics big">
           <div><span>Эталонов загружено</span><b id="referenceCount">0 / 3</b></div>
           <div><span>Общая модель</span><b id="combinedModelState">ожидает 3 GPX</b></div>
@@ -1513,8 +1516,8 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="app.js?v=270-forecast-tabs-css-radio-fix"></script>
-  <script src="interval-ocr.js?v=255-forecast-tabs-css-radio-fix"></script>
+  <script src="app.js?v=273-forecast-route-jump"></script>
+  <script src="interval-ocr.js?v=254-forecast-route-jump"></script>
 <footer class="app-footer">Сидоренко Павел (c) 2026</footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 

@@ -1,9 +1,9 @@
-const CACHE='trail-analyzer-web-v257-forecast-tabs-css-radio-fix';
+const CACHE='trail-analyzer-web-v256-forecast-route-jump';
 const CORE=[
   './',
   './index.html',
-  './styles.css?v=273-forecast-tabs-css-radio-fix',
-  './app.js?v=270-forecast-tabs-css-radio-fix',
+  './styles.css?v=276-forecast-route-jump',
+  './app.js?v=273-forecast-route-jump',
   './manifest.webmanifest?v=075',
   './icon-192.png',
   './icon-512.png'

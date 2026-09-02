@@ -739,3 +739,13 @@ button.action-error:disabled {
 #forecastTrainingFlat:checked ~ .forecast-training-panels [data-forecast-training-panel="flatRace"]{
   display:flex!important;
 }
+
+
+/* v0.0271 — show strictly one forecast GPX panel */
+.forecast-training-panel,
+.forecast-training-panel.active{display:none!important}
+#forecastTrainingStrength:checked ~ .forecast-training-panels [data-forecast-training-panel="strength"],
+#forecastTrainingFast:checked ~ .forecast-training-panels [data-forecast-training-panel="fastTrail"],
+#forecastTrainingFlat:checked ~ .forecast-training-panels [data-forecast-training-panel="flatRace"]{
+  display:flex!important;
+}

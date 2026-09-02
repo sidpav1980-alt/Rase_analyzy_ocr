@@ -281,6 +281,17 @@ document.querySelectorAll('.tab').forEach(btn => {
   });
 });
 
+document.addEventListener('click',e=>{
+  const link=e.target.closest?.('.forecast-jump-link');
+  if(!link) return;
+  e.preventDefault();
+  const tab=document.querySelector('[data-tab="route"]');
+  if(tab){
+    tab.click();
+    setTimeout(()=>document.getElementById('route')?.scrollIntoView({behavior:'smooth',block:'start'}),0);
+  }
+});
+
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   state.deferredPrompt = e;
@@ -4072,7 +4083,7 @@ function updateFinalCalcAvailability(){
 
   if(!ready){
     setActionState('calcBtn','idle');
-    if(status) status.textContent='Сначала рассчитайте прогноз во вкладке «Прогноз».';
+    if(status) status.innerHTML='Прогноз находится в разделе «Трек гонки». <a href="#route" class="forecast-jump-link">Перейти в «1. Трек гонки»</a>.';
   }else{
     setActionState('calcBtn','ready');
     if(status){
