@@ -678,3 +678,17 @@ button.action-error:disabled {
 .interval-ocr-table{min-width:760px}
 .interval-ocr-mode-note{font-size:13px;color:#8fb5d4;margin-top:6px}
 .interval-ocr-photo-status.approx{color:#ffd277}
+
+/* v0.0266 — keep average pace visible without horizontal scrolling on phones */
+.interval-ocr-pace b{color:#7dd3fc;font-weight:900}
+@media(max-width:640px){
+  .interval-ocr-table{min-width:0!important;width:100%;table-layout:auto}
+  .interval-ocr-table th,.interval-ocr-table td{padding:10px 7px;font-size:.82rem}
+  .interval-ocr-table th:nth-child(5),.interval-ocr-table td:nth-child(5),
+  .interval-ocr-table th:nth-child(6),.interval-ocr-table td:nth-child(6),
+  .interval-ocr-table th:nth-child(7),.interval-ocr-table td:nth-child(7){display:none}
+  .interval-ocr-table th:nth-child(1),.interval-ocr-table td:nth-child(1){width:9%}
+  .interval-ocr-table th:nth-child(2),.interval-ocr-table td:nth-child(2){width:29%}
+  .interval-ocr-table th:nth-child(3),.interval-ocr-table td:nth-child(3){width:34%}
+  .interval-ocr-table th:nth-child(4),.interval-ocr-table td:nth-child(4){width:28%}
+}

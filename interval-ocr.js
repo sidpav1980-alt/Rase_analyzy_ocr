@@ -212,7 +212,7 @@
 
   function render(){
     const arr=[...found.values()].sort((a,b)=>a.index-b.index);
-    rowsEl.innerHTML=arr.map(r=>`<tr><td>${r.index}</td><td>${r.approx?'Бег ≈':'Бег'}</td><td>${fmtDist(r.distance)}</td><td>${esc(r.time||'—')}</td><td>${esc(r.pace)}/км</td><td>${fmtHr(r.avgHr)}</td><td>${fmtHr(r.maxHr)}</td></tr>`).join('');
+    rowsEl.innerHTML=arr.map(r=>`<tr><td>${r.index}</td><td>${fmtDist(r.distance)}</td><td class="interval-ocr-pace"><b>${esc(r.pace)}/км</b></td><td>${esc(r.time||'—')}</td><td>${r.approx?'Бег ≈':'Бег'}</td><td>${fmtHr(r.avgHr)}</td><td>${fmtHr(r.maxHr)}</td></tr>`).join('');
     results.hidden=!arr.length;
     if(arr.length){
       const nums=arr.map(r=>r.index);

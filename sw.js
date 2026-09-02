@@ -1,9 +1,9 @@
-const CACHE='trail-analyzer-web-v253-new-photo-reset-fix';
+const CACHE='trail-analyzer-web-v254-interval-pace-visible-mobile';
 const CORE=[
   './',
   './index.html',
-  './styles.css?v=268-new-photo-reset-fix',
-  './app.js?v=265-new-photo-reset-fix',
+  './styles.css?v=269-interval-pace-visible-mobile',
+  './app.js?v=266-interval-pace-visible-mobile',
   './manifest.webmanifest?v=075',
   './icon-192.png',
   './icon-512.png'
