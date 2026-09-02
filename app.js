@@ -289,9 +289,14 @@ document.addEventListener('click',e=>{
   if(tab){
     tab.click();
     setTimeout(()=>{
-      const target=document.querySelector('#route .gpx-upload-column') || document.getElementById('gpxFile') || document.getElementById('route');
-      target?.scrollIntoView({behavior:'smooth',block:'start'});
-      setTimeout(()=>window.scrollBy({top:-120,left:0,behavior:'smooth'}),180);
+      // Jump to the START of the whole «Трек гонки» section, not directly to the
+      // file input. On iPhone the sticky navigation can cover the section heading,
+      // so place it noticeably higher and keep the title visible above the GPX box.
+      const target=document.getElementById('route');
+      if(target){
+        const y=target.getBoundingClientRect().top + window.scrollY - 300;
+        window.scrollTo({top:Math.max(0,y),left:0,behavior:'smooth'});
+      }
     },0);
   }
 });

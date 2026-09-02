@@ -1,9 +1,9 @@
-const CACHE='trail-analyzer-web-v278-forecast-jump-to-gpx-upload';
+const CACHE='trail-analyzer-web-v280-track-jump-higher';
 const CORE=[
   './',
   './index.html',
-  './styles.css?v=278-forecast-jump-to-gpx-upload',
-  './app.js?v=278-forecast-jump-to-gpx-upload',
+  './styles.css?v=280-track-jump-higher',
+  './app.js?v=280-track-jump-higher',
   './manifest.webmanifest?v=075',
   './icon-192.png',
   './icon-512.png'
